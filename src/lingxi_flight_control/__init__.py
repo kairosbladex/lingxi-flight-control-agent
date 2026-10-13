@@ -1,25 +1,46 @@
 """灵犀飞行执行与任务下发 Agent 的最小核心。"""
 
-from .agent import FlightExecutionAgent, TaskDispatchAgent, parse_relative_move
+from .agent import BoundedAgentLoop, FlightExecutionAgent, ModelDecider, TaskDispatchAgent, ToolRegistry, parse_relative_move
 from .models import (
     CommandStatus,
+    AgentCheckpoint,
+    AgentRunResult,
+    DecisionKind,
     DispatchResult,
     DispatchStatus,
     ExecutionContext,
+    HoverAction,
+    LoopStatus,
+    ModelDecision,
     RelativeMove,
     ToolCall,
+    ToolDefinition,
+    ToolParameter,
+    ToolSchema,
     Vector3,
 )
 
 __all__ = [
     "CommandStatus",
+    "AgentCheckpoint",
+    "AgentRunResult",
+    "BoundedAgentLoop",
+    "DecisionKind",
     "DispatchResult",
     "DispatchStatus",
     "ExecutionContext",
     "FlightExecutionAgent",
+    "HoverAction",
+    "LoopStatus",
+    "ModelDecider",
+    "ModelDecision",
     "RelativeMove",
     "TaskDispatchAgent",
     "ToolCall",
+    "ToolDefinition",
+    "ToolParameter",
+    "ToolRegistry",
+    "ToolSchema",
     "Vector3",
     "parse_relative_move",
 ]
