@@ -1,6 +1,15 @@
 import unittest
 
-from lingxi_flight_control import DispatchStatus, TaskDispatchAgent, ToolCall
+from lingxi_flight_control import (
+    CommandStatus,
+    DispatchStatus,
+    ExecutionContext,
+    FlightExecutionAgent,
+    TaskDispatchAgent,
+    ToolCall,
+    parse_relative_move,
+)
+from lingxi_flight_control.simulator import MemoryFlightSimulator
 
 
 class TaskDispatchAgentTests(unittest.TestCase):
@@ -32,6 +41,22 @@ class TaskDispatchAgentTests(unittest.TestCase):
         result = agent.handle("清理")
         self.assertEqual(result.status, DispatchStatus.REJECTED)
         self.assertEqual(self.calls, [])
+
+    def test_flight_text_parse_and_execute(self):
+        context = ExecutionContext("execution-1", "drone-1", 1, True)
+        simulator = MemoryFlightSimulator(context)
+        agent = FlightExecutionAgent(context, simulator)
+
+        result = agent.handle("向前 10 米", idempotency_key="command-1")
+
+        self.assertEqual(result.status, CommandStatus.ACCEPTED)
+        self.assertEqual(result.position.y_m, 10)
+
+    def test_parser_rejects_multiple_or_out_of_range_commands(self):
+        with self.assertRaises(ValueError):
+            parse_relative_move("向前10米再向右2米", idempotency_key="command-1")
+        with self.assertRaises(ValueError):
+            parse_relative_move("向前101米", idempotency_key="command-1")
 
 
 if __name__ == "__main__":

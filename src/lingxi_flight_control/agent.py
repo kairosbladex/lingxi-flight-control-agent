@@ -5,7 +5,53 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, Protocol
 
-from .models import DispatchResult, DispatchStatus, ToolCall
+from .models import DispatchResult, DispatchStatus, ExecutionContext, RelativeMove, ToolCall
+
+
+def parse_relative_move(text: str, *, idempotency_key: str) -> RelativeMove:
+    """把单个受限中文控制句解析为相对移动。
+
+    这里只解析方向和距离；执行上下文、确认、幂等和设备状态由执行层负责。
+    """
+    import re
+
+    if not text or not text.strip():
+        raise ValueError("control text is required")
+    match = re.fullmatch(
+        r"\s*(?:向?前|前进|往前)\s*(?P<distance>\d+(?:\.\d+)?)\s*米\s*", text
+    )
+    direction = "forward"
+    if not match:
+        patterns = {
+            "backward": r"(?:向?后|后退|往后)",
+            "left": r"(?:向?左|左移)",
+            "right": r"(?:向?右|右移)",
+            "up": r"(?:上升|向?上)",
+            "down": r"(?:下降|向?下)",
+        }
+        for candidate, prefix in patterns.items():
+            match = re.fullmatch(rf"\s*{prefix}\s*(?P<distance>\d+(?:\.\d+)?)\s*米\s*", text)
+            if match:
+                direction = candidate
+                break
+    if not match:
+        raise ValueError("expected one direction and distance in meters")
+    move = RelativeMove(direction, float(match.group("distance")), idempotency_key)
+    move.validate()
+    return move
+
+
+class FlightExecutionAgent:
+    """飞行执行文本闭环：解析后交给已绑定的内存/平台执行器。"""
+
+    def __init__(self, context: ExecutionContext, executor: Any):
+        context.validate()
+        self._context = context
+        self._executor = executor
+
+    def handle(self, text: str, *, idempotency_key: str):
+        move = parse_relative_move(text, idempotency_key=idempotency_key)
+        return self._executor.relative_move(self._context, move)
 
 
 class IntentInterpreter(Protocol):
