@@ -122,7 +122,7 @@ class ModelDecision:
     def validate(self) -> None:
         try:
             kind = DecisionKind(self.kind)
-        except ValueError as exc:
+        except (TypeError, ValueError) as exc:
             raise ValueError("unsupported model decision") from exc
         if kind in {DecisionKind.FINAL, DecisionKind.CLARIFY}:
             if not self.message.strip() or self.tool_call is not None:
@@ -152,7 +152,7 @@ class ToolDefinition:
     name: str
     description: str
     schema: ToolSchema
-    handler: Any
+    handler: Any = None
     side_effect: bool = False
     requires_confirmation: bool = False
 
@@ -175,6 +175,8 @@ class AgentCheckpoint:
     def __post_init__(self) -> None:
         if self.executed_tool_calls is None:
             self.executed_tool_calls = []
+        if self.max_steps <= 0:
+            raise ValueError("max_steps must be positive")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -191,6 +193,20 @@ class AgentCheckpoint:
             "executed_tool_calls": list(self.executed_tool_calls or []),
             "confirmation_binding": self.confirmation_binding,
         }
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "AgentCheckpoint":
+        """从 JSON 对象恢复检查点；恢复后仍应重新校验上下文新鲜度。"""
+        return cls(
+            user_input=value["user_input"], context=dict(value.get("context", {})),
+            messages=list(value.get("messages", [])), tool_calls=list(value.get("tool_calls", [])),
+            observations=list(value.get("observations", [])), step_count=int(value.get("step_count", 0)),
+            max_steps=int(value.get("max_steps", 8)),
+            status=LoopStatus(value.get("status", LoopStatus.TOOL_CALL.value)),
+            confirmed=bool(value.get("confirmed", False)), last_error=value.get("last_error"),
+            executed_tool_calls=list(value.get("executed_tool_calls", [])),
+            confirmation_binding=value.get("confirmation_binding"),
+        )
 
 
 @dataclass(frozen=True)

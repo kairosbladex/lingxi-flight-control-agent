@@ -112,20 +112,29 @@ class ToolRegistry:
     """白名单工具及其结构化参数契约。"""
 
     def __init__(self, definitions: Mapping[str, ToolDefinition] | None = None):
-        self._definitions: dict[str, ToolDefinition] = dict(definitions or {})
+        self._definitions: dict[str, ToolDefinition] = {}
+        for definition in (definitions or {}).values():
+            self.register(definition)
 
     def register(self, definition: ToolDefinition) -> None:
         if not definition.name or not definition.name.replace("_", "").isalnum():
             raise ValueError("tool name must be a simple identifier")
         if definition.requires_confirmation and not definition.side_effect:
             raise ValueError("confirmation is only valid for side-effect tools")
+        if not callable(definition.handler):
+            raise ValueError("tool handler must be callable")
         self._definitions[definition.name] = definition
 
     def get(self, name: str) -> ToolDefinition | None:
         return self._definitions.get(name)
 
     def definitions(self) -> tuple[ToolDefinition, ...]:
-        return tuple(self._definitions.values())
+        # Model receives a contract only; callable handlers never cross the boundary.
+        return tuple(
+            ToolDefinition(item.name, item.description, item.schema, None,
+                           item.side_effect, item.requires_confirmation)
+            for item in self._definitions.values()
+        )
 
     def validate(self, call: ToolCall) -> list[str]:
         definition = self.get(call.name)
@@ -207,6 +216,12 @@ class BoundedAgentLoop:
             checkpoint: AgentCheckpoint | None = None, confirmed: bool = False) -> AgentRunResult:
         if not user_message.strip():
             raise ValueError("user text is required")
+        if _contains_unsafe_content(user_message) or not _json_safe(user_message):
+            raise ValueError("user input contains forbidden or non-serializable content")
+        if checkpoint is None and context is not None and (
+            _contains_unsafe_content(context) or not _json_safe(context)
+        ):
+            raise ValueError("context contains forbidden or non-serializable content")
         checkpoint = checkpoint or AgentCheckpoint(
             user_input=user_message, context=dict(context or {}), messages=[], tool_calls=[],
             observations=[], max_steps=self._max_steps,
@@ -243,12 +258,20 @@ class BoundedAgentLoop:
                 return AgentRunResult(LoopStatus.CLARIFICATION, checkpoint, message=decision.message)
             call = decision.tool_call
             assert call is not None
+            if not _json_safe(call.arguments):
+                return self._error(checkpoint, "tool arguments must be JSON-serializable", call)
             checkpoint.tool_calls.append({"name": call.name, "arguments": dict(call.arguments)})
             definition = self._registry.get(call.name)
-            errors = self._registry.validate(call)
+            try:
+                errors = self._registry.validate(call)
+            except Exception as exc:
+                return self._error(checkpoint, f"invalid tool schema or arguments: {exc}", call)
             if errors:
                 return self._error(checkpoint, "; ".join(errors), call)
-            binding = _binding(checkpoint, call)
+            try:
+                binding = _binding(checkpoint, call)
+            except (TypeError, ValueError) as exc:
+                return self._error(checkpoint, f"tool arguments cannot be bound safely: {exc}", call)
             if (definition.side_effect or definition.requires_confirmation) and (
                 not checkpoint.confirmed or checkpoint.confirmation_binding != binding
             ):
@@ -268,8 +291,8 @@ class BoundedAgentLoop:
                 if not self._continue_on_tool_error:
                     return AgentRunResult(LoopStatus.TOOL_ERROR, checkpoint, tool_call=call, error=error)
                 continue
-            if _contains_unsafe_content(output):
-                return self._error(checkpoint, "tool output contains forbidden connection or execution data", call)
+            if _contains_unsafe_content(output) or not _json_safe(output):
+                return self._error(checkpoint, "tool output is forbidden or not JSON-serializable", call)
             checkpoint.confirmed = False
             checkpoint.confirmation_binding = None
             checkpoint.executed_tool_calls.append({"name": call.name, "binding": binding})
@@ -296,6 +319,14 @@ class BoundedAgentLoop:
 
 
 def _binding(checkpoint: AgentCheckpoint, call: ToolCall) -> str:
-    payload = json.dumps({"context": dict(checkpoint.context), "tool": call.name,
+    payload = json.dumps({"user_input": checkpoint.user_input, "context": dict(checkpoint.context), "tool": call.name,
                           "arguments": dict(call.arguments)}, ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _json_safe(value: Any) -> bool:
+    try:
+        json.dumps(value, ensure_ascii=False, sort_keys=True)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return True

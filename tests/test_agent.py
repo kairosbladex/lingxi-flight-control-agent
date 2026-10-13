@@ -1,4 +1,5 @@
 import unittest
+import json
 
 from lingxi_flight_control import (
     AgentCheckpoint,
@@ -87,9 +88,15 @@ class BoundedAgentLoopTests(unittest.TestCase):
         calls = []
         class Decider:
             def decide(self, _, checkpoint, __):
+                self.last_tools = __
+                self.assert_no_handlers(__)
                 if not checkpoint.observations:
                     return ModelDecision(DecisionKind.TOOL_CALL, tool_call=ToolCall("read_value", {"value": 3}))
                 return ModelDecision(DecisionKind.FINAL, message="完成")
+            @staticmethod
+            def assert_no_handlers(tools):
+                if any(tool.handler is not None for tool in tools):
+                    raise AssertionError("model must not receive executable handlers")
         registry = ToolRegistry({"read_value": self.definition(handler=lambda args: calls.append(args) or {"ok": True})})
         result = BoundedAgentLoop(Decider(), registry).run("查询")
         self.assertEqual(result.status, LoopStatus.FINAL)
@@ -128,6 +135,18 @@ class BoundedAgentLoopTests(unittest.TestCase):
         self.assertEqual(done.status, LoopStatus.FINAL)
         self.assertEqual(calls, [{"value": 1}])
 
+    def test_confirmation_binding_rejects_changed_parameters_or_context(self):
+        calls = []
+        class Create:
+            def decide(self, _, checkpoint, __):
+                value = 2 if checkpoint.confirmed else 1
+                return ModelDecision(DecisionKind.TOOL_CALL, tool_call=ToolCall("create_task", {"value": value}))
+        registry = ToolRegistry({"create_task": self.definition("create_task", lambda args: calls.append(args), side_effect=True)})
+        pending = BoundedAgentLoop(Create(), registry).run("创建", context={"version": 1})
+        changed = BoundedAgentLoop(Create(), registry).run("创建", checkpoint=pending.checkpoint, confirmed=True)
+        self.assertEqual(changed.status, LoopStatus.CLARIFICATION)
+        self.assertEqual(calls, [])
+
     def test_survey_and_unsafe_model_output_are_blocked(self):
         class Never:
             def decide(self, *_): raise AssertionError("must clarify first")
@@ -137,6 +156,18 @@ class BoundedAgentLoopTests(unittest.TestCase):
             def decide(self, *_): return ModelDecision(DecisionKind.FINAL, message="MQTT payload 执行成功")
         result = BoundedAgentLoop(Unsafe(), ToolRegistry()).run("测试")
         self.assertEqual(result.status, LoopStatus.TOOL_ERROR)
+
+    def test_checkpoint_round_trip_and_unsafe_tool_output_are_blocked(self):
+        class Read:
+            def decide(self, *_):
+                return ModelDecision(DecisionKind.TOOL_CALL, tool_call=ToolCall("read_value", {"value": 1}))
+        unsafe = ToolRegistry({"read_value": self.definition(handler=lambda _: {"mqtt_payload": "x"})})
+        result = BoundedAgentLoop(Read(), unsafe).run("查询")
+        self.assertEqual(result.status, LoopStatus.TOOL_ERROR)
+        checkpoint = result.checkpoint
+        restored = type(checkpoint).from_dict(checkpoint.to_dict())
+        self.assertEqual(restored.to_dict(), checkpoint.to_dict())
+        json.dumps(restored.to_dict(), ensure_ascii=False)
 
 
 if __name__ == "__main__":
