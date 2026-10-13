@@ -1,23 +1,22 @@
-# 灵犀飞行执行 Agent
+# 灵犀任务下发 Agent
 
-独立维护飞行执行阶段的自然语言控制能力。该项目只处理已经绑定到执行上下文的飞行控制意图，不负责巡检地点解析、航线规划、算法选择或任务下发。
+独立维护“理解用户意图并调用任务工具下发任务”的流程。该项目不负责飞控控制，也不实现厂商协议。
 
 ## 当前范围
 
-- 将受限的控制文本解析为结构化意图；
-- 校验距离、方向和单动作约束；
-- 在内存模拟器中执行相对移动；
-- 使用 `execution_id`、`context_version` 和 `idempotency_key` 拒绝过期或重复命令。
+- 通过注入的意图解释器生成结构化 `ToolCall`；
+- 仅允许注册的任务工具；
+- 未确认时只返回待确认结果，不调用工具；
+- 确认后调用工具并返回工具结果。
 
-当前版本不连接 MQTT、真实飞控或生产任务平台，也不保存业务数据。
+当前版本不连接 MQTT、真实飞控或生产任务平台；工具由调用方注入。
 
 ## 运行
 
 ```bash
-python -m unittest discover -s tests -p 'test_*.py' -v
-PYTHONPATH=src python -m lingxi_flight_control.simulator
+PYTHONPATH=src python -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
 ## 与 lingxi-agent 的边界
 
-`lingxi-agent` 负责任务规划、任务草稿、确认和任务下发；本项目只接收结构化的执行上下文和控制意图。两边通过后续版本化协议对接，厂商指令和设备权限留在平台适配层。
+`lingxi-agent` 负责业务入口和任务数据；本项目负责意图到工具调用的最小流程。工具实现、权限、幂等和平台适配由调用方注入。

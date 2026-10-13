@@ -1,10 +1,11 @@
-"""灵犀飞行执行 Agent 的最小安全核心。"""
+"""灵犀任务下发 Agent 的最小核心。"""
 
-from .models import CommandStatus, ExecutionContext, RelativeMove, Vector3
+from .agent import TaskDispatchAgent
+from .models import DispatchResult, DispatchStatus, ToolCall
 
 __all__ = [
-    "CommandStatus",
-    "ExecutionContext",
-    "RelativeMove",
-    "Vector3",
+    "DispatchResult",
+    "DispatchStatus",
+    "TaskDispatchAgent",
+    "ToolCall",
 ]
