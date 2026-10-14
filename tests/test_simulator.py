@@ -2,6 +2,7 @@ import math
 import unittest
 
 from lingxi_flight_control import (
+    AgentCheckpoint,
     BoundedAgentLoop,
     CommandStatus,
     DecisionKind,
@@ -36,6 +37,13 @@ class MemoryFlightSimulatorTests(unittest.TestCase):
     def test_unconfirmed_context_is_rejected_before_execution(self):
         with self.assertRaises(ValueError):
             MemoryFlightSimulator(ExecutionContext("execution-1", "drone-1", 1, False))
+        for invalid in (
+            ExecutionContext("execution-1", "drone-1", True, True),
+            ExecutionContext("execution-1", "drone-1", 1.0, True),
+            ExecutionContext("execution-1", "drone-1", -1, True),
+        ):
+            with self.assertRaises(ValueError):
+                invalid.validate()
 
     def test_hover_is_idempotent_and_rejects_stale_context(self):
         action = HoverAction(5, "hover-1")
@@ -66,6 +74,116 @@ class MemoryFlightSimulatorTests(unittest.TestCase):
         self.assertEqual(definitions["relative_move"].schema.properties["distance_m"].maximum, 100)
         self.assertTrue(definitions["relative_move"].schema.properties["distance_m"].exclusive_minimum)
         self.assertEqual(definitions["hover"].schema.properties["duration_s"].maximum, 300)
+
+    def test_registry_binds_live_simulator_runtime_context(self):
+        registry = self.simulator.tool_registry()
+        self.assertEqual(registry.runtime_context(), self.context)
+        self.simulator.context = ExecutionContext("execution-1", "drone-1", 4, True)
+        self.assertEqual(registry.runtime_context(), self.simulator.context)
+        result = registry.get("relative_move").handler({
+            "direction": "forward", "distance_m": 2, "idempotency_key": "live-context"
+        })
+        self.assertEqual(result["status"], "accepted")
+        self.assertEqual(self.simulator.position.y_m, 2)
+
+    def test_checkpoint_runtime_context_round_trip_and_fresh_resume(self):
+        class Resume:
+            def __init__(self):
+                self.calls = 0
+
+            def decide(self, _, checkpoint, __):
+                self.calls += 1
+                if self.calls == 1:
+                    return ModelDecision(DecisionKind.CLARIFY, message="继续执行")
+                if not checkpoint.observations:
+                    return ModelDecision(DecisionKind.TOOL_CALL, tool_call=ToolCall(
+                        "relative_move", {
+                            "direction": "forward", "distance_m": 3, "idempotency_key": "resume-1"
+                        }
+                    ))
+                return ModelDecision(DecisionKind.FINAL, message="完成")
+
+        decider = Resume()
+        pending = BoundedAgentLoop(decider, self.simulator.tool_registry()).run("继续")
+        restored = AgentCheckpoint.from_dict(pending.checkpoint.to_dict())
+        self.assertEqual(restored.runtime_context, self.context.to_dict())
+        done = BoundedAgentLoop(decider, self.simulator.tool_registry()).run(
+            "继续", checkpoint=restored
+        )
+        self.assertEqual(done.status, LoopStatus.FINAL)
+        self.assertEqual(done.checkpoint.observations[0]["result"]["status"], "accepted")
+        self.assertEqual(self.simulator.position.y_m, 3)
+
+    def test_restored_checkpoint_rejects_new_runtime_before_decider(self):
+        class Resume:
+            def __init__(self):
+                self.calls = 0
+
+            def decide(self, *_):
+                self.calls += 1
+                raise AssertionError("stale checkpoint must stop before the decider")
+
+        class Pending:
+            def decide(self, *_):
+                return ModelDecision(DecisionKind.CLARIFY, message="暂停")
+
+        pending = BoundedAgentLoop(Pending(), self.simulator.tool_registry()).run("继续")
+        restored = AgentCheckpoint.from_dict(pending.checkpoint.to_dict())
+        self.simulator.context = ExecutionContext("execution-1", "drone-1", 4, True)
+        decider = Resume()
+        result = BoundedAgentLoop(decider, self.simulator.tool_registry()).run(
+            "继续", checkpoint=restored
+        )
+        self.assertEqual(result.status, LoopStatus.TOOL_ERROR)
+        self.assertEqual(result.error["code"], "stale_context")
+        self.assertEqual(decider.calls, 0)
+        self.assertEqual(result.checkpoint.tool_calls, pending.checkpoint.tool_calls)
+        self.assertEqual(result.checkpoint.observations, pending.checkpoint.observations)
+        self.assertEqual(self.simulator.position.y_m, 0)
+
+    def test_restored_checkpoint_rejects_runtime_identity_change(self):
+        class Pending:
+            def decide(self, *_):
+                return ModelDecision(DecisionKind.CLARIFY, message="暂停")
+
+        pending = BoundedAgentLoop(Pending(), self.simulator.tool_registry()).run("继续")
+        for stale in (
+            ExecutionContext("execution-2", "drone-1", 3, True),
+            ExecutionContext("execution-1", "drone-2", 3, True),
+        ):
+            with self.subTest(stale=stale):
+                self.simulator.context = stale
+                restored = AgentCheckpoint.from_dict(pending.checkpoint.to_dict())
+                result = BoundedAgentLoop(Pending(), self.simulator.tool_registry()).run(
+                    "继续", checkpoint=restored
+                )
+                self.assertEqual(result.status, LoopStatus.TOOL_ERROR)
+                self.assertEqual(result.error["code"], "stale_context")
+                self.assertEqual(result.checkpoint.observations, pending.checkpoint.observations)
+                self.assertEqual(self.simulator.position, self.simulator.position.__class__())
+
+    def test_runtime_change_during_decision_is_rejected_before_handler(self):
+        class SwitchRuntime:
+            def __init__(self):
+                self.calls = 0
+
+            def decide(self, *_):
+                self.calls += 1
+                self.simulator.context = ExecutionContext("execution-1", "drone-1", 4, True)
+                return ModelDecision(DecisionKind.TOOL_CALL, tool_call=ToolCall(
+                    "relative_move", {
+                        "direction": "forward", "distance_m": 2, "idempotency_key": "race-1"
+                    }
+                ))
+
+        decider = SwitchRuntime()
+        decider.simulator = self.simulator
+        result = BoundedAgentLoop(decider, self.simulator.tool_registry()).run("继续")
+        self.assertEqual(result.status, LoopStatus.TOOL_ERROR)
+        self.assertEqual(result.error["code"], "stale_context")
+        self.assertEqual(decider.calls, 1)
+        self.assertEqual(result.checkpoint.tool_calls, [])
+        self.assertEqual(self.simulator.position, self.simulator.position.__class__())
 
     def test_relative_move_and_hover_tools_execute_through_bounded_loop(self):
         class MoveThenHover:

@@ -7,6 +7,7 @@
 - 将单个中文方向和距离解析为 `RelativeMove`；
 - 在已确认的 `ExecutionContext` 中执行相对移动；
 - 用 `idempotency_key` 拒绝重复命令，用上下文版本拒绝过期命令；
+- MemoryFlightSimulator 工具动态绑定当前 `ExecutionContext`，检查点恢复时拒绝执行批次、无人机或版本已变化的旧上下文；
 - 通过注入的意图解释器生成结构化 `ToolCall`，维持旧任务下发调用方兼容。
 
 当前版本不连接 MQTT、真实飞控或生产任务平台；执行器和任务工具均由调用方注入。

@@ -33,6 +33,11 @@ class MemoryFlightSimulator:
         self.position = Vector3()
         self._seen_keys: set[str] = set()
 
+    def runtime_context(self) -> ExecutionContext:
+        """Return the current validated context used by the simulator Runtime."""
+        self.context.validate()
+        return self.context
+
     def relative_move(self, context: ExecutionContext, move: RelativeMove) -> ExecutionResult:
         move.validate()
         if context != self.context:
@@ -85,10 +90,9 @@ def _execution_observation(result: ExecutionResult) -> dict[str, Any]:
 def build_memory_flight_tool_registry(simulator: MemoryFlightSimulator) -> ToolRegistry:
     """把模拟器能力注册成 Runtime 可调用的白名单工具。
 
-    handlers 捕获已校验的执行上下文，模型只能看到工具描述，不能获得 Python handler。
+    handlers 每次从模拟器读取已校验的当前执行上下文；模型只能看到工具描述，不能获得 Python handler。
     """
-    context = simulator.context
-    context.validate()
+    simulator.runtime_context()
 
     def relative_move(arguments: Mapping[str, Any]) -> dict[str, Any]:
         move = RelativeMove(
@@ -96,16 +100,16 @@ def build_memory_flight_tool_registry(simulator: MemoryFlightSimulator) -> ToolR
             distance_m=arguments["distance_m"],
             idempotency_key=arguments["idempotency_key"],
         )
-        return _execution_observation(simulator.relative_move(context, move))
+        return _execution_observation(simulator.relative_move(simulator.runtime_context(), move))
 
     def hover(arguments: Mapping[str, Any]) -> dict[str, Any]:
         action = HoverAction(
             duration_s=arguments["duration_s"],
             idempotency_key=arguments["idempotency_key"],
         )
-        return _execution_observation(simulator.hover(context, action))
+        return _execution_observation(simulator.hover(simulator.runtime_context(), action))
 
-    registry = ToolRegistry()
+    registry = ToolRegistry(runtime_context_provider=simulator.runtime_context)
     registry.register(ToolDefinition(
         name="relative_move",
         description="在已绑定的内存飞行模拟器中执行一次受限相对移动。",

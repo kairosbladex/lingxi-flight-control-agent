@@ -6,7 +6,7 @@ from collections.abc import Mapping
 import hashlib
 import json
 import math
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from .models import (
     AgentCheckpoint,
@@ -112,8 +112,14 @@ class ModelDecider(Protocol):
 class ToolRegistry:
     """白名单工具及其结构化参数契约。"""
 
-    def __init__(self, definitions: Mapping[str, ToolDefinition] | None = None):
+    def __init__(
+        self,
+        definitions: Mapping[str, ToolDefinition] | None = None,
+        *,
+        runtime_context_provider: Callable[[], ExecutionContext] | None = None,
+    ):
         self._definitions: dict[str, ToolDefinition] = {}
+        self._runtime_context_provider = runtime_context_provider
         for definition in (definitions or {}).values():
             self.register(definition)
 
@@ -136,6 +142,16 @@ class ToolRegistry:
                            item.side_effect, item.requires_confirmation)
             for item in self._definitions.values()
         )
+
+    def runtime_context(self) -> ExecutionContext | None:
+        """读取当前 Runtime 上下文；未绑定上下文的通用注册表返回 None。"""
+        if self._runtime_context_provider is None:
+            return None
+        context = self._runtime_context_provider()
+        if not isinstance(context, ExecutionContext):
+            raise ValueError("runtime context provider must return ExecutionContext")
+        context.validate()
+        return context
 
     def validate(self, call: ToolCall) -> list[str]:
         definition = self.get(call.name)
@@ -227,22 +243,68 @@ class BoundedAgentLoop:
         self._max_steps = max_steps
         self._continue_on_tool_error = continue_on_tool_error
 
-    def run(self, user_message: str, *, context: Mapping[str, Any] | None = None,
-            checkpoint: AgentCheckpoint | None = None, confirmed: bool = False) -> AgentRunResult:
+    def run(
+        self,
+        user_message: str,
+        *,
+        context: Mapping[str, Any] | ExecutionContext | None = None,
+        runtime_context: Mapping[str, Any] | ExecutionContext | None = None,
+        checkpoint: AgentCheckpoint | None = None,
+        confirmed: bool = False,
+    ) -> AgentRunResult:
         if not user_message.strip():
             raise ValueError("user text is required")
         if _contains_unsafe_content(user_message) or not _json_safe(user_message):
             raise ValueError("user input contains forbidden or non-serializable content")
-        if checkpoint is None and context is not None and (
-            _contains_unsafe_content(context) or not _json_safe(context)
-        ):
+
+        context_payload = _context_payload(context)
+        if _contains_unsafe_content(context_payload) or not _json_safe(context_payload):
             raise ValueError("context contains forbidden or non-serializable content")
-        checkpoint = checkpoint or AgentCheckpoint(
-            user_input=user_message, context=dict(context or {}), messages=[], tool_calls=[],
-            observations=[], max_steps=self._max_steps,
-        )
+        try:
+            requested_runtime = _coerce_runtime_context(runtime_context, "runtime_context")
+            context_runtime = _coerce_runtime_context(context, "context")
+            if requested_runtime is not None and context_runtime is not None and requested_runtime != context_runtime:
+                raise _StaleRuntimeContext("runtime context does not match context")
+            current_runtime = self._registry.runtime_context()
+            if current_runtime is not None and requested_runtime is not None and current_runtime != requested_runtime:
+                raise _StaleRuntimeContext("runtime context does not match the registered runtime")
+            if current_runtime is not None and context_runtime is not None and current_runtime != context_runtime:
+                raise _StaleRuntimeContext("context does not match the registered runtime")
+            current_runtime = current_runtime or requested_runtime or context_runtime
+        except _StaleRuntimeContext as exc:
+            if checkpoint is not None:
+                return self._stale_context(checkpoint, str(exc))
+            checkpoint = AgentCheckpoint(
+                user_input=user_message, context={}, messages=[], tool_calls=[], observations=[],
+                max_steps=self._max_steps,
+            )
+            return self._stale_context(checkpoint, str(exc))
+        except (TypeError, ValueError) as exc:
+            if checkpoint is not None:
+                return self._error(checkpoint, f"invalid runtime context: {exc}")
+            checkpoint = AgentCheckpoint(
+                user_input=user_message, context={}, messages=[], tool_calls=[], observations=[],
+                max_steps=self._max_steps,
+            )
+            return self._error(checkpoint, f"invalid runtime context: {exc}")
+
+        if checkpoint is None:
+            checkpoint = AgentCheckpoint(
+                user_input=user_message, context=context_payload, messages=[], tool_calls=[],
+                observations=[], max_steps=self._max_steps,
+                runtime_context=current_runtime.to_dict() if current_runtime else None,
+            )
         if checkpoint.user_input != user_message:
             return self._error(checkpoint, "checkpoint user input does not match")
+        try:
+            stored_runtime = _checkpoint_runtime_context(checkpoint)
+        except ValueError as exc:
+            return self._stale_context(checkpoint, f"checkpoint runtime context is invalid: {exc}")
+        if current_runtime is not None:
+            if stored_runtime is None:
+                return self._stale_context(checkpoint, "checkpoint has no runtime context binding")
+            if stored_runtime != current_runtime:
+                return self._stale_context(checkpoint, "checkpoint runtime context is stale")
         if confirmed:
             checkpoint.confirmed = True
         if self._needs_survey_clarification(checkpoint.user_input):
@@ -251,6 +313,9 @@ class BoundedAgentLoop:
             checkpoint.messages.append({"role": "assistant", "kind": "clarify", "content": message})
             return AgentRunResult(LoopStatus.CLARIFICATION, checkpoint, message=message)
         while checkpoint.step_count < checkpoint.max_steps:
+            freshness_error = self._check_runtime_freshness(checkpoint)
+            if freshness_error is not None:
+                return freshness_error
             checkpoint.step_count += 1
             try:
                 decision = self._decider.decide(user_message, checkpoint, self._registry.definitions())
@@ -273,6 +338,9 @@ class BoundedAgentLoop:
                 return AgentRunResult(LoopStatus.CLARIFICATION, checkpoint, message=decision.message)
             call = decision.tool_call
             assert call is not None
+            freshness_error = self._check_runtime_freshness(checkpoint)
+            if freshness_error is not None:
+                return freshness_error
             if not _json_safe(call.arguments):
                 return self._error(checkpoint, "tool arguments must be JSON-serializable", call)
             checkpoint.tool_calls.append({"name": call.name, "arguments": dict(call.arguments)})
@@ -296,6 +364,9 @@ class BoundedAgentLoop:
                 message = f"请确认执行工具 {call.name}，参数：{json.dumps(dict(call.arguments), ensure_ascii=False, sort_keys=True)}"
                 checkpoint.messages.append({"role": "assistant", "kind": "confirmation_required", "content": message})
                 return AgentRunResult(LoopStatus.CLARIFICATION, checkpoint, message=message, tool_call=call)
+            freshness_error = self._check_runtime_freshness(checkpoint)
+            if freshness_error is not None:
+                return freshness_error
             try:
                 output = definition.handler(call.arguments)
             except Exception as exc:
@@ -332,10 +403,80 @@ class BoundedAgentLoop:
         checkpoint.status = LoopStatus.TOOL_ERROR
         return AgentRunResult(LoopStatus.TOOL_ERROR, checkpoint, tool_call=call, error=error)
 
+    @staticmethod
+    def _stale_context(checkpoint: AgentCheckpoint, message: str) -> AgentRunResult:
+        error = {"code": "stale_context", "message": message}
+        checkpoint.last_error = error
+        checkpoint.confirmed = False
+        checkpoint.confirmation_binding = None
+        checkpoint.status = LoopStatus.TOOL_ERROR
+        return AgentRunResult(LoopStatus.TOOL_ERROR, checkpoint, error=error)
+
+    def _check_runtime_freshness(self, checkpoint: AgentCheckpoint) -> AgentRunResult | None:
+        try:
+            current_runtime = self._registry.runtime_context()
+        except (TypeError, ValueError) as exc:
+            return self._error(checkpoint, f"invalid runtime context: {exc}")
+        if current_runtime is None:
+            return None
+        try:
+            stored_runtime = _checkpoint_runtime_context(checkpoint)
+        except ValueError as exc:
+            return self._stale_context(checkpoint, f"checkpoint runtime context is invalid: {exc}")
+        if stored_runtime is None:
+            return self._stale_context(checkpoint, "checkpoint has no runtime context binding")
+        if stored_runtime != current_runtime:
+            return self._stale_context(checkpoint, "runtime context changed while resuming")
+        return None
+
+
+_RUNTIME_CONTEXT_FIELDS = frozenset({"execution_id", "drone_id", "context_version", "confirmed"})
+
+
+class _StaleRuntimeContext(ValueError):
+    """Internal marker for a valid binding that no longer matches Runtime."""
+
+
+def _context_payload(value: Mapping[str, Any] | ExecutionContext | None) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if isinstance(value, ExecutionContext):
+        return value.to_dict()
+    if isinstance(value, Mapping):
+        return dict(value)
+    raise ValueError("context must be an object")
+
+
+def _coerce_runtime_context(
+    value: Mapping[str, Any] | ExecutionContext | None, field_name: str
+) -> ExecutionContext | None:
+    if value is None:
+        return None
+    if isinstance(value, ExecutionContext):
+        value.validate()
+        return value
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{field_name} must be an ExecutionContext object")
+    present = _RUNTIME_CONTEXT_FIELDS.intersection(value)
+    if not present:
+        return None
+    if present != _RUNTIME_CONTEXT_FIELDS:
+        missing = sorted(_RUNTIME_CONTEXT_FIELDS - present)
+        raise ValueError(f"{field_name} is missing {', '.join(missing)}")
+    return ExecutionContext.from_mapping(value)
+
+
+def _checkpoint_runtime_context(checkpoint: AgentCheckpoint) -> ExecutionContext | None:
+    if checkpoint.runtime_context is not None:
+        return ExecutionContext.from_mapping(checkpoint.runtime_context)
+    return _coerce_runtime_context(checkpoint.context, "checkpoint context")
+
 
 def _binding(checkpoint: AgentCheckpoint, call: ToolCall) -> str:
-    payload = json.dumps({"user_input": checkpoint.user_input, "context": dict(checkpoint.context), "tool": call.name,
-                          "arguments": dict(call.arguments)}, ensure_ascii=False, sort_keys=True, allow_nan=False)
+    payload = json.dumps({"user_input": checkpoint.user_input, "context": dict(checkpoint.context),
+                          "runtime_context": dict(checkpoint.runtime_context or {}),
+                          "tool": call.name, "arguments": dict(call.arguments)},
+                         ensure_ascii=False, sort_keys=True, allow_nan=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 

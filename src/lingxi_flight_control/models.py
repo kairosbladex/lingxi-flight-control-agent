@@ -33,12 +33,46 @@ class ExecutionContext:
     confirmed: bool
 
     def validate(self) -> None:
-        if not self.execution_id or not self.drone_id:
+        if not isinstance(self.execution_id, str) or not self.execution_id:
             raise ValueError("execution_id and drone_id are required")
+        if not isinstance(self.drone_id, str) or not self.drone_id:
+            raise ValueError("execution_id and drone_id are required")
+        if isinstance(self.context_version, bool) or not isinstance(self.context_version, int):
+            raise ValueError("context_version must be an integer")
         if self.context_version < 0:
             raise ValueError("context_version must be non-negative")
-        if not self.confirmed:
+        if self.confirmed is not True:
             raise ValueError("flight control requires explicit confirmation")
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the validated, JSON-shaped runtime binding."""
+        self.validate()
+        return {
+            "execution_id": self.execution_id,
+            "drone_id": self.drone_id,
+            "context_version": self.context_version,
+            "confirmed": self.confirmed,
+        }
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> "ExecutionContext":
+        if not isinstance(value, Mapping):
+            raise ValueError("runtime context must be an object")
+        try:
+            context = cls(
+                execution_id=value["execution_id"],
+                drone_id=value["drone_id"],
+                context_version=value["context_version"],
+                confirmed=value["confirmed"],
+            )
+        except KeyError as exc:
+            raise ValueError(f"runtime context is missing {exc.args[0]}") from exc
+        context.validate()
+        return context
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "ExecutionContext":
+        return cls.from_mapping(value)
 
 
 @dataclass(frozen=True)
@@ -186,12 +220,15 @@ class AgentCheckpoint:
     last_error: Mapping[str, Any] | None = None
     executed_tool_calls: list[Mapping[str, Any]] | None = None
     confirmation_binding: str | None = None
+    runtime_context: Mapping[str, Any] | None = None
 
     def __post_init__(self) -> None:
         if self.executed_tool_calls is None:
             self.executed_tool_calls = []
         if self.max_steps <= 0:
             raise ValueError("max_steps must be positive")
+        if self.runtime_context is not None:
+            self.runtime_context = ExecutionContext.from_mapping(self.runtime_context).to_dict()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -207,6 +244,7 @@ class AgentCheckpoint:
             "last_error": dict(self.last_error) if self.last_error else None,
             "executed_tool_calls": list(self.executed_tool_calls or []),
             "confirmation_binding": self.confirmation_binding,
+            "runtime_context": dict(self.runtime_context) if self.runtime_context else None,
         }
 
     @classmethod
@@ -221,6 +259,7 @@ class AgentCheckpoint:
             confirmed=bool(value.get("confirmed", False)), last_error=value.get("last_error"),
             executed_tool_calls=list(value.get("executed_tool_calls", [])),
             confirmation_binding=value.get("confirmation_binding"),
+            runtime_context=value.get("runtime_context"),
         )
 
 

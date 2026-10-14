@@ -169,6 +169,35 @@ class BoundedAgentLoopTests(unittest.TestCase):
         self.assertEqual(restored.to_dict(), checkpoint.to_dict())
         json.dumps(restored.to_dict(), ensure_ascii=False)
 
+    def test_context_runtime_binding_rejects_stale_restored_context(self):
+        calls = []
+
+        class Final:
+            def __init__(self, fail=False):
+                self.calls = 0
+                self.fail = fail
+
+            def decide(self, *_):
+                self.calls += 1
+                if self.fail:
+                    raise AssertionError("stale context must stop before the decider")
+                return ModelDecision(DecisionKind.FINAL, message="完成")
+
+        registry = ToolRegistry({"read_value": self.definition(handler=lambda args: calls.append(args))})
+        context_v3 = ExecutionContext("execution-1", "drone-1", 3, True)
+        first = Final()
+        pending = BoundedAgentLoop(first, registry).run("查询", context=context_v3)
+        restored = AgentCheckpoint.from_dict(pending.checkpoint.to_dict())
+        context_v4 = ExecutionContext("execution-1", "drone-1", 4, True)
+        second = Final(fail=True)
+        result = BoundedAgentLoop(second, registry).run(
+            "查询", context=context_v4, checkpoint=restored
+        )
+        self.assertEqual(result.status, LoopStatus.TOOL_ERROR)
+        self.assertEqual(result.error["code"], "stale_context")
+        self.assertEqual(second.calls, 0)
+        self.assertEqual(calls, [])
+
 
 if __name__ == "__main__":
     unittest.main()
