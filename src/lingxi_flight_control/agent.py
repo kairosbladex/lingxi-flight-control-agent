@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 import hashlib
 import json
+import math
 from typing import Any, Protocol
 
 from .models import (
@@ -158,15 +159,29 @@ class ToolRegistry:
                     type=spec.get("type", ""),
                     enum=tuple(spec["enum"]) if spec.get("enum") is not None else None,
                     minimum=spec.get("minimum"), maximum=spec.get("maximum"),
+                    exclusive_minimum=spec.get("exclusive_minimum", False),
+                    min_length=spec.get("min_length"),
                 )
             if not _matches_type(value, spec.type):
                 errors.append(f"field {field} must be {spec.type}")
                 continue
+            if spec.min_length is not None and isinstance(value, str) and len(value) < spec.min_length:
+                errors.append(f"field {field} must contain at least {spec.min_length} characters")
             if spec.enum is not None and value not in spec.enum:
                 errors.append(f"field {field} must be one of {list(spec.enum)}")
             if isinstance(value, (int, float)) and not isinstance(value, bool):
-                if spec.minimum is not None and value < spec.minimum:
-                    errors.append(f"field {field} is below minimum {spec.minimum}")
+                try:
+                    finite = math.isfinite(value)
+                except (OverflowError, TypeError):
+                    finite = False
+                if not finite:
+                    errors.append(f"field {field} must be finite")
+                    continue
+                if spec.minimum is not None and (
+                    value < spec.minimum or (spec.exclusive_minimum and value == spec.minimum)
+                ):
+                    comparator = "greater than" if spec.exclusive_minimum else "at least"
+                    errors.append(f"field {field} must be {comparator} {spec.minimum}")
                 if spec.maximum is not None and value > spec.maximum:
                     errors.append(f"field {field} is above maximum {spec.maximum}")
         return errors
@@ -320,13 +335,13 @@ class BoundedAgentLoop:
 
 def _binding(checkpoint: AgentCheckpoint, call: ToolCall) -> str:
     payload = json.dumps({"user_input": checkpoint.user_input, "context": dict(checkpoint.context), "tool": call.name,
-                          "arguments": dict(call.arguments)}, ensure_ascii=False, sort_keys=True)
+                          "arguments": dict(call.arguments)}, ensure_ascii=False, sort_keys=True, allow_nan=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _json_safe(value: Any) -> bool:
     try:
-        json.dumps(value, ensure_ascii=False, sort_keys=True)
+        json.dumps(value, ensure_ascii=False, sort_keys=True, allow_nan=False)
     except (TypeError, ValueError, OverflowError):
         return False
     return True

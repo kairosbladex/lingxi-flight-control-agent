@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+import math
 from typing import Any, Mapping
 
 
@@ -49,7 +50,13 @@ class RelativeMove:
     def validate(self) -> None:
         if self.direction not in {"forward", "backward", "left", "right", "up", "down"}:
             raise ValueError("unsupported relative direction")
-        if not 0 < self.distance_m <= 100:
+        if isinstance(self.distance_m, bool) or not isinstance(self.distance_m, (int, float)):
+            raise ValueError("distance_m must be a finite number")
+        try:
+            finite = math.isfinite(self.distance_m)
+        except (OverflowError, TypeError):
+            finite = False
+        if not finite or not 0 < self.distance_m <= 100:
             raise ValueError("distance_m must be greater than 0 and at most 100")
         if not self.idempotency_key:
             raise ValueError("idempotency_key is required")
@@ -63,7 +70,13 @@ class HoverAction:
     idempotency_key: str
 
     def validate(self) -> None:
-        if not 0 < self.duration_s <= 300:
+        if isinstance(self.duration_s, bool) or not isinstance(self.duration_s, (int, float)):
+            raise ValueError("duration_s must be a finite number")
+        try:
+            finite = math.isfinite(self.duration_s)
+        except (OverflowError, TypeError):
+            finite = False
+        if not finite or not 0 < self.duration_s <= 300:
             raise ValueError("duration_s must be greater than 0 and at most 300")
         if not self.idempotency_key:
             raise ValueError("idempotency_key is required")
@@ -138,6 +151,8 @@ class ToolParameter:
     enum: tuple[Any, ...] | None = None
     minimum: float | None = None
     maximum: float | None = None
+    exclusive_minimum: bool = False
+    min_length: int | None = None
 
 
 @dataclass(frozen=True)

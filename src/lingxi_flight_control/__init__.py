@@ -1,6 +1,7 @@
 """灵犀飞行执行与任务下发 Agent 的最小核心。"""
 
 from .agent import BoundedAgentLoop, FlightExecutionAgent, ModelDecider, TaskDispatchAgent, ToolRegistry, parse_relative_move
+from .simulator import MemoryFlightSimulator, build_memory_flight_tool_registry
 from .models import (
     CommandStatus,
     AgentCheckpoint,
@@ -30,6 +31,7 @@ __all__ = [
     "DispatchStatus",
     "ExecutionContext",
     "FlightExecutionAgent",
+    "MemoryFlightSimulator",
     "HoverAction",
     "LoopStatus",
     "ModelDecider",
@@ -41,6 +43,7 @@ __all__ = [
     "ToolParameter",
     "ToolRegistry",
     "ToolSchema",
+    "build_memory_flight_tool_registry",
     "Vector3",
     "parse_relative_move",
 ]
