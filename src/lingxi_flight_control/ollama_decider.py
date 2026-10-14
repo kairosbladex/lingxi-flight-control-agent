@@ -102,6 +102,22 @@ def estimate_prompt_tokens(
         total += estimate_tokens(tools_json, estimator=estimator) + _TOOLS_OVERHEAD_TOKENS
     return total
 
+
+#: 一次响应的生成读数。`done_reason="length"` 表示生成被窗口截断——那正是
+#: ``output_reserve`` 太小才会出现的故障，因此它必须是可读的一等遥测。
+_GENERATION_FIELDS = ("done_reason", "eval_count", "prompt_eval_count")
+
+
+def generation_telemetry(response: Mapping[str, Any] | None) -> dict[str, Any]:
+    """从一次模型响应里抽出生成读数；缺字段时返回 ``None`` 而不是抛错。
+
+    联调脚本与评测都用它读 ``done_reason``/``eval_count``，避免各自硬编码字段名。
+    """
+    if not isinstance(response, Mapping):
+        return {field: None for field in _GENERATION_FIELDS}
+    return {field: response.get(field) for field in _GENERATION_FIELDS}
+
+
 #: 提示词要显式写清多步纪律。实测省略这句时，9b 在多动作请求上会只做第一步就收尾。
 DEFAULT_SYSTEM_PROMPT = """你是灵犀无人机飞控执行 Agent。你负责理解用户意图，并调用工具操作无人机。
 
@@ -311,6 +327,14 @@ class OllamaDecider:
     def prompt_budget_tokens(self) -> int:
         """一次请求允许占用的最大 prompt tokens（给生成留出 ``output_reserve``）。"""
         return self._num_ctx - self._output_reserve
+
+    @property
+    def last_generation(self) -> dict[str, Any]:
+        """最近一次模型响应的生成读数（``done_reason``/``eval_count``/``prompt_eval_count``）。
+
+        ``output_reserve`` 的取值只能靠这个读数来定：``done_reason="length"`` 就是预留不足。
+        """
+        return generation_telemetry(self.last_raw_response)
 
     def estimate_prompt_tokens(
         self, messages: Sequence[Mapping[str, Any]], definitions: Sequence[ToolDefinition] = ()

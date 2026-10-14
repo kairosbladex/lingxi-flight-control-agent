@@ -24,6 +24,7 @@ from lingxi_flight_control.ollama_decider import (
     OllamaDecider,
     PromptBudgetExceeded,
     build_tools_payload,
+    generation_telemetry,
     http_transport,
     tool_payload,
 )
@@ -542,6 +543,39 @@ class ResultProjectorTests(unittest.TestCase):
     def test_non_callable_projector_is_rejected(self):
         with self.assertRaises(ValueError):
             OllamaDecider(model="m", result_projector="nope")
+
+
+class GenerationTelemetryTests(unittest.TestCase):
+    """生成预留（``output_reserve``）的取值只能靠实测，所以生成读数必须是一等公民。
+
+    Ollama 的响应里 ``done_reason="length"`` 表示生成被 `num_ctx` 截断——那正是
+    output_reserve 太小才会出现的故障；``eval_count`` 是它的量化版本。
+    """
+
+    def test_generation_readouts_are_exposed(self):
+        telemetry = generation_telemetry(
+            {"done_reason": "stop", "eval_count": 319, "prompt_eval_count": 9156})
+        self.assertEqual(telemetry, {"done_reason": "stop", "eval_count": 319,
+                                     "prompt_eval_count": 9156})
+
+    def test_truncated_generation_is_visible(self):
+        # done_reason=length 说明这次生成撞上了 num_ctx 的尾巴，必须能被读出来。
+        self.assertEqual(generation_telemetry({"done_reason": "length"})["done_reason"], "length")
+
+    def test_missing_response_yields_stable_none_fields(self):
+        self.assertEqual(generation_telemetry(None),
+                         {"done_reason": None, "eval_count": None, "prompt_eval_count": None})
+        self.assertEqual(generation_telemetry("nope"),
+                         {"done_reason": None, "eval_count": None, "prompt_eval_count": None})
+
+    def test_decider_surfaces_the_generation_readouts_of_the_last_response(self):
+        decider = OllamaDecider(model="m", transport=FakeTransport([tool_call_response("hover", {})]))
+        self.assertEqual(decider.last_generation["done_reason"], None)
+        decider.decide("悬停5秒", checkpoint(), ())
+        # 注入的假传输层没有生成读数：字段必须稳定存在且为 None，而不是 KeyError。
+        self.assertIsNone(decider.last_generation["done_reason"])
+        decider.last_raw_response = {"done_reason": "stop", "eval_count": 812}
+        self.assertEqual(decider.last_generation["eval_count"], 812)
 
 
 class ConstructorValidationTests(unittest.TestCase):

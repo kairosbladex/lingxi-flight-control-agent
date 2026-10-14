@@ -147,6 +147,47 @@ system prompt 里的硬性约束。把口令标记 `ZEBRA-7391` 写进 system pr
 `num_ctx=8192` 被拒绝是刻意的：59 个工具的契约 + system prompt 的保守估算已超出它的预算，
 这个窗口**本来就装不下**；明确报错（并提示调大 `num_ctx`）比静默丢掉硬性约束安全。
 
+
+### 生成预留：`output_reserve = 2048` 的实测依据
+
+`prompt + 生成` 要一起装进 `num_ctx`，所以预算必须给生成留出 `output_reserve`。留小了不会
+报错——Ollama 只是把生成截断，响应里的 `done_reason` 变成 `length`，这一次决策随即不可用；
+留大了则白白压低 prompt 预算。这个数只能实测，所以 `OllamaDecider.last_generation` 把
+`done_reason` / `eval_count` / `prompt_eval_count` 暴露成一等读数。
+
+`tools/bench/generation_reserve.py` 用**生产同一条 `payload()` 路径**（同一 system prompt、
+同一套 59 工具、同一 `num_ctx`、同一预算闸门与投影）发 5 条代表性请求：
+
+| 场景 | prompt 估算 | 实测 prompt_eval_count | 实测 eval_count | done_reason |
+|---|---|---|---|---|
+| 单动作（接管控制权） | 7477 | 3532 | 33 | stop |
+| 8 动作复合 | 7530 | 3577 | 198 | stop |
+| 状态汇报（读取当前状态） | 7478 | 3533 | 37 | stop |
+| 歧义澄清（做测绘任务） | 7477 | 3533 | 226 | stop |
+| 长规划思考 | 7532 | 3566 | **395** | stop |
+
+真实循环里的最坏值比这更小：`--cockpit` 四命令最坏 **334**（"读取当前状态"那条 14 字段答复），
+8 动作复合循环最坏 328，16 观察长循环 59~187，**全部 `done_reason=stop`**。为了摸清「思考」
+长度的尾巴，另外单独测了一次无工具闲聊（同一模型、同一 `num_ctx=32768`、`temperature=0`）：
+
+```bash
+curl -s http://192.168.130.238:11434/api/chat -H 'Content-Type: application/json' \
+  -d '{"model":"qwen3.5:9b","messages":[{"role":"user","content":"你好"}],"stream":false,"options":{"num_ctx":32768,"temperature":0},"keep_alive":"30m"}' \
+  | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["done_reason"], d["eval_count"])'
+# -> stop 780
+```
+
+结论：**最坏一次生成实测 780（无工具闲聊），Agent 决策最坏 395；`done_reason` 全是 `stop`，
+`length` 一次都没出现。** 2048 对最坏生成是 2.6 倍余量、对最坏 Agent 决策是 5.2 倍，
+占用率 ≤38%，因此**维持 2048**：
+
+- 不调小（例如 1024）：对同一句 `你好` 就只有 1.3 倍余量，而 9b 的思考长度波动很大，
+  一旦截断就是「整次决策不可用」，赌不起；
+- 不调大：只会白压 prompt 预算（预算 = `num_ctx - output_reserve`），而实测离上限还远。
+
+触发调整的条件写在这里：一旦 `decider.last_generation["done_reason"] == "length"`，
+或 `eval_count` 逼近 2048，就按实测值调大 `output_reserve`（预算随之下降）。
+
 ### 压缩是可观测的
 
 压缩不能是静默的——否则线上分不清「闸门在工作」和「根本没触发」。`OllamaDecider` 在
@@ -158,16 +199,18 @@ system prompt 里的硬性约束。把口令标记 `ZEBRA-7391` 写进 system pr
 | `last_omitted_observations` | 最近一次省略的观察条数 |
 | `compressed_payloads` | 累计发生压缩的载荷次数（含空响应重试） |
 | `omitted_observation_turns` | 累计省略的观察条数 |
+| `last_generation` | 最近一次响应的 `done_reason`/`eval_count`/`prompt_eval_count`（生成预留的依据） |
 
 ```python
 decider = OllamaDecider(model="qwen3.5:9b")
 BoundedAgentLoop(decider, registry).run("读取当前状态")
 print(decider.last_prompt_estimate, decider.last_omitted_observations,
-      decider.compressed_payloads, decider.omitted_observation_turns)
+      decider.compressed_payloads, decider.omitted_observation_turns,
+      decider.last_generation)
 ```
 
 换 `SafetyFastPathDecider` 包装时读数只在真的走了模型的那一步前进（快路径短路不计数），
-`tools/flight_agent_demo.py --cockpit` 会逐步打印 `[prompt预算]` 与收尾的累计行。
+`tools/flight_agent_demo.py --cockpit` 会逐步打印 `[prompt预算]`、`[生成]` 与收尾的累计行。
 
 ### 真实长循环验证（`tools/bench/long_loop_budget.py`）
 
@@ -255,6 +298,9 @@ KV cache 实测（`/api/ps` 的 `size_vram`；同一模型换 `num_ctx` 会重�
   `OllamaDecider(num_ctx=None)` 会被拒绝；窗口小于「59 工具 + system prompt」的保守估算
   （59 工具配置下阈值约 `num_ctx=9600`，`num_ctx=8192` 必然命中）会抛 `PromptBudgetExceeded`，
   而不是静默丢掉 system prompt。压缩策略见上一节。
+- **`output_reserve=2048` 有实测台账，改之前先看数据。** 最坏一次生成 780（无工具闲聊）、
+  Agent 决策最坏 395，`done_reason` 全是 `stop`；触发调大的信号是 `last_generation` 里
+  出现 `done_reason="length"` 或 `eval_count` 逼近 2048。
 - **不要显式传 `think: false`。** 对 `qwen3.5:9b` + Ollama 0.21.0，显式关闭思考会让
   **工具调用完全失效**——模型返回空响应（`content=""`、无 `tool_calls`、`done_reason=stop`）。
   省略该字段时思考照常开启（实测 110 字思考）、工具调用正常且略快：
@@ -389,6 +435,7 @@ python3 tools/bench/prefill_cost.py qwen3.5:9b qwen3.6:latest    # 预填充成�
 python3 tools/bench/cache_probe.py qwen3.5:9b                    # KV cache 命中
 PYTHONPATH=src python3 tools/bench/loop_cost.py qwen3.5:9b       # 真实循环逐步成本
 PYTHONPATH=src python3 tools/bench/context_budget.py qwen3.5:9b  # 上下文预算 / 截断对比
+PYTHONPATH=src python3 tools/bench/generation_reserve.py qwen3.5:9b  # 生成预留（done_reason/eval_count）
 PYTHONPATH=src python3 tools/bench/long_loop_budget.py qwen3.5:9b # 真实长循环里的压缩验证
 PYTHONPATH=src python3 tools/flight_agent_demo.py                # 端到端（最小执行器）
 PYTHONPATH=src python3 tools/flight_agent_demo.py --cockpit      # 端到端（59 动作驾驶舱）

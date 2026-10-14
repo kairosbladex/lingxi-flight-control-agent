@@ -41,15 +41,23 @@ class TracingDecider:
         # 原始 OllamaDecider：用它读 prompt 预算遥测（装饰器只转发，不暴露这些读数）。
         self._meter = meter
         self.step = 0
+        #: 本次命令里模型真实生成的读数；安全快路径短路时不产生新响应，所以按对象身份判断。
+        self.generations = 0
+        self.worst_generation: dict | None = None
 
     def decide(self, user_message, checkpoint, tools):
         self.step += 1
         if self._meter is not None:
             # 安全快路径不发模型调用，此时读数是上一轮的，先清掉免得打印陈旧预算。
             self._meter.last_prompt_estimate = None
+        previous_response = self._meter.last_raw_response if self._meter is not None else None
         started = time.time()
         decision = self._inner.decide(user_message, checkpoint, tools)
         elapsed = time.time() - started
+        generation = None
+        if self._meter is not None and self._meter.last_raw_response is not previous_response:
+            generation = self._meter.last_generation
+            self._track_generation(generation)
         if self._verbose:
             label = decision.kind.value if hasattr(decision.kind, "value") else decision.kind
             if decision.tool_call is not None:
@@ -62,7 +70,26 @@ class TracingDecider:
                 print(f"      [prompt预算] 估算 {self._meter.last_prompt_estimate}"
                       f"/{self._meter.prompt_budget_tokens} tokens"
                       f"  回放省略观察 {self._meter.last_omitted_observations} 条")
+            if generation is not None:
+                print(f"      [生成] done_reason={generation['done_reason']}"
+                      f"  eval_count={generation['eval_count']}")
         return decision
+
+    def _track_generation(self, generation) -> None:
+        """记录最坏一次生成：``output_reserve`` 只由它来定。"""
+        if generation.get("eval_count") is None and generation.get("done_reason") is None:
+            return
+        self.generations += 1
+        current = self.worst_generation
+        if current is None or (generation.get("eval_count") or 0) > (current.get("eval_count") or 0):
+            self.worst_generation = dict(generation)
+
+    def report_generation(self) -> str:
+        if self.worst_generation is None:
+            return "  [生成] 本命令无模型生成（安全快路径短路）"
+        return (f"  [生成最坏] eval_count={self.worst_generation['eval_count']}"
+                f"  done_reason={self.worst_generation['done_reason']}"
+                f"  （{self.generations} 次真实生成）")
 
     def report_budget(self) -> str:
         if self._meter is None:
@@ -171,6 +198,8 @@ def main() -> int:
     failures = 0
     for command in commands:
         traced.step = 0
+        traced.generations = 0
+        traced.worst_generation = None
         try:
             if args.cockpit:
                 run_cockpit(traced, command, max_steps=args.max_steps,
@@ -181,6 +210,7 @@ def main() -> int:
             failures += 1
             print(f"  [异常] {type(exc).__name__}: {exc}")
         if not args.quiet:
+            print(traced.report_generation())
             budget = traced.report_budget()
             if budget:
                 print(budget)

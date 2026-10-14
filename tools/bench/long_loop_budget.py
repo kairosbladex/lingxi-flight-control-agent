@@ -110,6 +110,7 @@ def main() -> int:
         "预算": brain.prompt_budget_tokens,
         "实测 prompt_eval_count": response.get("prompt_eval_count"),
         "实测 eval_count": response.get("eval_count"),
+        "实测 done_reason": response.get("done_reason"),
         "在预算内": (brain.last_prompt_estimate or 0) <= brain.prompt_budget_tokens,
     }, ensure_ascii=False))
     print(json.dumps({

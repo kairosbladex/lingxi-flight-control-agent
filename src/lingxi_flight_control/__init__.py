@@ -11,6 +11,7 @@ from .ollama_decider import (
     PromptBudgetExceeded,
     build_tools_payload,
     estimate_prompt_tokens,
+    generation_telemetry,
     http_transport,
 )
 from .safety import DEFAULT_SAFETY_PHRASES, SafetyFastPath, SafetyFastPathDecider
@@ -76,6 +77,7 @@ __all__ = [
     "PromptBudgetExceeded",
     "build_tools_payload",
     "estimate_prompt_tokens",
+    "generation_telemetry",
     "http_transport",
     "SafetyFastPath",
     "SafetyFastPathDecider",
