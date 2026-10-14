@@ -116,10 +116,13 @@ def build_memory_flight_tool_registry(simulator: MemoryFlightSimulator) -> ToolR
         schema=ToolSchema(
             properties={
                 "direction": ToolParameter(
-                    "string", enum=("forward", "backward", "left", "right", "up", "down")
+                    "string", enum=("forward", "backward", "left", "right", "up", "down"),
+                    description="相对机身的方向",
                 ),
-                "distance_m": ToolParameter("number", minimum=0, maximum=100, exclusive_minimum=True),
-                "idempotency_key": ToolParameter("string", min_length=1),
+                "distance_m": ToolParameter("number", minimum=0, maximum=100, exclusive_minimum=True,
+                                            description="距离，米，需大于 0 且不超过 100"),
+                "idempotency_key": ToolParameter("string", min_length=1,
+                                                 description="本次动作的唯一标识，重复提交同一键不会重复执行"),
             },
             required=("direction", "distance_m", "idempotency_key"),
         ),
@@ -130,8 +133,10 @@ def build_memory_flight_tool_registry(simulator: MemoryFlightSimulator) -> ToolR
         description="在当前位置执行指定时长的受限内存悬停动作。",
         schema=ToolSchema(
             properties={
-                "duration_s": ToolParameter("number", minimum=0, maximum=300, exclusive_minimum=True),
-                "idempotency_key": ToolParameter("string", min_length=1),
+                "duration_s": ToolParameter("number", minimum=0, maximum=300, exclusive_minimum=True,
+                                            description="悬停时长，秒，需大于 0 且不超过 300"),
+                "idempotency_key": ToolParameter("string", min_length=1,
+                                                 description="本次动作的唯一标识，重复提交同一键不会重复执行"),
             },
             required=("duration_s", "idempotency_key"),
         ),

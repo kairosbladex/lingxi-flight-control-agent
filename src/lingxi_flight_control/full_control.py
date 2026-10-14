@@ -14,11 +14,22 @@ import hashlib
 import json
 import math
 import re
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 from uuid import uuid4
 
-from .models import ExecutionContext
+from .agent import ToolRegistry
+from .models import (
+    ExecutionContext,
+    ToolDefinition,
+    ToolParameter,
+    ToolSchema,
+    parameter_json_schema,
+)
+from .safety import SafetyFastPath, normalize
 from .simulator import MemoryFlightSimulator
+
+#: 精确安全短语表，与 SafetyFastPathDecider 共用同一份定义。
+_SAFETY_FAST_PATH = SafetyFastPath()
 
 
 class FlightControlAction(str, Enum):
@@ -107,6 +118,17 @@ _MOVES = {
     FlightControlAction.MOVE_LEFT, FlightControlAction.MOVE_RIGHT,
     FlightControlAction.MOVE_UP, FlightControlAction.MOVE_DOWN,
 }
+
+#: 这些动作不需要先持有控制权。急停只停止运动、不会引入新的风险，
+#: 而且恰恰是「控制权不在自己手上」时最需要它——要求先握手会延误处置。
+#: 返航/降落会驱动自主飞行，与他人操控可能冲突，因此仍要求持有控制权。
+_CONTROL_FREE_ACTIONS = frozenset({
+    FlightControlAction.CONTROL_ACQUIRE,
+    FlightControlAction.REMOTE_REQUEST,
+    FlightControlAction.REMOTE_APPROVE,
+    FlightControlAction.REMOTE_REJECT,
+    FlightControlAction.EMERGENCY_STOP,
+})
 
 
 @dataclass(frozen=True)
@@ -416,6 +438,16 @@ def _status_receipt(status: FlightControlStatus, request: FlightControlActionReq
     )
 
 
+def _context_for(binding: RuntimeBinding) -> ExecutionContext:
+    """由运行时绑定派生执行上下文，作为唯一真源，避免两处状态漂移。"""
+    return ExecutionContext(
+        execution_id=f"{binding.project_id}:{binding.hangar_id}:{binding.task_batch_id}",
+        drone_id=binding.drone_id,
+        context_version=binding.context_version,
+        confirmed=True,
+    )
+
+
 class MemoryFlightControlSimulator(MemoryFlightSimulator):
     """纯内存完整控制面；不会触碰旧的真实控制接口。"""
 
@@ -423,18 +455,23 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         binding.validate()
         # Keep the original MemoryFlightSimulator API available while adding
         # the complete action/state model around the same in-memory boundary.
-        super().__init__(ExecutionContext(
-            execution_id=f"{binding.project_id}:{binding.hangar_id}:{binding.task_batch_id}",
-            drone_id=binding.drone_id,
-            context_version=binding.context_version,
-            confirmed=True,
-        ))
+        super().__init__(_context_for(binding))
         self.binding = binding
         self.state = FlightControlState(context_version=binding.context_version)
         self._clock = clock or _now
         self._ttl_sec = float(ttl_sec)
         self._pending: dict[str, _Pending] = {}
         self._by_key: dict[str, FlightControlReceipt] = {}
+
+    def runtime_context(self) -> ExecutionContext:
+        """始终由当前绑定派生。
+
+        父类把它存成独立字段，换绑后不同步就等于过期上下文保护失效——
+        检查点会在换了无人机之后仍被当成新鲜的可执行上下文。
+        """
+        context = _context_for(self.binding)
+        context.validate()
+        return context
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -450,6 +487,8 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         self._pending.clear()
         self.binding = binding
         self.state = FlightControlState(context_version=binding.context_version)
+        # 同步父类持有的执行上下文，保持两套 API 一致。
+        self.context = _context_for(binding)
 
     def preview(self, request: FlightControlActionRequest) -> FlightControlReceipt:
         request.validate()
@@ -477,12 +516,7 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
                                        message="读取模拟状态")
             self._by_key[request.idempotency_key] = receipt
             return receipt
-        if action not in {
-            FlightControlAction.CONTROL_ACQUIRE,
-            FlightControlAction.REMOTE_REQUEST,
-            FlightControlAction.REMOTE_APPROVE,
-            FlightControlAction.REMOTE_REJECT,
-        } and self.state.control_owner != self.binding.actor_id:
+        if action not in _CONTROL_FREE_ACTIONS and self.state.control_owner != self.binding.actor_id:
             return _status_receipt(FlightControlStatus.REJECTED, request, self.binding, self.state,
                                    error_code="CONTROL_NOT_OWNED", message="请先获取模拟控制权")
         confirmation_id = uuid4().hex
@@ -688,15 +722,44 @@ _TEXT_ACTIONS: tuple[tuple[str, FlightControlAction, dict[str, Any]], ...] = (
 )
 
 
+#: 出现这些词说明用户在否定或犹疑，绝不能按肯定语义触发动作。
+#: 「取消返航」这类本身是否定语义的动作由精确安全短语表先行命中，不走这里。
+#: 文本动作的精确匹配表（键已归一化）。
+#: 曾经用子串包含，结果「请勿急停」被判成急停、「勿返航」「禁止返航」「免降落」同理——
+#: 否定说法无法穷举，靠维护一张否定词表是打地鼠。精确匹配让它结构上不可能命中。
+_TEXT_ACTION_BY_PHRASE: dict[str, tuple[FlightControlAction, dict[str, Any]]] = {
+    normalize(marker): (action, dict(parameters))
+    for marker, action, parameters in _TEXT_ACTIONS
+}
+
+
 def parse_flight_control_text(text: str, *, command_id: str, idempotency_key: str,
                               context_version: int | None = None) -> FlightControlActionRequest:
-    """把有限自然语言转成显式 action；无法唯一映射时直接拒绝。"""
+    """把有限自然语言转成显式 action；无法唯一映射时直接拒绝。
+
+    只接受**精确**指令（标点与空白不敏感）。任何多余的字——包括「帮我」「请」
+    这类客套前缀和一切否定/犹疑说法——一律拒绝，因为把用户的否定读成肯定在飞控上是灾难。
+    需要理解自然语言时应该交给模型，而不是让这个正则层去猜。
+    """
     cleaned = str(text or "").strip()
     if not cleaned:
         raise ValueError("control text is required")
-    for marker, action, parameters in _TEXT_ACTIONS:
-        if marker in cleaned:
-            return FlightControlActionRequest(command_id, idempotency_key, action, parameters, context_version)
+
+    safety_call = _SAFETY_FAST_PATH.recognize(cleaned)
+    if safety_call is not None:
+        return FlightControlActionRequest(command_id, idempotency_key,
+                                          FlightControlAction(safety_call.name), {}, context_version)
+
+    hit = _TEXT_ACTION_BY_PHRASE.get(normalize(cleaned))
+    if hit is not None:
+        action, parameters = hit
+        return FlightControlActionRequest(command_id, idempotency_key, action,
+                                          dict(parameters), context_version)
+
+    # 含有已知动作词但不是精确指令（「帮我拍照」「请勿急停」）：明确拒绝，绝不猜语义。
+    if any(marker in cleaned for marker, _, _ in _TEXT_ACTIONS):
+        raise ValueError("control text must match one action exactly")
+
     move = re.fullmatch(r"(?:向?前|前进|往前)\s*(\d+(?:\.\d+)?)\s*米", cleaned)
     if move:
         return FlightControlActionRequest(command_id, idempotency_key, FlightControlAction.MOVE_FORWARD,
@@ -718,59 +781,240 @@ def action_tool_names() -> tuple[str, ...]:
     return tuple(item.value for item in FlightControlAction)
 
 
+# ---------------------------------------------------------------------------
+# 动作元数据：manifest、工具定义和模型注册表共用的单一真源。
+# ---------------------------------------------------------------------------
+
+_P_DISTANCE = ToolParameter("number", minimum=0, maximum=1000, exclusive_minimum=True)
+_P_ANGLE = ToolParameter("number", minimum=0, maximum=360, exclusive_minimum=True)
+_P_ALTITUDE = ToolParameter("number", minimum=1, maximum=500)
+_P_SPEED_MOVE = ToolParameter("number", minimum=0.1, maximum=50)
+_P_SPEED_ANGLE = ToolParameter("number", minimum=0.1, maximum=360)
+_P_ZOOM = ToolParameter("number", minimum=1, maximum=30)
+_P_TEMPERATURE = ToolParameter("number", minimum=-100, maximum=500)
+_P_RADIUS = ToolParameter("number", minimum=1, maximum=5000)
+_P_LONGITUDE = ToolParameter("number", minimum=-180, maximum=180)
+_P_LATITUDE = ToolParameter("number", minimum=-90, maximum=90)
+_P_INDEX = ToolParameter("number", minimum=0)
+_P_TEXT = ToolParameter("string", min_length=1)
+_P_BUTTON_ACTION = ToolParameter("string", min_length=1)
+_P_ENABLED = ToolParameter("boolean")
+_P_WAYPOINTS = ToolParameter("array")
+
+
+@dataclass(frozen=True)
+class ActionSpec:
+    """一个驾驶舱动作对模型可见的契约：领域、描述、参数与必填项。"""
+
+    domain: str
+    description: str
+    parameters: Mapping[str, ToolParameter] = field(default_factory=dict)
+    required: tuple[str, ...] = ()
+
+
+def _spec(domain: str, description: str, parameters: Mapping[str, ToolParameter] | None = None,
+          required: tuple[str, ...] = ()) -> ActionSpec:
+    properties = dict(parameters or {})
+    missing = [name for name in required if name not in properties]
+    if missing:
+        raise ValueError(f"required parameters are not declared: {missing}")
+    # 必填项排在前面，manifest 的 parameter_names 顺序才有意义。
+    ordered = {name: properties[name] for name in required}
+    ordered.update({k: v for k, v in properties.items() if k not in ordered})
+    return ActionSpec(domain, description, ordered, tuple(required))
+
+
+ACTION_SPECS: dict[FlightControlAction, ActionSpec] = {
+    # 控制权
+    FlightControlAction.CONTROL_ACQUIRE: _spec("control", "获取无人机控制权；执行任何飞行动作前必须先获取"),
+    FlightControlAction.CONTROL_RELEASE: _spec("control", "释放当前持有的控制权"),
+    FlightControlAction.REMOTE_REQUEST: _spec("control", "向远端发起接管请求"),
+    FlightControlAction.REMOTE_APPROVE: _spec("control", "同意远端的接管请求"),
+    FlightControlAction.REMOTE_REJECT: _spec("control", "拒绝远端的接管请求"),
+    FlightControlAction.SET_KEYBOARD_MODE: _spec("control", "切换为键盘操作模式"),
+    FlightControlAction.SET_JOYSTICK_MODE: _spec("control", "切换为摇杆操作模式"),
+    FlightControlAction.SET_VIRTUAL_BUTTON: _spec(
+        "control", "绑定虚拟按键", {"button": _P_TEXT, "action": _P_BUTTON_ACTION},
+        ("button", "action")),
+    # 飞行
+    FlightControlAction.MOVE_FORWARD: _spec("flight", "向机头正前方水平平移，不改变航向",
+                                            {"distance_m": _P_DISTANCE}, ("distance_m",)),
+    FlightControlAction.MOVE_BACKWARD: _spec("flight", "向机尾后方水平平移，不改变航向",
+                                             {"distance_m": _P_DISTANCE}, ("distance_m",)),
+    FlightControlAction.MOVE_LEFT: _spec("flight", "向机身左侧水平平移，不改变航向",
+                                         {"distance_m": _P_DISTANCE}, ("distance_m",)),
+    FlightControlAction.MOVE_RIGHT: _spec("flight", "向机身右侧水平平移，不改变航向",
+                                          {"distance_m": _P_DISTANCE}, ("distance_m",)),
+    FlightControlAction.MOVE_UP: _spec("flight", "垂直上升",
+                                       {"distance_m": _P_DISTANCE}, ("distance_m",)),
+    FlightControlAction.MOVE_DOWN: _spec("flight", "垂直下降",
+                                         {"distance_m": _P_DISTANCE}, ("distance_m",)),
+    FlightControlAction.TURN_LEFT: _spec("flight", "原地向左偏航转向，只改变航向不产生位移",
+                                         {"angle_deg": _P_ANGLE}, ("angle_deg",)),
+    FlightControlAction.TURN_RIGHT: _spec("flight", "原地向右偏航转向，只改变航向不产生位移",
+                                          {"angle_deg": _P_ANGLE}, ("angle_deg",)),
+    FlightControlAction.EMERGENCY_STOP: _spec("flight", "紧急停止所有运动"),
+    FlightControlAction.TAKEOFF: _spec("flight", "起飞至指定高度",
+                                       {"altitude_m": _P_ALTITUDE}, ("altitude_m",)),
+    FlightControlAction.LAND: _spec("flight", "在当前点垂直降落"),
+    FlightControlAction.LAND_ALTERNATE: _spec("flight", "飞往备降点降落"),
+    FlightControlAction.RETURN_HOME: _spec("flight", "返航回到起飞点"),
+    FlightControlAction.CANCEL_RETURN_HOME: _spec("flight", "取消正在进行的返航"),
+    # 航线
+    FlightControlAction.ROUTE_PAUSE: _spec("route", "暂停当前航线任务"),
+    FlightControlAction.ROUTE_RESUME: _spec("route", "恢复被暂停的航线任务"),
+    FlightControlAction.CONTINUE_FROM_BREAKPOINT: _spec("route", "从航线断点继续执行",
+                                                        {"index": _P_INDEX}),
+    FlightControlAction.POINT_FLIGHT: _spec(
+        "route", "飞往指定的经纬度与高度",
+        {"longitude": _P_LONGITUDE, "latitude": _P_LATITUDE, "altitude_m": _P_ALTITUDE},
+        ("longitude", "latitude", "altitude_m")),
+    FlightControlAction.POINT_ORBIT: _spec(
+        "route", "以指定经纬度为中心盘旋",
+        {"longitude": _P_LONGITUDE, "latitude": _P_LATITUDE, "radius_m": _P_RADIUS},
+        ("longitude", "latitude", "radius_m")),
+    FlightControlAction.UPLOAD_ROUTE: _spec(
+        "route", "上传航线到无人机", {"route_id": _P_TEXT, "waypoints": _P_WAYPOINTS},
+        ("route_id", "waypoints")),
+    FlightControlAction.EXECUTE_ROUTE: _spec("route", "执行已经上传的航线"),
+    # 飞行参数
+    FlightControlAction.SET_MOVE_SPEED: _spec("parameters", "设置水平移动速度（米/秒）",
+                                              {"value": _P_SPEED_MOVE}, ("value",)),
+    FlightControlAction.SET_ROLL_SPEED: _spec("parameters", "设置横滚角速度（度/秒）",
+                                              {"value": _P_SPEED_ANGLE}, ("value",)),
+    FlightControlAction.SET_PITCH_SPEED: _spec("parameters", "设置俯仰角速度（度/秒）",
+                                               {"value": _P_SPEED_ANGLE}, ("value",)),
+    FlightControlAction.SET_VERTICAL_SPEED: _spec("parameters", "设置垂直升降速度（米/秒）",
+                                                  {"value": _P_SPEED_MOVE}, ("value",)),
+    FlightControlAction.SET_YAW_SPEED: _spec("parameters", "设置偏航角速度（度/秒）",
+                                             {"value": _P_SPEED_ANGLE}, ("value",)),
+    FlightControlAction.RESET_PARAMETERS: _spec("parameters", "恢复默认飞行参数"),
+    # 相机与云台
+    FlightControlAction.CAMERA_ELECTRO_OPTICAL: _spec("camera", "切换为可见光相机"),
+    FlightControlAction.CAMERA_ZOOM: _spec("camera", "设置光学变焦倍数",
+                                           {"value": _P_ZOOM}, ("value",)),
+    FlightControlAction.CAMERA_INFRARED: _spec("camera", "切换为红外热成像镜头"),
+    FlightControlAction.CAMERA_WIDE: _spec("camera", "切换为广角镜头"),
+    FlightControlAction.GIMBAL_UP: _spec("camera", "云台向上转动"),
+    FlightControlAction.GIMBAL_DOWN: _spec("camera", "云台向下转动"),
+    FlightControlAction.GIMBAL_LEFT: _spec("camera", "云台向左转动"),
+    FlightControlAction.GIMBAL_RIGHT: _spec("camera", "云台向右转动"),
+    FlightControlAction.GIMBAL_DIGITAL_ZOOM: _spec("camera", "设置云台数字变焦倍数",
+                                                   {"value": _P_ZOOM}, ("value",)),
+    FlightControlAction.GIMBAL_RESET: _spec("camera", "云台回中复位"),
+    FlightControlAction.GIMBAL_45: _spec("camera", "云台俯仰至 -45 度"),
+    FlightControlAction.GIMBAL_90: _spec("camera", "云台俯仰至 -90 度"),
+    FlightControlAction.CAMERA_LOCK_FOCUS: _spec("camera", "锁定对焦"),
+    FlightControlAction.CAMERA_PANORAMA: _spec("camera", "全景拍摄"),
+    FlightControlAction.CAMERA_PHOTO: _spec("camera", "拍摄单张照片"),
+    FlightControlAction.CAMERA_START_RECORDING: _spec("camera", "开始录像"),
+    FlightControlAction.CAMERA_STOP_RECORDING: _spec("camera", "停止录像"),
+    # 红外
+    FlightControlAction.INFRARED_SET_LIMITS: _spec(
+        "infrared", "设置红外测温的下限与上限（摄氏度）",
+        {"min_c": _P_TEMPERATURE, "max_c": _P_TEMPERATURE}, ("min_c", "max_c")),
+    # 载荷
+    FlightControlAction.PAYLOAD_MEGAPHONE: _spec("payload", "控制喊话器开关",
+                                                 {"enabled": _P_ENABLED}),
+    FlightControlAction.PAYLOAD_SEARCHLIGHT: _spec("payload", "控制探照灯开关",
+                                                   {"enabled": _P_ENABLED}),
+    FlightControlAction.PAYLOAD_METHANE: _spec("payload", "控制甲烷检测开关",
+                                               {"enabled": _P_ENABLED}),
+    FlightControlAction.PAYLOAD_DROPPER: _spec("payload", "控制投放器",
+                                               {"payload": _P_TEXT}),
+    FlightControlAction.PAYLOAD_DYNAMIC: _spec(
+        "payload", "控制动态载荷开关", {"payload": _P_TEXT, "enabled": _P_ENABLED},
+        ("payload", "enabled")),
+    # 状态
+    FlightControlAction.READ_STATE: _spec("state", "读取当前飞行状态与遥测"),
+}
+
+if set(ACTION_SPECS) != set(FlightControlAction):  # pragma: no cover - 导入期自检
+    raise RuntimeError("ACTION_SPECS must cover every FlightControlAction exactly once")
+
+
 def action_tool_definitions() -> tuple[dict[str, Any], ...]:
     """Return serializable per-action tools; handlers never cross the model boundary."""
     return tuple({
         "name": action.value,
-        "description": f"在 simulator 中预览并确认 {action.value}。",
-        "parameters": {"type": "object", "additionalProperties": True},
+        "description": ACTION_SPECS[action].description,
+        "parameters": {
+            "type": "object",
+            "properties": {name: parameter_json_schema(parameter)
+                           for name, parameter in ACTION_SPECS[action].parameters.items()},
+            "required": list(ACTION_SPECS[action].required),
+            "additionalProperties": False,
+        },
         "requires_confirmation": action != FlightControlAction.READ_STATE,
         "execution_mode": "simulator",
     } for action in FlightControlAction)
 
 
+def build_full_control_tool_registry(
+    simulator: MemoryFlightControlSimulator,
+    *,
+    command_id_factory: Callable[[], str] | None = None,
+    idempotency_key_factory: Callable[[str, Mapping[str, Any]], str] | None = None,
+) -> ToolRegistry:
+    """把完整的 59 个驾驶舱动作注册成模型可调用的白名单工具。
+
+    每个动作都经过 `preview` -> `confirm` 两阶段：模型给出的参数先被 `ToolRegistry`
+    按 schema 校验，再由模拟器做上下文版本、幂等和预览/确认检查，任何一环不通过都不会改变状态。
+
+    幂等键默认每次调用新生成。跨轮次的「恰好执行一次」需要调用方提供稳定的
+    `idempotency_key_factory`（例如绑定上层业务的请求号）；模型自己无法提供可靠的幂等键。
+    防「未经确认就执行」由 `BoundedAgentLoop` 的确认绑定负责，两者不是同一层保护。
+    """
+    new_command_id = command_id_factory or (lambda: uuid4().hex)
+    new_idempotency_key = idempotency_key_factory or (lambda _action, _arguments: uuid4().hex)
+
+    registry = ToolRegistry(runtime_context_provider=simulator.runtime_context)
+
+    for action, spec in ACTION_SPECS.items():
+        mutating = action != FlightControlAction.READ_STATE
+
+        def handler(arguments: Mapping[str, Any], action: FlightControlAction = action) -> dict[str, Any]:
+            binding = simulator.binding
+            request = FlightControlActionRequest(
+                command_id=new_command_id(),
+                idempotency_key=new_idempotency_key(action.value, arguments),
+                action=action,
+                parameters=dict(arguments),
+                context_version=binding.context_version,
+            )
+            receipt = simulator.preview(request)
+            if receipt.status is not FlightControlStatus.PREVIEW_REQUIRED:
+                # READ_STATE 直接返回；重复、过期、越权也在这里如实返回。
+                return receipt.to_dict()
+            return simulator.confirm(
+                receipt.confirmation_id,
+                command_id=request.command_id,
+                idempotency_key=request.idempotency_key,
+                confirmation_binding=receipt.confirmation_binding,
+                context_version=binding.context_version,
+            ).to_dict()
+
+        registry.register(ToolDefinition(
+            name=action.value,
+            description=spec.description,
+            schema=ToolSchema(properties=dict(spec.parameters), required=spec.required),
+            handler=handler,
+            side_effect=mutating,
+            requires_confirmation=mutating,
+        ))
+    return registry
+
+
+
 def action_manifest() -> dict[str, Any]:
     """Manifest consumed by the cockpit; every UI item has one tool entry."""
-    domains = {
-        "control": {FlightControlAction.CONTROL_ACQUIRE, FlightControlAction.CONTROL_RELEASE,
-                     FlightControlAction.REMOTE_REQUEST, FlightControlAction.REMOTE_APPROVE,
-                     FlightControlAction.REMOTE_REJECT, FlightControlAction.SET_KEYBOARD_MODE,
-                     FlightControlAction.SET_JOYSTICK_MODE, FlightControlAction.SET_VIRTUAL_BUTTON},
-        "flight": _MOVES | {FlightControlAction.TURN_LEFT, FlightControlAction.TURN_RIGHT,
-                            FlightControlAction.EMERGENCY_STOP, FlightControlAction.TAKEOFF,
-                            FlightControlAction.LAND, FlightControlAction.LAND_ALTERNATE,
-                            FlightControlAction.RETURN_HOME, FlightControlAction.CANCEL_RETURN_HOME},
-        "route": {FlightControlAction.ROUTE_PAUSE, FlightControlAction.ROUTE_RESUME,
-                   FlightControlAction.CONTINUE_FROM_BREAKPOINT, FlightControlAction.POINT_FLIGHT,
-                   FlightControlAction.POINT_ORBIT, FlightControlAction.UPLOAD_ROUTE,
-                   FlightControlAction.EXECUTE_ROUTE},
-        "parameters": {FlightControlAction.SET_MOVE_SPEED, FlightControlAction.SET_ROLL_SPEED,
-                        FlightControlAction.SET_PITCH_SPEED, FlightControlAction.SET_VERTICAL_SPEED,
-                        FlightControlAction.SET_YAW_SPEED, FlightControlAction.RESET_PARAMETERS},
-        "camera": {action for action in FlightControlAction if action.value.startswith(("camera_", "gimbal_"))},
-        "infrared": {FlightControlAction.INFRARED_SET_LIMITS},
-        "payload": {action for action in FlightControlAction if action.value.startswith("payload_")},
-        "state": {FlightControlAction.READ_STATE},
-    }
-    domain_by_action = {action: name for name, actions in domains.items() for action in actions}
-    parameter_names = {
-        FlightControlAction.SET_VIRTUAL_BUTTON: ("button", "action"),
-        **{action: ("distance_m",) for action in _MOVES},
-        FlightControlAction.TURN_LEFT: ("angle_deg",), FlightControlAction.TURN_RIGHT: ("angle_deg",),
-        FlightControlAction.TAKEOFF: ("altitude_m",),
-        FlightControlAction.POINT_FLIGHT: ("longitude", "latitude", "altitude_m"),
-        FlightControlAction.POINT_ORBIT: ("longitude", "latitude", "radius_m"),
-        FlightControlAction.UPLOAD_ROUTE: ("route_id", "waypoints"),
-        FlightControlAction.INFRARED_SET_LIMITS: ("min_c", "max_c"),
-        FlightControlAction.PAYLOAD_DYNAMIC: ("payload", "enabled"),
-    }
     tools = []
-    for action in FlightControlAction:
+    for action, spec in ACTION_SPECS.items():
         tools.append({
             "action": action.value,
-            "domain": domain_by_action[action],
+            "domain": spec.domain,
             "label": action.value,
-            "parameter_names": list(parameter_names.get(action, ())),
+            "parameter_names": list(spec.parameters),
             "requires_confirmation": action != FlightControlAction.READ_STATE,
             "execution_mode": "simulator",
         })

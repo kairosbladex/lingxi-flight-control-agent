@@ -240,7 +240,12 @@ class MemoryFlightSimulatorTests(unittest.TestCase):
         )
         for call in calls:
             result = BoundedAgentLoop(Invalid(call), self.simulator.tool_registry()).run("测试")
-            self.assertEqual(result.status, LoopStatus.TOOL_ERROR, call)
+            # 参数写错不再让 run 直接死掉：模型会拿到校验错误并有机会改正，
+            # 一直改不对则由 max_steps 截停并把最后一个错误带出来。
+            # NaN/Inf 走另一条硬失败路径——它们根本无法序列化、也就无法回放给模型。
+            self.assertIn(result.status, (LoopStatus.MAX_STEPS_EXCEEDED, LoopStatus.TOOL_ERROR), call)
+            self.assertIsNotNone(result.error, call)
+            self.assertEqual(result.checkpoint.executed_tool_calls, [], call)
         self.assertEqual(self.simulator.position, self.simulator.position.__class__())
 
 

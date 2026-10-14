@@ -215,10 +215,15 @@ def _matches_type(value: Any, expected: str) -> bool:
 
 
 def _contains_unsafe_content(value: Any) -> bool:
-    """拒绝模型越过边界提供连接信息、厂商报文或虚假的执行结论。"""
+    """拒绝模型越过边界提供连接信息、厂商报文或虚假的执行结论。
+
+    注意：这里只能用无歧义的术语。裸词 ``payload`` 曾被列入，但它同时是载荷领域的
+    正常词汇（``mounted_payloads()``、``payload_*`` 动作、状态里的 ``payloads`` 字段），
+    会把驾驶舱的合法回执整条判为禁止内容。厂商报文的意图已由「厂商指令」「飞控报文」覆盖。
+    """
     forbidden = (
         "mqtt", "password", "passwd", "credential", "token", "secret", "私钥", "凭据",
-        "厂商指令", "飞控报文", "payload", "执行成功", "已成功执行",
+        "厂商指令", "飞控报文", "执行成功", "已成功执行",
         "execution successful", "execution succeeded", "successfully executed",
     )
     if isinstance(value, str):
@@ -316,7 +321,6 @@ class BoundedAgentLoop:
             freshness_error = self._check_runtime_freshness(checkpoint)
             if freshness_error is not None:
                 return freshness_error
-            checkpoint.step_count += 1
             try:
                 decision = self._decider.decide(user_message, checkpoint, self._registry.definitions())
                 if not isinstance(decision, ModelDecision):
@@ -329,10 +333,12 @@ class BoundedAgentLoop:
             except Exception as exc:
                 return self._error(checkpoint, str(exc))
             if decision.kind == DecisionKind.FINAL:
+                checkpoint.step_count += 1
                 checkpoint.status = LoopStatus.FINAL
                 checkpoint.messages.append({"role": "assistant", "kind": "final", "content": decision.message})
                 return AgentRunResult(LoopStatus.FINAL, checkpoint, message=decision.message)
             if decision.kind == DecisionKind.CLARIFY:
+                checkpoint.step_count += 1
                 checkpoint.status = LoopStatus.CLARIFICATION
                 checkpoint.messages.append({"role": "assistant", "kind": "clarify", "content": decision.message})
                 return AgentRunResult(LoopStatus.CLARIFICATION, checkpoint, message=decision.message)
@@ -345,12 +351,25 @@ class BoundedAgentLoop:
                 return self._error(checkpoint, "tool arguments must be JSON-serializable", call)
             checkpoint.tool_calls.append({"name": call.name, "arguments": dict(call.arguments)})
             definition = self._registry.get(call.name)
+            if definition is None:
+                # 调用不存在的工具是模型越界，不是参数写错，保持硬失败。
+                return self._error(checkpoint, f"unknown tool: {call.name}", call)
             try:
                 errors = self._registry.validate(call)
             except Exception as exc:
                 return self._error(checkpoint, f"invalid tool schema or arguments: {exc}", call)
             if errors:
-                return self._error(checkpoint, "; ".join(errors), call)
+                # 参数写错可以自纠：把校验错误作为观察结果回喂，让模型改，而不是让整个 run 死掉。
+                # 这里必须计步，否则模型一直给错参数就会死循环。一次失败也打断授权链，
+                # 免得旧的确认在中间出了岔子之后仍被沿用。
+                checkpoint.step_count += 1
+                error = {"code": "tool_error", "message": "; ".join(errors), "tool": call.name}
+                checkpoint.last_error = error
+                checkpoint.confirmed = False
+                checkpoint.observations.append(
+                    {"tool": call.name, "arguments": dict(call.arguments), "error": error})
+                checkpoint.status = LoopStatus.OBSERVATION
+                continue
             try:
                 binding = _binding(checkpoint, call)
             except (TypeError, ValueError) as exc:
@@ -358,6 +377,11 @@ class BoundedAgentLoop:
             if (definition.side_effect or definition.requires_confirmation) and (
                 not checkpoint.confirmed or checkpoint.confirmation_binding != binding
             ):
+                # 确认只是用户授权握手，任务本身没有推进，因此不计入 max_steps；
+                # 但它自己需要一个上限，否则模型每次换一个调用就能无限往复。
+                checkpoint.confirmation_rounds += 1
+                if checkpoint.confirmation_rounds > checkpoint.max_steps:
+                    break
                 checkpoint.confirmation_binding = binding
                 checkpoint.confirmed = False
                 checkpoint.status = LoopStatus.CLARIFICATION
@@ -373,22 +397,28 @@ class BoundedAgentLoop:
                 error = {"code": "tool_exception", "message": str(exc), "tool": call.name}
                 checkpoint.last_error = error
                 checkpoint.status = LoopStatus.TOOL_ERROR
-                checkpoint.observations.append({"tool": call.name, "error": error})
+                checkpoint.observations.append(
+                    {"tool": call.name, "arguments": dict(call.arguments), "error": error})
                 if not self._continue_on_tool_error:
                     return AgentRunResult(LoopStatus.TOOL_ERROR, checkpoint, tool_call=call, error=error)
                 continue
             if _contains_unsafe_content(output) or not _json_safe(output):
                 return self._error(checkpoint, "tool output is forbidden or not JSON-serializable", call)
+            checkpoint.step_count += 1
             checkpoint.confirmed = False
             checkpoint.confirmation_binding = None
-            checkpoint.executed_tool_calls.append({"name": call.name, "binding": binding})
-            checkpoint.observations.append({"tool": call.name, "result": output})
+            checkpoint.executed_tool_calls.append(
+                {"name": call.name, "arguments": dict(call.arguments), "binding": binding})
+            # 观察结果自带工具名与参数。失败尝试也会进这个列表，而它不在
+            # executed_tool_calls 里，所以不能靠两个列表对齐来回放——见 OllamaDecider.messages。
+            checkpoint.observations.append(
+                {"tool": call.name, "arguments": dict(call.arguments), "result": output})
             checkpoint.status = LoopStatus.OBSERVATION
             checkpoint.messages.append({"role": "tool", "name": call.name, "content": output})
-            if checkpoint.step_count >= checkpoint.max_steps:
-                break
         checkpoint.status = LoopStatus.MAX_STEPS_EXCEEDED
-        return AgentRunResult(LoopStatus.MAX_STEPS_EXCEEDED, checkpoint, message="达到最大步骤数，已停止。")
+        # 撞上限时把最后一个错误带上，调用方才知道是「卡在参数错误」而不是「模型话太多」。
+        return AgentRunResult(LoopStatus.MAX_STEPS_EXCEEDED, checkpoint,
+                              message="达到最大步骤数，已停止。", error=checkpoint.last_error)
 
     @staticmethod
     def _needs_survey_clarification(text: str) -> bool:

@@ -12,14 +12,94 @@
 - `full_control.py` 提供显式的 `FlightControlAction`、`RuntimeBinding`、`FlightControlState` 和
   `MemoryFlightControlSimulator`，覆盖驾驶舱控制权、飞行、航线、相机/云台、红外、载荷和状态读取。
   这些动作只在内存中预览、确认和执行，回执固定标记 `execution_mode=simulator`。
+- 59 个驾驶舱动作通过 `build_full_control_tool_registry` 全部注册为模型可调用的白名单工具，
+  每个动作都经过 `ToolRegistry` schema 校验 + 模拟器 `preview/confirm` 两阶段。
+- **安全快路径**：急停等安全动作走确定性精确匹配，不经过模型。实测走模型要 9 秒才能发出急停，
+  快路径 1 毫秒；且模型服务不可达时快路径照常可用。详见 `docs/safety-fast-path.md`。
+
+## 安全快路径
+
+```python
+from lingxi_flight_control import SafetyFastPathDecider
+
+decider = SafetyFastPathDecider(OllamaDecider(model="qwen3.5:9b"))
+```
+
+急停 / 返航 / 降落 / 取消返航 命中短语表时完全不发模型调用，执行后也不回问模型。
+**只做精确匹配，绝不做子串包含**——「不要返航」包含「返航」，子串匹配会出人命。
+起飞刻意不在快路径里（它需要高度参数，替用户猜高度是危险的）。
+
+急停已豁免控制权要求（它只停止运动，且恰恰是控制权不在自己手上时最需要）。
+
+## 驾驶舱工具
+
+```python
+from lingxi_flight_control import (
+    BoundedAgentLoop, MemoryFlightControlSimulator, OllamaDecider,
+    RuntimeBinding, build_full_control_tool_registry,
+)
+
+simulator = MemoryFlightControlSimulator(
+    RuntimeBinding("actor-1", "project-1", "hangar-1", "drone-01", "batch-1", 1))
+loop = BoundedAgentLoop(OllamaDecider(model="qwen3.5:9b"),
+                        build_full_control_tool_registry(simulator), max_steps=24)
+result = loop.run("接管控制权，然后向前飞10米，再拍张照片")
+```
+
+`ACTION_SPECS` 是动作领域、描述与参数契约的单一真源，`action_manifest()`、
+`action_tool_definitions()` 和工具注册表都由它派生。
+
+两点使用注意：
+
+- **`max_steps` 只计推进任务的步骤。** 确认握手不占步数（它只是用户授权，任务没有推进），
+  所以 `max_steps=8` 足够「7 个动作 + 收尾」。握手次数另由 `confirmation_rounds`
+  单独设上限，避免模型每次换一个调用就让确认无限往复。
+- **参数校验失败可以自纠。** 参数越界、缺必填、多余字段不再让整个 run 死掉：
+  校验错误会作为观察结果回喂模型，让它改正或向用户澄清。模型一直改不对时由
+  `max_steps` 截停，并把最后一个错误通过 `AgentRunResult.error` 带出来。
+  非法调用绝不会进入 `executed_tool_calls`。
+  例外：未知工具、handler 抛异常、含不安全内容一律硬失败（fail-closed）。
+- **跨轮次幂等需要调用方提供稳定键。** 默认每次调用生成新 `idempotency_key`；
+  需要「恰好执行一次」时传入 `idempotency_key_factory`。"未经确认就执行"由
+  `BoundedAgentLoop` 的确认绑定负责，两者不是同一层保护。
 
 当前版本不连接 MQTT、真实飞控或生产任务平台；执行器和任务工具均由调用方注入。
+
+## 模型大脑
+
+`OllamaDecider` 是 `ModelDecider` 的真实实现，接入 `192.168.130.238` 上的 Ollama。
+它只做协议转换：把 `ToolRegistry` 的工具契约翻成 function calling 声明，把检查点重建成原生对话，
+再把模型输出收敛回 `ModelDecision`。安全边界仍然全部由 `BoundedAgentLoop` 和 `ToolRegistry` 持有。
+
+选型结论是 `qwen3.5:9b`，理由与全部实测数据见 `docs/model-selection.md`。
+
+```python
+from lingxi_flight_control import (
+    BoundedAgentLoop, ExecutionContext, MemoryFlightSimulator, OllamaDecider,
+)
+
+simulator = MemoryFlightSimulator(ExecutionContext("exec-1", "drone-01", 0, True))
+loop = BoundedAgentLoop(OllamaDecider(model="qwen3.5:9b"), simulator.tool_registry())
+result = loop.run("先向前飞10米，然后原地悬停30秒")
+print(result.status, result.checkpoint.observations)
+```
+
+真实联调脚本：
+
+```bash
+PYTHONPATH=src python3 tools/flight_agent_demo.py "先向前飞10米，然后原地悬停30秒"
+```
+
+冷启动加载模型可能超过默认 180 秒超时。生产环境建议设 `keep_alive="30m"` 常驻，
+或把 `timeout` 调大；超时错误会明确提示这两条出路。
 
 ## 运行
 
 ```bash
 PYTHONPATH=src python -m unittest discover -s tests -p 'test_*.py' -v
 ```
+
+测试全部离线：`OllamaDecider` 通过注入的传输层测试，不访问网络。
 
 ## 与 lingxi-agent 的边界
 

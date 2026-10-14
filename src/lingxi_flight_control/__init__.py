@@ -1,8 +1,17 @@
 """灵犀飞行执行与任务下发 Agent 的最小核心。"""
 
 from .agent import BoundedAgentLoop, FlightExecutionAgent, ModelDecider, TaskDispatchAgent, ToolRegistry, parse_relative_move
+from .ollama_decider import (
+    DEFAULT_BASE_URL,
+    DEFAULT_MODEL,
+    OllamaDecider,
+    build_tools_payload,
+    http_transport,
+)
+from .safety import DEFAULT_SAFETY_PHRASES, SafetyFastPath, SafetyFastPathDecider
 from .simulator import MemoryFlightSimulator, build_memory_flight_tool_registry
 from .full_control import (
+    ActionSpec,
     FlightControlAction,
     FlightControlActionRequest,
     FlightControlReceipt,
@@ -13,6 +22,7 @@ from .full_control import (
     action_manifest,
     action_tool_definitions,
     action_tool_names,
+    build_full_control_tool_registry,
     mounted_payloads,
     parse_flight_control_text,
 )
@@ -33,6 +43,7 @@ from .models import (
     ToolParameter,
     ToolSchema,
     Vector3,
+    parameter_json_schema,
 )
 
 __all__ = [
@@ -50,6 +61,14 @@ __all__ = [
     "LoopStatus",
     "ModelDecider",
     "ModelDecision",
+    "OllamaDecider",
+    "DEFAULT_BASE_URL",
+    "DEFAULT_MODEL",
+    "build_tools_payload",
+    "http_transport",
+    "SafetyFastPath",
+    "SafetyFastPathDecider",
+    "DEFAULT_SAFETY_PHRASES",
     "RelativeMove",
     "TaskDispatchAgent",
     "ToolCall",
@@ -68,6 +87,9 @@ __all__ = [
     "action_manifest",
     "action_tool_definitions",
     "action_tool_names",
+    "ActionSpec",
+    "build_full_control_tool_registry",
+    "parameter_json_schema",
     "mounted_payloads",
     "parse_flight_control_text",
     "Vector3",

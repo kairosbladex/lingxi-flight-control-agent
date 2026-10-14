@@ -187,6 +187,27 @@ class ToolParameter:
     maximum: float | None = None
     exclusive_minimum: bool = False
     min_length: int | None = None
+    description: str | None = None
+
+
+def parameter_json_schema(parameter: ToolParameter) -> dict[str, Any]:
+    """把内部参数契约翻译成 JSON Schema 片段，供模型侧工具声明复用。"""
+    if not isinstance(parameter, ToolParameter):
+        raise ValueError("parameter must be a ToolParameter")
+    schema: dict[str, Any] = {"type": parameter.type}
+    if parameter.description:
+        schema["description"] = parameter.description
+    if parameter.enum is not None:
+        schema["enum"] = list(parameter.enum)
+    if parameter.minimum is not None:
+        schema["minimum"] = parameter.minimum
+    if parameter.maximum is not None:
+        schema["maximum"] = parameter.maximum
+    if parameter.exclusive_minimum and parameter.minimum is not None:
+        schema["exclusiveMinimum"] = True
+    if parameter.min_length is not None:
+        schema["minLength"] = parameter.min_length
+    return schema
 
 
 @dataclass(frozen=True)
@@ -215,6 +236,9 @@ class AgentCheckpoint:
     observations: list[Mapping[str, Any]]
     step_count: int = 0
     max_steps: int = 8
+    #: 确认握手次数。它不推进任务，所以不计入 step_count，但同样需要一个上限，
+    #: 否则模型每次换一个调用就能让「请求确认 → 用户放行」无限往复。
+    confirmation_rounds: int = 0
     status: LoopStatus = LoopStatus.TOOL_CALL
     confirmed: bool = False
     last_error: Mapping[str, Any] | None = None
@@ -239,6 +263,7 @@ class AgentCheckpoint:
             "observations": list(self.observations),
             "step_count": self.step_count,
             "max_steps": self.max_steps,
+            "confirmation_rounds": self.confirmation_rounds,
             "status": self.status.value,
             "confirmed": self.confirmed,
             "last_error": dict(self.last_error) if self.last_error else None,
@@ -255,6 +280,7 @@ class AgentCheckpoint:
             messages=list(value.get("messages", [])), tool_calls=list(value.get("tool_calls", [])),
             observations=list(value.get("observations", [])), step_count=int(value.get("step_count", 0)),
             max_steps=int(value.get("max_steps", 8)),
+            confirmation_rounds=int(value.get("confirmation_rounds", 0)),
             status=LoopStatus(value.get("status", LoopStatus.TOOL_CALL.value)),
             confirmed=bool(value.get("confirmed", False)), last_error=value.get("last_error"),
             executed_tool_calls=list(value.get("executed_tool_calls", [])),

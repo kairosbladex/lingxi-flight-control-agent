@@ -110,7 +110,11 @@ class BoundedAgentLoopTests(unittest.TestCase):
         class Bad:
             def decide(self, *_): return ModelDecision(DecisionKind.TOOL_CALL, tool_call=ToolCall("read_value", {"value": 99}))
         result = BoundedAgentLoop(Bad(), ToolRegistry({"read_value": self.definition()})).run("查询")
-        self.assertEqual(result.status, LoopStatus.TOOL_ERROR)
+        # 参数写错不是硬失败：模型会拿到校验错误并有机会改正；
+        # 一直改不对则由 max_steps 截停，并把最后一个错误带出来。
+        self.assertEqual(result.status, LoopStatus.MAX_STEPS_EXCEEDED)
+        self.assertIn("maximum", result.error["message"])
+        self.assertEqual(result.checkpoint.executed_tool_calls, [])
         class Explodes:
             def decide(self, *_): return ModelDecision(DecisionKind.TOOL_CALL, tool_call=ToolCall("read_value", {"value": 1}))
         result = BoundedAgentLoop(Explodes(), ToolRegistry({"read_value": self.definition(handler=lambda _: 1 / 0)})).run("查询")
