@@ -78,9 +78,10 @@ result = loop.run("接管控制权，然后向前飞10米，再拍张照片")
 **prompt 预算由解码器自己管住。** Ollama 在 prompt 超过 `num_ctx` 时静默丢掉**最前面**的 token，
 也就是 system prompt 里的硬性约束，而且不报错。所以每次发送前都按
 `num_ctx - output_reserve`（默认 `32768 - 2048`）核对预算：system prompt 与当前 user 消息
-永不丢弃，只回放最近 12 条观察，更早的压成`（更早的 N 次工具调用已省略）`；仍然装不下就继续
-往前丢，连头部都装不下时抛 `PromptBudgetExceeded`。估算用保守的字符口径，可注入
-`token_estimator` 覆盖，不依赖 tokenizer。
+永不丢弃，只回放最近 12 条观察，更早的压成**确定性摘要**（工具名 + 状态，
+如 `control_acquire✓ camera_photo✗`，含失败标记）；摘要自己优先被压——装不下先退化成
+`（更早的 N 次工具调用已省略）`，再装不下才往前丢观察；连头部都装不下时抛
+`PromptBudgetExceeded`。估算用保守的字符口径，可注入 `token_estimator` 覆盖，不依赖 tokenizer。
 
 ```python
 from lingxi_flight_control import DEFAULT_KEEP_RECENT_OBSERVATIONS, DEFAULT_NUM_CTX, OllamaDecider
@@ -89,16 +90,23 @@ decider = OllamaDecider(model="qwen3.5:9b", num_ctx=DEFAULT_NUM_CTX,
                         keep_recent_observations=DEFAULT_KEEP_RECENT_OBSERVATIONS)
 ```
 
+两个经验参数都定了实测依据（`DEFAULT_OUTPUT_RESERVE_TOKENS=2048`、
+`DEFAULT_KEEP_RECENT_OBSERVATIONS=12`）：最坏一次生成实测 `eval_count=780`、Agent 决策最坏 395、
+`done_reason` 全是 `stop`（`tools/bench/generation_reserve.py`）；8 动作复合驾驶舱指令下
+回放上限 12/20/无上限行为一致，降到 6 且用裸占位会把收尾打成 fail-closed
+（`tools/bench/keep_recent_experiment.py`）。
+
 默认 `num_ctx=32768`（9b 原生 256K，但 256K 的 KV cache 约 19.7GB，已逼近单张 L20 的空闲显存）。
 实测：20 次观察的完整对话 14987 prompt tokens，默认窗口给到 2.37 倍余量，
 压缩后 10440；`num_ctx=8192` 会把 prompt 压在 8097 并丢掉 system prompt。
 
 压缩不是静默的：`last_prompt_estimate` / `last_omitted_observations` /
-`compressed_payloads` / `omitted_observation_turns` 四个读数可直接打日志或告警。
+`compressed_payloads` / `omitted_observation_turns` 四个读数可直接打日志或告警；
+`last_generation` 给出最近一次生成的 `done_reason`/`eval_count`（生成预留不足时它是 `length`）。
 回执还会按域投影后再回放（`OllamaDecider(result_projector=project_observation_result)`）：
 请求回声与领域重块不再喂给模型，`read_state` 保留全部状态；实测 flight/control 类回执
-字符数减半，长循环实测 `prompt_eval_count` 10421 → 9156。
-真实循环验证（16 次观察 + 模型答 system prompt 里的口令）：省略 4 条、估算 15008/30720、
+字符数减半，长循环实测 `prompt_eval_count` 10421 → 9169。
+真实循环验证（16 次观察 + 模型答 system prompt 里的口令）：省略 4 条、估算 15032/30720、
 口令答对。全部实测数字与取舍见 `docs/model-selection.md`「上下文预算」一节。
 
 ```python

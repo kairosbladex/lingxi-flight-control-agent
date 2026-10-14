@@ -9,7 +9,7 @@
 压缩必然触发；用户问的是 system prompt 里的口令标记，答对就证明硬性约束没被丢掉。
 
 用法：
-    PYTHONPATH=src python3 tools/bench/long_loop_budget.py [model] [scripted_steps]
+    PYTHONPATH=src python3 tools/bench/long_loop_budget.py [model] [scripted_steps] [keep_recent] [on|off]
 """
 
 import json
@@ -59,6 +59,8 @@ class ScriptedThenModel:
 def main() -> int:
     model = sys.argv[1] if len(sys.argv) > 1 else "qwen3.5:9b"
     scripted = int(sys.argv[2]) if len(sys.argv) > 2 else SCRIPTED_STEPS
+    keep_recent = int(sys.argv[3]) if len(sys.argv) > 3 else DEFAULT_KEEP_RECENT_OBSERVATIONS
+    summary = (sys.argv[4] if len(sys.argv) > 4 else "on") != "off"
 
     simulator = MemoryFlightControlSimulator(
         RuntimeBinding("actor-bench", "project-bench", "hangar-01", "drone-01", "batch-01", 1))
@@ -66,7 +68,8 @@ def main() -> int:
     definitions = registry.definitions()
 
     brain = OllamaDecider(model=model, system_prompt=SYSTEM_PROMPT, base_url=BASE_URL,
-                          keep_alive="30m", think=None,
+                          keep_alive="30m", think=None, keep_recent_observations=keep_recent,
+                          omission_summary=summary,
                           result_projector=project_observation_result)
     decider = ScriptedThenModel(scripted, brain)
     loop = BoundedAgentLoop(decider, registry, max_steps=scripted + 4)
@@ -83,7 +86,7 @@ def main() -> int:
 
     response = brain.last_raw_response or {}
     print(f"模型={model}  脚本步数={scripted}  默认num_ctx={DEFAULT_NUM_CTX}  "
-          f"回放上限={DEFAULT_KEEP_RECENT_OBSERVATIONS}  回执投影=on")
+          f"回放上限={keep_recent}  省略摘要={'on' if summary else 'off'}  回执投影=on")
     print(json.dumps({
         "循环结果": result.status.value,
         "观察条数": len(checkpoint.observations),

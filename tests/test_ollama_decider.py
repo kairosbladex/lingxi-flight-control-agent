@@ -348,17 +348,25 @@ class PromptBudgetTests(unittest.TestCase):
     def test_only_the_most_recent_observations_are_replayed(self):
         definitions = budget_tools()
         decider = self.decider(num_ctx=DEFAULT_NUM_CTX)
-        observations = bulk_observations(DEFAULT_KEEP_RECENT_OBSERVATIONS + 6)
+        observations = [
+            {"tool": f"action_{index:02d}", "arguments": {"value": index},
+             "result": {"status": "accepted", "blob": f"OMITTED-{index:02d}"}}
+            for index in range(DEFAULT_KEEP_RECENT_OBSERVATIONS + 6)
+        ]
         messages = decider.messages("向前飞10米", checkpoint(observations=observations), definitions)
 
         replayed = [m["tool_calls"][0]["function"]["name"] for m in messages if m.get("tool_calls")]
         self.assertEqual(replayed,
                          [o["tool"] for o in observations[-DEFAULT_KEEP_RECENT_OBSERVATIONS:]])
         self.assertEqual(messages[2]["role"], "assistant")
-        self.assertIn("更早的 6 次工具调用已省略", messages[2]["content"])
+        self.assertEqual(
+            messages[2]["content"],
+            "（更早的 6 次工具调用已省略："
+            + " ".join(f"action_{index:02d}✓" for index in range(6)) + "）")
+        # 省略的观察只留摘要；它们的回执内容绝不回放。
         serialized = json.dumps(messages, ensure_ascii=False)
-        for omitted in observations[:6]:
-            self.assertNotIn(omitted["tool"], serialized)
+        for index in range(6):
+            self.assertNotIn(f"OMITTED-{index:02d}", serialized)
 
     def test_oversized_single_observation_is_omitted_rather_than_truncated(self):
         definitions = budget_tools()
@@ -368,7 +376,9 @@ class PromptBudgetTests(unittest.TestCase):
         messages = decider.messages("向前飞10米", checkpoint(observations=observations), definitions)
 
         self.assertIn("更早的 1 次工具调用已省略", messages[2]["content"])
-        self.assertNotIn("read_state", json.dumps(messages, ensure_ascii=False))
+        # 超大回执连一个字符都不进 prompt；省略说明里只留工具名与状态。
+        self.assertNotIn("x" * 100, json.dumps(messages, ensure_ascii=False))
+        self.assertEqual(messages[2]["content"], "（更早的 1 次工具调用已省略：read_state✓）")
         self.assertLessEqual(decider.estimate_prompt_tokens(messages, definitions),
                              decider.prompt_budget_tokens)
 
@@ -443,13 +453,93 @@ class PromptBudgetTests(unittest.TestCase):
 
         self.assertEqual(messages[0]["content"], DEFAULT_SYSTEM_PROMPT)
         self.assertEqual(messages[1], {"role": "user", "content": "读取当前状态"})
+        omitted = 20 - DEFAULT_KEEP_RECENT_OBSERVATIONS
         self.assertEqual(messages[2]["content"],
-                         f"（更早的 {20 - DEFAULT_KEEP_RECENT_OBSERVATIONS} 次工具调用已省略）")
+                         f"（更早的 {omitted} 次工具调用已省略：{' '.join(['read_state✓'] * omitted)}）")
         self.assertLessEqual(decider.estimate_prompt_tokens(messages, definitions),
                              decider.prompt_budget_tokens)
         # 默认窗口必须装得下实测的完整对话；压缩只是策略上的进一步收窄。
         self.assertGreaterEqual(decider.prompt_budget_tokens,
                                 self.MEASURED_TWENTY_OBSERVATION_TOKENS)
+
+
+class OmissionSummaryTests(unittest.TestCase):
+    """被压掉的早期观察换成一条紧凑摘要（工具名 + 状态），而不是一句裸占位。
+
+    裸占位只说「有更早的调用」，模型不知道做过什么，容易重复执行；摘要把「做过什么、
+    成没成」留在上下文里。摘要本身也必须受同一套预算约束，且**优先于观察被压**。
+    """
+
+    def decider(self, **kwargs):
+        kwargs.setdefault("num_ctx", DEFAULT_NUM_CTX)
+        return OllamaDecider(model="test-model", transport=FakeTransport([]), **kwargs)
+
+    def test_summary_is_deterministic_and_names_each_omitted_call(self):
+        definitions = budget_tools()
+        observations = bulk_observations(DEFAULT_KEEP_RECENT_OBSERVATIONS + 3)
+        messages = self.decider().messages("向前飞10米",
+                                           checkpoint(observations=observations), definitions)
+        expected = ("（更早的 3 次工具调用已省略："
+                    "action_00✓ action_01✓ action_02✓）")
+        self.assertEqual(messages[2]["content"], expected)
+        # 确定性：同一检查点重复构建必须逐字节相同。
+        again = self.decider().messages("向前飞10米",
+                                        checkpoint(observations=observations), definitions)
+        self.assertEqual(messages, again)
+
+    def test_failed_calls_are_marked_as_failed_without_replaying_their_body(self):
+        definitions = budget_tools()
+        observations = [
+            {"tool": "hover", "arguments": {},
+             "error": {"code": "tool_error", "message": "距离超限的详细原因"}},
+            {"tool": "action_00", "arguments": {"value": 0}, "result": {"status": "accepted"}},
+            {"tool": "action_01", "arguments": {"value": 1}, "result": {"status": "accepted"}},
+        ]
+        messages = self.decider(keep_recent_observations=1).messages(
+            "向前飞10米", checkpoint(observations=observations), definitions)
+        self.assertEqual(messages[2]["content"],
+                         "（更早的 2 次工具调用已省略：hover✗ action_00✓）")
+        self.assertNotIn("距离超限的详细原因", json.dumps(messages, ensure_ascii=False))
+
+    def test_summary_is_compressed_before_any_observation_is_dropped(self):
+        """完整摘要装不下时，先退化成紧凑占位，而不是把观察一条条丢掉。"""
+        definitions = budget_tools()
+        # 省掉的观察带一个超长工具名：完整摘要 ≈3000 tokens，装不进 num_ctx=4096 的 2048 预算。
+        observations = [{"tool": "y" * 6000, "arguments": {},
+                         "result": {"status": "accepted"}}] + [
+            {"tool": f"action_{index:02d}", "arguments": {"value": index},
+             "result": {"status": "accepted"}}
+            for index in range(3)
+        ]
+        decider = self.decider(num_ctx=4096, keep_recent_observations=1)
+        messages = decider.messages("向前飞10米", checkpoint(observations=observations), definitions)
+
+        self.assertEqual(messages[2]["content"], "（更早的 3 次工具调用已省略）")
+        replayed = [m["tool_calls"][0]["function"]["name"] for m in messages if m.get("tool_calls")]
+        self.assertEqual(replayed, ["action_02"])          # 观察一条都没被丢
+        self.assertLessEqual(decider.estimate_prompt_tokens(messages, definitions),
+                             decider.prompt_budget_tokens)
+
+    def test_summary_can_be_turned_off_for_an_ab_comparison(self):
+        # A/B 用：关掉摘要就是修复前那句裸占位，其余策略一字不改。
+        definitions = budget_tools()
+        decider = self.decider(keep_recent_observations=2, omission_summary=False)
+        messages = decider.messages("向前飞10米",
+                                    checkpoint(observations=bulk_observations(4)), definitions)
+        self.assertEqual(messages[2]["content"], "（更早的 2 次工具调用已省略）")
+
+    def test_summary_is_never_sent_over_budget(self):
+        definitions = budget_tools()
+        for num_ctx in (4096, 8192, DEFAULT_NUM_CTX):
+            for count in (13, 20, 60):
+                decider = self.decider(num_ctx=num_ctx)
+                messages = decider.messages("向前飞10米",
+                                            checkpoint(observations=bulk_observations(count)),
+                                            definitions)
+                self.assertLessEqual(
+                    decider.estimate_prompt_tokens(messages, definitions),
+                    decider.prompt_budget_tokens,
+                    msg=f"num_ctx={num_ctx} observations={count}")
 
 
 class BudgetTelemetryTests(unittest.TestCase):

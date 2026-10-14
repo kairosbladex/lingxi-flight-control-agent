@@ -49,6 +49,10 @@ DEFAULT_OUTPUT_RESERVE_TOKENS = 2048
 #: 它把稳态 prompt 增长封顶（每次决策只多一条观察），预算闸门则处理单条超大观察。
 DEFAULT_KEEP_RECENT_OBSERVATIONS = 12
 
+#: 被压掉的观察是否回放「工具名 + 状态」摘要（而不是一句裸占位）。
+#: 设 False 只为 A/B 复现修复前的行为，生产默认开——理由见 docs/model-selection.md。
+DEFAULT_OMISSION_SUMMARY = True
+
 #: 保守字符估算：中日韩字符按 1 token/字，其余按 2 字符/token。
 #: 实测（238 上的 qwen3.5:9b）：59 工具 + system prompt = 3525 tokens，本估算给 7449（+111%）；
 #: 单条 read_state 回执 1386 字符 ≈ 569 tokens，本估算给 704（+24%）。
@@ -263,6 +267,7 @@ class OllamaDecider:
         num_ctx: int = DEFAULT_NUM_CTX,
         output_reserve: int = DEFAULT_OUTPUT_RESERVE_TOKENS,
         keep_recent_observations: int = DEFAULT_KEEP_RECENT_OBSERVATIONS,
+        omission_summary: bool = DEFAULT_OMISSION_SUMMARY,
         keep_alive: str | None = None,
         max_attempts: int = 2,
         transport: Transport | None = None,
@@ -286,6 +291,8 @@ class OllamaDecider:
         if (isinstance(keep_recent_observations, bool)
                 or not isinstance(keep_recent_observations, int) or keep_recent_observations < 0):
             raise ValueError("keep_recent_observations must be a non-negative integer")
+        if not isinstance(omission_summary, bool):
+            raise ValueError("omission_summary must be a boolean")
         if token_estimator is not None and not callable(token_estimator):
             raise ValueError("token_estimator must be callable")
         if result_projector is not None and not callable(result_projector):
@@ -303,6 +310,7 @@ class OllamaDecider:
         self._num_ctx = num_ctx
         self._output_reserve = output_reserve
         self._keep_recent_observations = keep_recent_observations
+        self._omission_summary = omission_summary
         self._token_estimator = token_estimator
         self._result_projector = result_projector
         self._keep_alive = keep_alive
@@ -341,35 +349,63 @@ class OllamaDecider:
     ) -> int:
         return estimate_prompt_tokens(messages, definitions, estimator=self._token_estimator)
 
-    @staticmethod
-    def _placeholder(omitted: int) -> dict[str, Any]:
-        """被压掉的早期观察只留一条明确占位，模型知道「还有更早的调用」而不是被无声抹掉。"""
-        return {"role": "assistant", "content": f"（更早的 {omitted} 次工具调用已省略）"}
+    #: 摘要里的状态标记：成功回执 ✓，失败回执 ✗。
+    _SUMMARY_OK = "✓"
+    _SUMMARY_ERROR = "✗"
+
+    @classmethod
+    def _summarize(cls, labels: Sequence[tuple[str, bool]]) -> str:
+        listed = " ".join(
+            f"{name}{cls._SUMMARY_OK if ok else cls._SUMMARY_ERROR}" for name, ok in labels)
+        return f"（更早的 {len(labels)} 次工具调用已省略：{listed}）"
+
+    def _omission_candidates(
+        self, labels: Sequence[tuple[str, bool]]
+    ) -> tuple[dict[str, Any] | None, ...]:
+        """省略说明的确定性降级阶梯：完整摘要 → 紧凑占位 → 不放说明。
+
+        裸占位只说「有更早的调用」，模型不知道**做过什么、成没成**，于是容易重复调用已经
+        成功过的工具。摘要把「工具名 + 状态」留下来，同时它自己仍然受同一套预算约束：
+        **摘要优先被压**——预算不够先牺牲摘要的信息量，观察本身永远晚一步才被丢。
+        """
+        compact = {"role": "assistant", "content": f"（更早的 {len(labels)} 次工具调用已省略）"}
+        if not labels:
+            return (None,)
+        if not self._omission_summary:
+            return (compact, None)
+        return (
+            {"role": "assistant", "content": self._summarize(labels)},
+            compact,
+            None,
+        )
 
     def _fit_observations(
         self,
         head: list[dict[str, Any]],
         turns: list[list[dict[str, Any]]],
         definitions: Sequence[ToolDefinition],
-    ) -> tuple[list[list[dict[str, Any]]], int]:
-        """确定性地挑出还能回放的观察轮次，返回 (保留的轮次, 被省略的条数)。
+        labels: Sequence[tuple[str, bool]],
+    ) -> tuple[list[list[dict[str, Any]]], dict[str, Any] | None]:
+        """确定性地挑出还能回放的观察轮次，返回 (保留的轮次, 省略说明或 None)。
 
-        两层保护：
+        三层保护：
         1. 只回放最近 ``keep_recent_observations`` 条，把稳态增长封顶；
-        2. 预算硬闸门——即便在候选里，装不下就从最旧的继续往前丢。
+        2. 预算硬闸门——即便在候选里，装不下就从最旧的继续往前丢；
+        3. 省略说明先降级（完整摘要 → 紧凑占位 → 不放），再考虑丢观察。
         system prompt 与当前 user 消息在 ``head`` 里，任何情况下都不参与丢弃。
         """
         cap = self._keep_recent_observations
         kept = list(turns[len(turns) - cap:]) if cap < len(turns) else list(turns)
         while True:
             omitted = len(turns) - len(kept)
-            candidate = list(head)
-            if omitted:
-                candidate.append(self._placeholder(omitted))
-            for turn in kept:
-                candidate.extend(turn)
-            if self.estimate_prompt_tokens(candidate, definitions) <= self.prompt_budget_tokens:
-                return kept, omitted
+            for omission in self._omission_candidates(labels[:omitted]):
+                candidate = list(head)
+                if omission is not None:
+                    candidate.append(omission)
+                for turn in kept:
+                    candidate.extend(turn)
+                if self.estimate_prompt_tokens(candidate, definitions) <= self.prompt_budget_tokens:
+                    return kept, omission
             if not kept:
                 raise PromptBudgetExceeded(
                     f"prompt budget is {self.prompt_budget_tokens} tokens, but the system prompt "
@@ -416,6 +452,8 @@ class OllamaDecider:
             {"role": "user", "content": user_message},
         ]
         turns: list[list[dict[str, Any]]] = []
+        # 与 turns 一一对应的 (工具名, 是否成功)，用来给被压掉的观察写摘要。
+        labels: list[tuple[str, bool]] = []
         for observation in checkpoint.observations:
             name = observation.get("tool")
             if not isinstance(name, str) or not name:
@@ -442,14 +480,15 @@ class OllamaDecider:
                     "content": json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str),
                 },
             ])
+            labels.append((name, "result" in observation))
 
-        kept, omitted = self._fit_observations(head, turns, definitions)
+        kept, omission = self._fit_observations(head, turns, definitions, labels)
         messages = list(head)
-        if omitted:
-            messages.append(self._placeholder(omitted))
+        if omission is not None:
+            messages.append(omission)
         for turn in kept:
             messages.extend(turn)
-        return messages, omitted
+        return messages, len(turns) - len(kept)
 
     def payload(
         self, user_message: str, checkpoint: AgentCheckpoint, definitions: Sequence[ToolDefinition]

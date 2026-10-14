@@ -132,8 +132,9 @@ system prompt 里的硬性约束。把口令标记 `ZEBRA-7391` 写进 system pr
 - 预算 = `num_ctx - output_reserve`（默认预留 2048 tokens 给生成）。
 - 压缩策略（确定性、可测试）：
   1. system prompt 与当前 user 消息**永不丢弃**；
-  2. 只回放最近 12 条观察，更早的压成明确占位`（更早的 N 次工具调用已省略）`；
-  3. 仍超预算就从最旧的候选观察继续往前丢；连头部都装不下时抛 `PromptBudgetExceeded`，
+  2. 只回放最近 12 条观察，更早的压成紧凑摘要（工具名 + 状态，见「省略观察的摘要回放」）；
+  3. 摘要优先被压：装不下先退化成`（更早的 N 次工具调用已省略）`，再装不下才从最旧的
+     候选观察继续往前丢；连头部都装不下时抛 `PromptBudgetExceeded`，
      **绝不把超长 prompt 发出去让服务端静默截断**。
 
 压缩后的实测（同一条 20 次观察对话，口令标记仍在）：
@@ -141,12 +142,11 @@ system prompt 里的硬性约束。把口令标记 `ZEBRA-7391` 写进 system pr
 | 配置 | 回放观察 | 估算 tokens | 预算 | prompt_eval_count | 口令 |
 |---|---|---|---|---|---|
 | `num_ctx=8192` | — | 7521（仅头部） | 6144 | **拒绝发送**（`PromptBudgetExceeded`） | — |
-| `num_ctx=16384` | 9/20 | 14204 | 14336 | 8728 | ✅ |
-| `num_ctx=32768`（默认） | 12/20 | 16424 | 30720 | **10440** | ✅ |
+| `num_ctx=16384` | 9/20 | 14271 | 14336 | 8762 | ✅ |
+| `num_ctx=32768`（默认） | 12/20 | 16472 | 30720 | **10465** | ✅ |
 
 `num_ctx=8192` 被拒绝是刻意的：59 个工具的契约 + system prompt 的保守估算已超出它的预算，
 这个窗口**本来就装不下**；明确报错（并提示调大 `num_ctx`）比静默丢掉硬性约束安全。
-
 
 ### 生成预留：`output_reserve = 2048` 的实测依据
 
@@ -212,6 +212,97 @@ print(decider.last_prompt_estimate, decider.last_omitted_observations,
 换 `SafetyFastPathDecider` 包装时读数只在真的走了模型的那一步前进（快路径短路不计数），
 `tools/flight_agent_demo.py --cockpit` 会逐步打印 `[prompt预算]`、`[生成]` 与收尾的累计行。
 
+### 回放上限：`keep_recent_observations = 12` 的实测取舍
+
+这个参数只做一件事：把「每次决策都多回放一条观察」的稳态增长封顶。定它要回答两个问题——
+压到多小会让模型答不出来或重复执行，留多大才不浪费预算。
+
+做法：固定一条 8 动作复合驾驶舱指令（覆盖 control / flight / camera / infrared / state 五个域），
+同一台模拟器、同一套 59 工具、同一 `num_ctx=32768`，只改回放上限与省略说明，跑完整
+`BoundedAgentLoop`（含预览/确认两阶段）：
+
+```bash
+PYTHONPATH=src python3 tools/bench/keep_recent_experiment.py qwen3.5:9b 6,12,20,inf 24 on
+PYTHONPATH=src python3 tools/bench/keep_recent_experiment.py qwen3.5:9b 6,12 24 both   # 摘要 A/B
+```
+
+| 回放上限 | 省略摘要 | 结果 | 动作序列 | 重复执行 | 收尾省略 | 估算峰值 | 实测收尾 prompt | 墙钟 |
+|---|---|---|---|---|---|---|---|---|
+| 6 | off（裸占位） | **tool_error**（3/3 复现） | 8/8 正确 | 无 | 2 | 10430 | 6033 | 89.6~106.8s |
+| 6 | on | final | 8/8 正确 | 无 | 2 | 10656 | 6040 | 83.6s |
+| 12（默认） | off | final | 8/8 正确 | 无 | 0 | 11496 | 6663 | 79.9~98.0s |
+| 12（默认） | on | final | 8/8 正确 | 无 | 0 | 11496 | 6663 | 80.7s |
+| 20 | on | final | 8/8 正确 | 无 | 0 | 11496 | 6663 | 81.3s |
+| 无上限 | on | final | 8/8 正确 | 无 | 0 | 11496 | 6663 | 80.8s |
+
+- **8 条观察的指令根本碰不到 12/20/无上限**（`收尾省略=0`），这三档逐字节等价；
+  所以 20 及以上在这条指令上没有行为差异，只有更长循环里才区分得开。
+- `回放上限=6` + 裸占位会把循环打成 `tool_error`：8 个动作全部执行正确，但收尾那一步模型
+  连续两次只产出思考、既无正文也无工具调用（`eval_count=191`、`done_reason=stop`），
+  循环按 fail-closed 收尾。三次复现，逐字段相同（6033/191/16 次调用）。
+- 换成摘要后 6 能过（见下一节），但那只有单次证据，而且它就贴着失败边缘。
+
+再对照一条真实长循环（16 次 `read_state` 观察，问 system prompt 里的口令）：
+
+```bash
+PYTHONPATH=src python3 tools/bench/long_loop_budget.py qwen3.5:9b 16 6 off
+PYTHONPATH=src python3 tools/bench/long_loop_budget.py qwen3.5:9b 16 6 on
+PYTHONPATH=src python3 tools/bench/long_loop_budget.py qwen3.5:9b 16 12 on
+```
+
+| 回放上限 | 省略摘要 | 省略观察 | 估算 tokens | 实测 prompt_eval_count | 口令 |
+|---|---|---|---|---|---|
+| 6 | off | 10/16 | 11276 | 6373 | ✅ |
+| 6 | on | 10/16 | 11337 | 6404 | ✅ |
+| 12（默认） | on | 4/16 | 15032 | 9169 | ✅ |
+
+结论：**维持 12**。三条依据：
+
+1. 12 在两条真实循环上都通过，且离实测失败边缘（6 + 裸占位，3/3 fail-closed）有一倍距离；
+2. 12 在 8 动作这类常见指令上根本不触发压缩（省略 0 条），真正的成本只落在「超过 12 条观察」
+   的长循环上——而那正是最不能忘记「做过什么」的地方；
+3. 12 对 20/无上限在可测范围内没有行为差异，却在 16 观察循环里少回放 8 条、
+   估算 15032/30720（占预算 49%）。
+
+不改成 6 的理由是风险不对称：降到 6 能省 10%~43% 实测 prompt（8 动作 6663→6040，
+16 观察 9169→6404），但省下的是远未用满的预算，赌上的是「整轮答不出来」。
+要把默认降到 6，需要比「每种负载 n=1」更强的证据。
+
+### 省略观察的摘要回放（替代裸占位）
+
+被压掉的早期观察原本只留一句`（更早的 N 次工具调用已省略）`——模型知道「有更早的调用」，
+却不知道**做过什么、成没成**，于是可能重复调用已经成功过的工具，甚至卡在收尾。
+
+现在换成确定性紧凑摘要：**工具名 + 状态**（成功 `✓`、失败 `✗`），按发生顺序排列：
+
+```
+（更早的 3 次工具调用已省略：control_acquire✓ move_forward✓ camera_photo✗）
+```
+
+- 确定性：只看检查点里的工具名与「有没有 `result`」，不依赖 tokenizer、不依赖时间与随机；
+- 仍受同一套预算约束，且**摘要优先被压**：装不下先退化成紧凑占位
+  `（更早的 N 次工具调用已省略）`，再装不下才不放说明；观察本身永远最后才被丢；
+- system prompt 与当前 user 消息照旧永不参与丢弃；
+- 被省略回执的**正文一个字符都不进 prompt**，只留工具名与状态（失败回执的报错细节同样不回放）；
+- `OllamaDecider(omission_summary=False)` 退回裸占位，只为 A/B 复现修复前的行为。
+
+实测（同一条 8 动作复合指令，`... keep_recent_experiment.py qwen3.5:9b 6,12 24 both`）：
+
+| 回放上限 | 省略摘要 | 结果 | 空响应重试 | 估算峰值 |
+|---|---|---|---|---|
+| 6 | off | **tool_error** | 2 | 10430 |
+| 6 | **on** | **final** | 0 | 10656 |
+| 12 | off | final | 0 | 11496 |
+| 12 | on | final | 0 | 11496 |
+
+摘要的代价很小：这条指令上把 2 条被省略的调用名写出来，比裸占位多 16 估算 tokens
+（12538 vs 12522，同一收尾检查点的离线估算）、多 7 实测 prompt tokens（6040 vs 6033）；
+16 观察长循环里把 4 条 `read_state` 写出来，实测 prompt 从 9156 涨到 9169。换来的是
+「更早做过什么」不被抹掉——在 6 档上它直接把一轮 `tool_error` 变成 `final`。
+
+测试见 `tests/test_ollama_decider.py::OmissionSummaryTests`：摘要内容逐字节确定、失败调用标 `✗`、
+超预算时先退化成紧凑占位（此时观察一条都不丢）、任何预算下都不超发。
+
 ### 真实长循环验证（`tools/bench/long_loop_budget.py`）
 
 合成对话只能证明闸门逻辑，这里让**真实 `BoundedAgentLoop`** 先由脚本驱动 16 次
@@ -222,8 +313,9 @@ print(decider.last_prompt_estimate, decider.last_omitted_observations,
 | 循环结果 | `final`，16 条观察，真实模型只被调用 1 次 |
 | 答复 | `ZEBRA-7391`——**口令正确，system prompt 没被丢掉** |
 | 省略观察 | 4（16 − 回放上限 12） |
-| 估算 tokens（三档） | 不压不投影 19361 → 只压缩 16424 → **压缩+投影 15008** |
-| 实测 `prompt_eval_count` | **9156**（只压缩 10421；不压不投影是 34 条消息） |
+| 估算 tokens（三档） | 不压不投影 19361 → 只压缩 16448 → **压缩+投影 15032** |
+| 实测 `prompt_eval_count` | **9169**（不压不投影是 34 条消息；比裸占位多 13——4 条省略观察的工具名） |
+| 实测 `eval_count` / `done_reason` | 59 / `stop` |
 | 累计读数 | `compressed_payloads=1`、`omitted_observation_turns=4` |
 
 开投影后同一条驾驶舱 e2e 逐步读数也随之下降（第 3 步 9139 → 8369，
@@ -234,9 +326,9 @@ print(decider.last_prompt_estimate, decider.last_omitted_observations,
 
 | `num_ctx` | 回放观察 | 估算 tokens | 预算 |
 |---|---|---|---|
-| 32768（默认，仅策略上限） | 12/16 | 16424 | 30720 |
-| 16384 | 9/16 | 14204 | 14336 |
-| 12288 | 3/16 | 9764 | 10240 |
+| 32768（默认，仅策略上限） | 12/16 | 16448 | 30720 |
+| 16384 | 9/16 | 14246 | 14336 |
+| 12288 | 3/16 | 9843 | 10240 |
 
 ### 默认值取舍：为什么是 32768
 
@@ -252,9 +344,9 @@ KV cache 实测（`/api/ps` 的 `size_vram`；同一模型换 `num_ctx` 会重�
 （22.4 GB），而这台机器是 5 人共用的生产机，「256K 上下文」实际开不起来。
 
 选 **32768** 的理由：实测 14987 tokens 的完整对话装得下（2.37 倍余量），默认策略进一步压到
-10440；KV cache 只比 8192 多 1.04 GB，是同机 5 人共用付得起的代价；只有原生上限的 1/8，
-不为用不到的深度白占显存。不选 16384：压缩后虽能用（8728），但留给大回执和长用户消息的余量太小；
-不选 65536 以上：prompt 已被 `keep_recent_observations=12` 封顶在 ~10.4K，更大的窗口只是白占 KV cache。
+10465；KV cache 只比 8192 多 1.04 GB，是同机 5 人共用付得起的代价；只有原生上限的 1/8，
+不为用不到的深度白占显存。不选 16384：压缩后虽能用（8762），但留给大回执和长用户消息的余量太小；
+不选 65536 以上：prompt 已被 `keep_recent_observations=12` 封顶在 ~10.5K，更大的窗口只是白占 KV cache。
 
 ### 回执投影：从源头压低每次观察
 
@@ -298,9 +390,10 @@ KV cache 实测（`/api/ps` 的 `size_vram`；同一模型换 `num_ctx` 会重�
   `OllamaDecider(num_ctx=None)` 会被拒绝；窗口小于「59 工具 + system prompt」的保守估算
   （59 工具配置下阈值约 `num_ctx=9600`，`num_ctx=8192` 必然命中）会抛 `PromptBudgetExceeded`，
   而不是静默丢掉 system prompt。压缩策略见上一节。
-- **`output_reserve=2048` 有实测台账，改之前先看数据。** 最坏一次生成 780（无工具闲聊）、
-  Agent 决策最坏 395，`done_reason` 全是 `stop`；触发调大的信号是 `last_generation` 里
-  出现 `done_reason="length"` 或 `eval_count` 逼近 2048。
+- **三个预算参数都有实测台账，改之前先看数据。** `num_ctx=32768`（KV cache 与显存余量）、
+  `output_reserve=2048`（最坏生成 780 / Agent 决策 395，全是 `done_reason=stop`）、
+  `keep_recent_observations=12`（12/20/无上限行为一致；6 + 裸占位 3/3 fail-closed）。
+  `omission_summary=False` 只用于 A/B 复现裸占位，生产别关。
 - **不要显式传 `think: false`。** 对 `qwen3.5:9b` + Ollama 0.21.0，显式关闭思考会让
   **工具调用完全失效**——模型返回空响应（`content=""`、无 `tool_calls`、`done_reason=stop`）。
   省略该字段时思考照常开启（实测 110 字思考）、工具调用正常且略快：
@@ -436,6 +529,8 @@ python3 tools/bench/cache_probe.py qwen3.5:9b                    # KV cache 命�
 PYTHONPATH=src python3 tools/bench/loop_cost.py qwen3.5:9b       # 真实循环逐步成本
 PYTHONPATH=src python3 tools/bench/context_budget.py qwen3.5:9b  # 上下文预算 / 截断对比
 PYTHONPATH=src python3 tools/bench/generation_reserve.py qwen3.5:9b  # 生成预留（done_reason/eval_count）
+PYTHONPATH=src python3 tools/bench/keep_recent_experiment.py qwen3.5:9b 6,12,20,inf 24 on  # 回放上限取舍
+PYTHONPATH=src python3 tools/bench/keep_recent_experiment.py qwen3.5:9b 6,12 24 both      # 摘要 A/B
 PYTHONPATH=src python3 tools/bench/long_loop_budget.py qwen3.5:9b # 真实长循环里的压缩验证
 PYTHONPATH=src python3 tools/flight_agent_demo.py                # 端到端（最小执行器）
 PYTHONPATH=src python3 tools/flight_agent_demo.py --cockpit      # 端到端（59 动作驾驶舱）
