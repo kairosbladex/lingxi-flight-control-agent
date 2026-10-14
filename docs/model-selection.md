@@ -88,8 +88,110 @@
 四条用例全部行为正确：单步、多步、超限拒绝、双向移动。开启 `think=true` 亦验证可用
 （首轮 16.9s，后续 2.4~3.2s）。
 
+上下文预算改动后复跑完整驾驶舱（`--cockpit`，59 工具 + 预览/确认两阶段，`num_ctx=32768` 默认）：
+
+| 命令 | 结果 | 步骤 | 已执行 |
+|---|---|---|---|
+| 接管控制权，然后向前飞10米，再拍张照片 | final | 4/24 | control_acquire → move_forward → camera_photo |
+| 切到红外镜头并设置测温范围-10到120度 | final | 5/24 | camera_infrared → control_acquire → camera_infrared → infrared_set_limits |
+| 读取当前状态 | final | 2/24 | read_state |
+| 急停 | final（快路径 0.0s） | 2/24 | emergency_stop |
+
+4/4 通过：模型自主完成「取控制权 → 移动 → 拍照」，并在第一个 `camera_infrared` 回执
+`CONTROL_NOT_OWNED` 后自己补上 `control_acquire` 纠正。冷启动期第一次整轮运行有一条命令
+卡在 180s 超时上（fail-closed，`步骤数 0/24`、未执行任何动作），模型驻留后复跑通过。
+
+## 上下文预算：默认 `num_ctx = 32768`，超预算先压缩再发送
+
+### 现象：8192 会静默丢掉 system prompt
+
+Ollama 在 prompt 超过 `num_ctx` 时**不报错**，直接丢掉**最前面**的 token——也就是
+system prompt 里的硬性约束。把口令标记 `ZEBRA-7391` 写进 system prompt，再发同一条
+20 次 `read_state` 观察的对话（42 条消息，每次回执 1386 字符）：
+
+| 场景 | prompt_eval_count | 答出口令 | 说明 |
+|---|---|---|---|
+| 59 工具 + system prompt + user（无观察） | 3567 | ✅ | 固定头部实测成本 |
+| 20 次观察，`num_ctx=8192` | **8097** | ❌ | 被压在上限，system prompt 被丢弃，**无任何报错** |
+| 20 次观察，`num_ctx=32768` | **14987** | ✅ | 完整 |
+
+每次观察回放（assistant `tool_calls` + tool 回执）实测 ≈ **571 prompt tokens**
+（`(14987-3567)/20`；比按 1386 字符 / 3.7 粗算的 357 高一截——`command_id`/`idempotency_key`
+这类十六进制串 tokenize 得很差）。20 次观察本身就占 1.1 万 tokens。所以 `num_ctx=8192`
+只留得下约 8 条观察（`(8192-3567)/571 ≈ 8`），**第 9 次工具调用起就开始静默丢弃最前面的内容**
+——回执口径越小这个数字越大，但丢的自始至终是 system prompt。
+
+### 修复：`OllamaDecider` 自己管住预算
+
+`src/lingxi_flight_control/ollama_decider.py` 每次发送前用**不依赖 tokenizer 的保守字符估算**
+核对预算：
+
+- 估算口径：中日韩字符 1 token/字，其余 2 字符/token，另加每条消息 8 tokens 模板开销；
+  tools 契约一并计入——59 个工具实测就占 3213~3525 tokens，漏掉它预算形同虚设。
+  保守度实测：固定头部估 7521 / 实测 3567（+111%），整条 20 次观察对话估 22321 / 实测 14987（+49%）。
+- 预算 = `num_ctx - output_reserve`（默认预留 2048 tokens 给生成）。
+- 压缩策略（确定性、可测试）：
+  1. system prompt 与当前 user 消息**永不丢弃**；
+  2. 只回放最近 12 条观察，更早的压成明确占位`（更早的 N 次工具调用已省略）`；
+  3. 仍超预算就从最旧的候选观察继续往前丢；连头部都装不下时抛 `PromptBudgetExceeded`，
+     **绝不把超长 prompt 发出去让服务端静默截断**。
+
+压缩后的实测（同一条 20 次观察对话，口令标记仍在）：
+
+| 配置 | 回放观察 | 估算 tokens | 预算 | prompt_eval_count | 口令 |
+|---|---|---|---|---|---|
+| `num_ctx=8192` | — | 7521（仅头部） | 6144 | **拒绝发送**（`PromptBudgetExceeded`） | — |
+| `num_ctx=16384` | 9/20 | 14204 | 14336 | 8728 | ✅ |
+| `num_ctx=32768`（默认） | 12/20 | 16424 | 30720 | **10440** | ✅ |
+
+`num_ctx=8192` 被拒绝是刻意的：59 个工具的契约 + system prompt 的保守估算已超出它的预算，
+这个窗口**本来就装不下**；明确报错（并提示调大 `num_ctx`）比静默丢掉硬性约束安全。
+
+### 默认值取舍：为什么是 32768
+
+KV cache 实测（`/api/ps` 的 `size_vram`；同一模型换 `num_ctx` 会重新加载）：
+
+| `num_ctx` | 驻留显存 | 相对 8192 |
+|---|---|---|
+| 8192 | 8.97 GB | — |
+| 32768 | 10.01 GB | +1.04 GB（+11.6%） |
+
+差分给出有效边际成本 ≈ 41 KiB/token（KV cache 与随窗口增长的 compute buffer 都线性于 `num_ctx`）。
+据此外推：65536 ≈ 11.4 GB，131072 ≈ 14.2 GB，原生 262144 ≈ 19.7 GB——已逼近单张 L20 的空闲显存
+（22.4 GB），而这台机器是 5 人共用的生产机，「256K 上下文」实际开不起来。
+
+选 **32768** 的理由：实测 14987 tokens 的完整对话装得下（2.37 倍余量），默认策略进一步压到
+10440；KV cache 只比 8192 多 1.04 GB，是同机 5 人共用付得起的代价；只有原生上限的 1/8，
+不为用不到的深度白占显存。不选 16384：压缩后虽能用（8728），但留给大回执和长用户消息的余量太小；
+不选 65536 以上：prompt 已被 `keep_recent_observations=12` 封顶在 ~10.4K，更大的窗口只是白占 KV cache。
+
+### 顺带评估：`read_state` 回执的紧凑投影（只记结论，未改代码）
+
+单条 `read_state` 回执 1386 字符里 `state` 占 1055 字符（76%），而大部分字段每步都用不上：
+
+| 块 | 字符 | 每步用得上吗 |
+|---|---|---|
+| 请求回声（`command_id`/`idempotency_key`/`confirmation_*`/`expires_at`） | 92 | ❌ 循环内部记账 |
+| `state.parameters`（5 个速度参数） | 122 | 仅参数设置类动作 |
+| `state.camera`（7 字段） | 143 | 仅相机/云台域 |
+| `state.infrared`（4 字段） | 78 | 仅红外域 |
+| 其余遥测（控制权/姿态/位置/电量/任务/航线等） | 712 | 按域取用 |
+
+按域做紧凑投影（状态/动作/错误 + 控制权/高度/经纬度/电量/任务与航线状态 + 相机 3 字段 +
+红外 3 字段）后是 **435 字符，即原回执的 31%**；按实测 571 tokens/次回放内插，单次约 180 tokens，
+默认 12 条回放从 ~6850 降到 ~2150 tokens。
+
+**先只记录结论。** 改动面不在解码器：`FlightControlReceipt` 是驾驶舱 UI 的对外契约
+（`test_full_control.py`、`test_full_control_registry.py` 逐字段断言），投影必须做在
+「观察 → 模型 prompt」的回放层，并需要一张与 `ACTION_SPECS` 的 `domain` 对齐的字段白名单表。
+它与本文的预算闸门互补：闸门保证不截断，投影从源头压低增长。
+
 ## 运维注意
 
+- **`num_ctx` 默认 32768，且必须显式已知。** 不知道窗口大小就管不住预算，因此
+  `OllamaDecider(num_ctx=None)` 会被拒绝；窗口小于「59 工具 + system prompt」的保守估算
+  （59 工具配置下阈值约 `num_ctx=9600`，`num_ctx=8192` 必然命中）会抛 `PromptBudgetExceeded`，
+  而不是静默丢掉 system prompt。压缩策略见上一节。
 - **不要显式传 `think: false`。** 对 `qwen3.5:9b` + Ollama 0.21.0，显式关闭思考会让
   **工具调用完全失效**——模型返回空响应（`content=""`、无 `tool_calls`、`done_reason=stop`）。
   省略该字段时思考照常开启（实测 110 字思考）、工具调用正常且略快：
@@ -223,6 +325,7 @@ python3 tools/bench/tool_selection.py qwen3.5:9b                 # 59 工具选�
 python3 tools/bench/prefill_cost.py qwen3.5:9b qwen3.6:latest    # 预填充成本
 python3 tools/bench/cache_probe.py qwen3.5:9b                    # KV cache 命中
 PYTHONPATH=src python3 tools/bench/loop_cost.py qwen3.5:9b       # 真实循环逐步成本
+PYTHONPATH=src python3 tools/bench/context_budget.py qwen3.5:9b  # 上下文预算 / 截断对比
 PYTHONPATH=src python3 tools/flight_agent_demo.py                # 端到端（最小执行器）
 PYTHONPATH=src python3 tools/flight_agent_demo.py --cockpit      # 端到端（59 动作驾驶舱）
 ```

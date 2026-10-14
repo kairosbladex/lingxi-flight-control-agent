@@ -17,7 +17,12 @@ from lingxi_flight_control import (
 )
 from lingxi_flight_control.models import AgentCheckpoint, parameter_json_schema
 from lingxi_flight_control.ollama_decider import (
+    DEFAULT_KEEP_RECENT_OBSERVATIONS,
+    DEFAULT_NUM_CTX,
+    DEFAULT_OUTPUT_RESERVE_TOKENS,
+    DEFAULT_SYSTEM_PROMPT,
     OllamaDecider,
+    PromptBudgetExceeded,
     build_tools_payload,
     http_transport,
     tool_payload,
@@ -54,6 +59,33 @@ def checkpoint(**overrides):
     payload = dict(user_input="向前飞10米", context={}, messages=[], tool_calls=[], observations=[])
     payload.update(overrides)
     return AgentCheckpoint(**payload)
+
+
+def budget_tools(count=2):
+    """小工具集：预算测试只关心消息长度，不该让工具契约本身吃掉整个预算。"""
+    return tuple(
+        ToolDefinition(
+            name=f"action_{index}",
+            description="紧凑的测试动作",
+            schema=ToolSchema(
+                properties={"value": ToolParameter("number", minimum=0, maximum=10)},
+                required=("value",)),
+            handler=None)
+        for index in range(count)
+    )
+
+
+def bulk_observations(count, *, blob_chars=0):
+    """造 count 条互不重名、体积可控的观察结果，便于断言「哪几条被省略」。"""
+    return [
+        {
+            "tool": f"action_{index:02d}",
+            "arguments": {"value": index},
+            "result": {"status": "accepted", "action": f"action_{index:02d}",
+                       "blob": "x" * blob_chars},
+        }
+        for index in range(count)
+    ]
 
 
 class SchemaConversionTests(unittest.TestCase):
@@ -256,6 +288,167 @@ class MessageRebuildTests(unittest.TestCase):
         self.assertNotIn("think", decider.payload("x", checkpoint(), ()))
         self.assertIn("think", OllamaDecider(model="m", transport=FakeTransport([]),
                                              think=True).payload("x", checkpoint(), ()))
+
+
+class PromptBudgetTests(unittest.TestCase):
+    """上下文预算：绝不让服务端静默截断。
+
+    Ollama 在 prompt 超过 ``num_ctx`` 时丢的是**最前面**的内容，也就是 system prompt 里的
+    硬性约束，而且不报错。所以 ``OllamaDecider`` 必须在发送前自己算预算、按确定策略压缩。
+    """
+
+    #: docs/model-selection.md 实测（238 上的 qwen3.5:9b + Ollama 0.21.0）：
+    #: 59 工具 + system prompt = 3525 prompt tokens；
+    #: 再叠 20 次 read_state 观察（每次回执 1386 字符）后完整 prompt = 14913 tokens
+    #: （带口令标记的复跑为 14987，这里取较小值当下界）。
+    MEASURED_HEAD_TOKENS = 3525
+    MEASURED_TWENTY_OBSERVATION_TOKENS = 14913
+    #: qwen3.5:9b 原生声明 256K；默认窗口不该直接开满去白占 KV cache。
+    NATIVE_CONTEXT_TOKENS = 256 * 1024
+
+    def decider(self, **kwargs):
+        kwargs.setdefault("num_ctx", 8192)
+        return OllamaDecider(model="test-model", transport=FakeTransport([]), **kwargs)
+
+    # ---- 默认值取舍 --------------------------------------------------------
+
+    def test_default_num_ctx_holds_the_measured_loop_without_wasting_kv_cache(self):
+        # 留余量：实测的 20 次观察完整对话必须装得下（还要留出生成预算）。
+        self.assertGreaterEqual(DEFAULT_NUM_CTX - DEFAULT_OUTPUT_RESERVE_TOKENS,
+                                self.MEASURED_TWENTY_OBSERVATION_TOKENS)
+        self.assertGreater(DEFAULT_NUM_CTX, 8192)
+        # 固定头部（59 工具 + system prompt）只占默认窗口的一小部分，其余留给对话与生成。
+        self.assertLess(self.MEASURED_HEAD_TOKENS, DEFAULT_NUM_CTX // 8)
+        # 不浪费：远小于原生上限，KV cache 不按 256K 白占显存。
+        self.assertLessEqual(DEFAULT_NUM_CTX, self.NATIVE_CONTEXT_TOKENS // 4)
+        self.assertEqual(OllamaDecider(model="m", transport=FakeTransport([]))._num_ctx,
+                         DEFAULT_NUM_CTX)
+
+    def test_num_ctx_must_be_positive_and_leave_room_for_generation(self):
+        for kwargs in ({"num_ctx": 0}, {"num_ctx": -1}, {"num_ctx": None},
+                       {"num_ctx": DEFAULT_OUTPUT_RESERVE_TOKENS}):
+            with self.assertRaises(ValueError):
+                OllamaDecider(model="m", **kwargs)
+
+    # ---- 压缩策略硬性要求 --------------------------------------------------
+
+    def test_over_budget_prompt_keeps_system_prompt_and_current_user_message(self):
+        definitions = budget_tools()
+        decider = self.decider(num_ctx=4096)                      # 预算 = 4096 - 2048
+        cp = checkpoint(observations=bulk_observations(12, blob_chars=4000))
+        messages = decider.messages("向前飞10米", cp, definitions)
+
+        self.assertEqual(messages[0]["role"], "system")
+        self.assertEqual(messages[0]["content"], DEFAULT_SYSTEM_PROMPT)
+        self.assertEqual(messages[1], {"role": "user", "content": "向前飞10米"})
+        self.assertLessEqual(decider.estimate_prompt_tokens(messages, definitions),
+                             decider.prompt_budget_tokens)
+
+    def test_only_the_most_recent_observations_are_replayed(self):
+        definitions = budget_tools()
+        decider = self.decider(num_ctx=DEFAULT_NUM_CTX)
+        observations = bulk_observations(DEFAULT_KEEP_RECENT_OBSERVATIONS + 6)
+        messages = decider.messages("向前飞10米", checkpoint(observations=observations), definitions)
+
+        replayed = [m["tool_calls"][0]["function"]["name"] for m in messages if m.get("tool_calls")]
+        self.assertEqual(replayed,
+                         [o["tool"] for o in observations[-DEFAULT_KEEP_RECENT_OBSERVATIONS:]])
+        self.assertEqual(messages[2]["role"], "assistant")
+        self.assertIn("更早的 6 次工具调用已省略", messages[2]["content"])
+        serialized = json.dumps(messages, ensure_ascii=False)
+        for omitted in observations[:6]:
+            self.assertNotIn(omitted["tool"], serialized)
+
+    def test_oversized_single_observation_is_omitted_rather_than_truncated(self):
+        definitions = budget_tools()
+        decider = self.decider(num_ctx=4096)
+        observations = [{"tool": "read_state", "arguments": {},
+                         "result": {"blob": "x" * 30000}}]
+        messages = decider.messages("向前飞10米", checkpoint(observations=observations), definitions)
+
+        self.assertIn("更早的 1 次工具调用已省略", messages[2]["content"])
+        self.assertNotIn("read_state", json.dumps(messages, ensure_ascii=False))
+        self.assertLessEqual(decider.estimate_prompt_tokens(messages, definitions),
+                             decider.prompt_budget_tokens)
+
+    def test_built_prompt_never_exceeds_the_budget(self):
+        definitions = budget_tools()
+        for num_ctx in (DEFAULT_OUTPUT_RESERVE_TOKENS + 1024, 4096, 8192, DEFAULT_NUM_CTX):
+            for count, blob_chars in ((0, 0), (1, 0), (5, 800), (40, 2000), (60, 6000)):
+                decider = self.decider(num_ctx=num_ctx)
+                cp = checkpoint(observations=bulk_observations(count, blob_chars=blob_chars))
+                messages = decider.messages("向前飞10米", cp, definitions)
+                self.assertLessEqual(
+                    decider.estimate_prompt_tokens(messages, definitions),
+                    decider.prompt_budget_tokens,
+                    msg=f"num_ctx={num_ctx} observations={count} blob={blob_chars}")
+
+    def test_payload_sends_the_compressed_messages(self):
+        definitions = budget_tools()
+        decider = self.decider(num_ctx=4096)
+        body = decider.payload("向前飞10米", checkpoint(observations=bulk_observations(30)), definitions)
+        self.assertIn("已省略", json.dumps(body["messages"], ensure_ascii=False))
+        self.assertLessEqual(decider.estimate_prompt_tokens(body["messages"], definitions),
+                             decider.prompt_budget_tokens)
+
+    def test_compression_is_deterministic(self):
+        definitions = budget_tools()
+        cp = checkpoint(observations=bulk_observations(20, blob_chars=200))
+        first = self.decider(num_ctx=4096).messages("向前飞10米", cp, definitions)
+        second = self.decider(num_ctx=4096).messages("向前飞10米", cp, definitions)
+        self.assertEqual(first, second)
+
+    def test_budget_uses_an_injectable_counter(self):
+        definitions = budget_tools()
+        # 每字符 1 token 的注入计数，比默认字符估算保守得多；压缩必须在它上面同样成立。
+        decider = self.decider(num_ctx=4096, token_estimator=lambda text: len(text))
+        messages = decider.messages("向前飞10米",
+                                    checkpoint(observations=bulk_observations(8)), definitions)
+        self.assertLessEqual(decider.estimate_prompt_tokens(messages, definitions),
+                             decider.prompt_budget_tokens)
+
+    def test_prompt_that_cannot_fit_even_after_compression_fails_closed(self):
+        decider = self.decider(num_ctx=4096, system_prompt="约束" * 4000)
+        with self.assertRaises(PromptBudgetExceeded) as ctx:
+            decider.messages("向前飞10米", checkpoint(), budget_tools())
+        self.assertIn("system prompt", str(ctx.exception))
+
+    def test_small_conversation_is_replayed_without_a_placeholder(self):
+        definitions = budget_tools()
+        decider = self.decider()
+        messages = decider.messages("向前飞10米",
+                                    checkpoint(observations=bulk_observations(3)), definitions)
+        self.assertEqual([m["role"] for m in messages],
+                         ["system", "user"] + ["assistant", "tool"] * 3)
+        self.assertNotIn("已省略", json.dumps(messages, ensure_ascii=False))
+
+    def test_default_config_holds_a_real_twenty_observation_cockpit_loop(self):
+        """真实 59 工具驾驶舱 + 20 次 read_state：默认配置必须装得下并保住 system prompt。"""
+        from lingxi_flight_control import (
+            MemoryFlightControlSimulator,
+            RuntimeBinding,
+            build_full_control_tool_registry,
+        )
+
+        simulator = MemoryFlightControlSimulator(RuntimeBinding("a", "p", "h", "d", "b", 1))
+        registry = build_full_control_tool_registry(simulator)
+        definitions = registry.definitions()
+        receipt = registry.get("read_state").handler({})
+        observations = [{"tool": "read_state", "arguments": {}, "result": receipt}
+                        for _ in range(20)]
+        decider = OllamaDecider(model="test-model", transport=FakeTransport([]))
+        messages = decider.messages("读取当前状态", checkpoint(observations=observations),
+                                    definitions)
+
+        self.assertEqual(messages[0]["content"], DEFAULT_SYSTEM_PROMPT)
+        self.assertEqual(messages[1], {"role": "user", "content": "读取当前状态"})
+        self.assertEqual(messages[2]["content"],
+                         f"（更早的 {20 - DEFAULT_KEEP_RECENT_OBSERVATIONS} 次工具调用已省略）")
+        self.assertLessEqual(decider.estimate_prompt_tokens(messages, definitions),
+                             decider.prompt_budget_tokens)
+        # 默认窗口必须装得下实测的完整对话；压缩只是策略上的进一步收窄。
+        self.assertGreaterEqual(decider.prompt_budget_tokens,
+                                self.MEASURED_TWENTY_OBSERVATION_TOKENS)
 
 
 class ConstructorValidationTests(unittest.TestCase):

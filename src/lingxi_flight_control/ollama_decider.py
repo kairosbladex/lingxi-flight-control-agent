@@ -8,11 +8,16 @@
 - 只支持原生 function calling。依赖正则从自由文本里抠参数会让模型输出绕过 schema 校验。
 - 模型返回 tool_call 时丢弃同轮的散文，保证 `ModelDecision` 的互斥契约成立。
 - 模型什么都没返回时抛错而不是猜，交由循环 fail-closed 处理。
+- **prompt 预算由本模块自己管住。** Ollama 在 prompt 超过 `num_ctx` 时静默丢掉**最前面**的
+  token——也就是 system prompt 里的硬性约束——并且不报错。所以每次发送前都用保守的字符
+  估算核对预算，超了就按确定策略压缩，绝不把超长 prompt 交出去。
 """
 
 from __future__ import annotations
 
 import json
+import math
+import re
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Protocol
 import urllib.error
@@ -29,6 +34,73 @@ from .models import (
 
 DEFAULT_BASE_URL = "http://192.168.130.238:11434"
 DEFAULT_MODEL = "qwen3.5:9b"
+
+#: 默认上下文窗口。qwen3.5:9b 原生声明 256K，但 KV cache 随 num_ctx 线性占显存，
+#: 开满只是白烧显存。实测（docs/model-selection.md）59 工具 + system prompt = 3525 tokens，
+#: 再叠 20 次 read_state 观察的完整对话 = 14913 tokens；32768 给到 2 倍余量，
+#: 同时只有原生上限的 1/8。
+DEFAULT_NUM_CTX = 32768
+
+#: 预留给模型生成（含 thinking）的 token。prompt 与生成必须一起装进 num_ctx，
+#: 真实循环里一次决策的 eval_count 实测只有几百，2048 足够宽裕。
+DEFAULT_OUTPUT_RESERVE_TOKENS = 2048
+
+#: 回放给模型的最近观察条数上限；更早的压成明确占位。
+#: 它把稳态 prompt 增长封顶（每次决策只多一条观察），预算闸门则处理单条超大观察。
+DEFAULT_KEEP_RECENT_OBSERVATIONS = 12
+
+#: 保守字符估算：中日韩字符按 1 token/字，其余按 2 字符/token。
+#: 实测（238 上的 qwen3.5:9b）：59 工具 + system prompt = 3525 tokens，本估算给 7449（+111%）；
+#: 单条 read_state 回执 1386 字符 ≈ 569 tokens，本估算给 704（+24%）。
+#: 两个方向都偏高，保证估算值不会低于真实 prompt（宁可早压，不可静默截断）。
+_NON_CJK_CHARS_PER_TOKEN = 2.0
+_CJK_CHARACTER = re.compile(r"[\u2e80-\u9fff\u3000-\u303f\uff00-\uffef]")
+#: 每条消息的模板开销（<|im_start|>role ... <|im_end|>）。
+_MESSAGE_OVERHEAD_TOKENS = 8
+#: tools 段的模板包装开销。
+_TOOLS_OVERHEAD_TOKENS = 24
+
+
+class PromptBudgetExceeded(ValueError):
+    """压缩到底也装不进预算：宁可硬失败，也不让服务端静默截断 system prompt。"""
+
+
+def estimate_tokens(text: str, *, estimator: Callable[[str], int] | None = None) -> int:
+    """不依赖 tokenizer 的保守 token 估算；``estimator`` 可注入自定义计数函数。"""
+    if estimator is not None:
+        return max(0, int(estimator(text)))
+    if not text:
+        return 0
+    cjk = len(_CJK_CHARACTER.findall(text))
+    return int(math.ceil(cjk + (len(text) - cjk) / _NON_CJK_CHARS_PER_TOKEN))
+
+
+def _message_text(message: Mapping[str, Any]) -> str:
+    parts = [str(message.get("content") or "")]
+    tool_calls = message.get("tool_calls")
+    if tool_calls:
+        parts.append(json.dumps(tool_calls, ensure_ascii=False, sort_keys=True, default=str))
+    return "\n".join(parts)
+
+
+def estimate_prompt_tokens(
+    messages: Sequence[Mapping[str, Any]],
+    definitions: Sequence[ToolDefinition] = (),
+    *,
+    estimator: Callable[[str], int] | None = None,
+) -> int:
+    """估算一次请求的 prompt tokens：对话消息 + 下发的 tools 契约。
+
+    tools 也算进 prompt——Ollama 会把 function 声明渲染进模板，59 个驾驶舱工具实测
+    就占掉 3213~3525 tokens，漏掉它会让预算形同虚设。
+    """
+    total = 0
+    for message in messages:
+        total += estimate_tokens(_message_text(message), estimator=estimator) + _MESSAGE_OVERHEAD_TOKENS
+    if definitions:
+        tools_json = json.dumps(build_tools_payload(definitions), ensure_ascii=False, sort_keys=True)
+        total += estimate_tokens(tools_json, estimator=estimator) + _TOOLS_OVERHEAD_TOKENS
+    return total
 
 #: 提示词要显式写清多步纪律。实测省略这句时，9b 在多动作请求上会只做第一步就收尾。
 DEFAULT_SYSTEM_PROMPT = """你是灵犀无人机飞控执行 Agent。你负责理解用户意图，并调用工具操作无人机。
@@ -172,11 +244,14 @@ class OllamaDecider:
         temperature: float = 0.0,
         timeout: float = 180.0,
         think: bool | None = None,
-        num_ctx: int | None = 8192,
+        num_ctx: int = DEFAULT_NUM_CTX,
+        output_reserve: int = DEFAULT_OUTPUT_RESERVE_TOKENS,
+        keep_recent_observations: int = DEFAULT_KEEP_RECENT_OBSERVATIONS,
         keep_alive: str | None = None,
         max_attempts: int = 2,
         transport: Transport | None = None,
         clarify_detector: Callable[[str], bool] | None = None,
+        token_estimator: Callable[[str], int] | None = None,
     ):
         if not model or not model.strip():
             raise ValueError("model name is required")
@@ -184,8 +259,18 @@ class OllamaDecider:
             raise ValueError("base_url is required")
         if timeout <= 0:
             raise ValueError("timeout must be positive")
-        if num_ctx is not None and num_ctx <= 0:
-            raise ValueError("num_ctx must be positive")
+        # num_ctx 必须已知：不知道窗口大小就无法管住预算，而服务端超限只会静默截断。
+        if isinstance(num_ctx, bool) or not isinstance(num_ctx, int) or num_ctx <= 0:
+            raise ValueError("num_ctx must be a positive integer so the prompt budget is known")
+        if isinstance(output_reserve, bool) or not isinstance(output_reserve, int) or output_reserve < 0:
+            raise ValueError("output_reserve must be a non-negative integer")
+        if output_reserve >= num_ctx:
+            raise ValueError("num_ctx must exceed output_reserve so the prompt has a budget")
+        if (isinstance(keep_recent_observations, bool)
+                or not isinstance(keep_recent_observations, int) or keep_recent_observations < 0):
+            raise ValueError("keep_recent_observations must be a non-negative integer")
+        if token_estimator is not None and not callable(token_estimator):
+            raise ValueError("token_estimator must be callable")
         if max_attempts <= 0:
             raise ValueError("max_attempts must be positive")
         self.model = model
@@ -197,6 +282,9 @@ class OllamaDecider:
         # 会让工具调用完全失效（返回空响应）；省略则思考照常开启且工具调用正常。
         self._think = think
         self._num_ctx = num_ctx
+        self._output_reserve = output_reserve
+        self._keep_recent_observations = keep_recent_observations
+        self._token_estimator = token_estimator
         self._keep_alive = keep_alive
         self._max_attempts = int(max_attempts)
         self._transport = transport or http_transport
@@ -204,41 +292,110 @@ class OllamaDecider:
         self.last_raw_response: Mapping[str, Any] | None = None
         self.empty_responses = 0
 
+    # ---- prompt 预算 -------------------------------------------------------
+
+    @property
+    def prompt_budget_tokens(self) -> int:
+        """一次请求允许占用的最大 prompt tokens（给生成留出 ``output_reserve``）。"""
+        return self._num_ctx - self._output_reserve
+
+    def estimate_prompt_tokens(
+        self, messages: Sequence[Mapping[str, Any]], definitions: Sequence[ToolDefinition] = ()
+    ) -> int:
+        return estimate_prompt_tokens(messages, definitions, estimator=self._token_estimator)
+
+    @staticmethod
+    def _placeholder(omitted: int) -> dict[str, Any]:
+        """被压掉的早期观察只留一条明确占位，模型知道「还有更早的调用」而不是被无声抹掉。"""
+        return {"role": "assistant", "content": f"（更早的 {omitted} 次工具调用已省略）"}
+
+    def _fit_observations(
+        self,
+        head: list[dict[str, Any]],
+        turns: list[list[dict[str, Any]]],
+        definitions: Sequence[ToolDefinition],
+    ) -> tuple[list[list[dict[str, Any]]], int]:
+        """确定性地挑出还能回放的观察轮次，返回 (保留的轮次, 被省略的条数)。
+
+        两层保护：
+        1. 只回放最近 ``keep_recent_observations`` 条，把稳态增长封顶；
+        2. 预算硬闸门——即便在候选里，装不下就从最旧的继续往前丢。
+        system prompt 与当前 user 消息在 ``head`` 里，任何情况下都不参与丢弃。
+        """
+        cap = self._keep_recent_observations
+        kept = list(turns[len(turns) - cap:]) if cap < len(turns) else list(turns)
+        while True:
+            omitted = len(turns) - len(kept)
+            candidate = list(head)
+            if omitted:
+                candidate.append(self._placeholder(omitted))
+            for turn in kept:
+                candidate.extend(turn)
+            if self.estimate_prompt_tokens(candidate, definitions) <= self.prompt_budget_tokens:
+                return kept, omitted
+            if not kept:
+                raise PromptBudgetExceeded(
+                    f"prompt budget is {self.prompt_budget_tokens} tokens, but the system prompt "
+                    f"and the current user message already need about "
+                    f"{self.estimate_prompt_tokens(head, definitions)}; raise num_ctx or shorten "
+                    "the system prompt and the user message"
+                )
+            kept.pop(0)
+
     # ---- 协议转换 ----------------------------------------------------------
 
     def messages(
-        self, user_message: str, checkpoint: AgentCheckpoint
+        self,
+        user_message: str,
+        checkpoint: AgentCheckpoint,
+        definitions: Sequence[ToolDefinition] = (),
     ) -> list[dict[str, Any]]:
-        """把检查点重建成原生对话。
+        """把检查点重建成原生对话，并保证结果装得进 prompt 预算。
 
         回放依据 `observations`：现在每条观察都自带工具名与参数，所以不需要再去对齐
         另一个列表。这一点很关键——确认轮次会让 `tool_calls` 重复记录，校验失败的尝试
         又只出现在 `observations` 里，靠两个列表 zip 一定错位。
         校验失败的尝试也要回放，模型才知道自己上一轮错在哪。
+
+        system prompt 与当前 user 消息永远保留；更早的观察按 `_fit_observations` 的
+        确定策略压缩。这里必须传 `definitions`，否则 59 个工具契约那 3000 多 tokens
+        不会计入预算。
         """
-        messages: list[dict[str, Any]] = [{"role": "system", "content": self._system_prompt}]
-        messages.append({"role": "user", "content": user_message})
+        head: list[dict[str, Any]] = [
+            {"role": "system", "content": self._system_prompt},
+            {"role": "user", "content": user_message},
+        ]
+        turns: list[list[dict[str, Any]]] = []
         for observation in checkpoint.observations:
             name = observation.get("tool")
             if not isinstance(name, str) or not name:
                 continue
             arguments = observation.get("arguments")
-            messages.append({
-                "role": "assistant",
-                "content": "",
-                "tool_calls": [{"function": {
-                    "name": name,
-                    "arguments": dict(arguments) if isinstance(arguments, Mapping) else {},
-                }}],
-            })
             if "result" in observation:
                 payload: Any = observation["result"]
             else:
                 payload = observation.get("error", {})
-            messages.append({
-                "role": "tool",
-                "content": json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str),
-            })
+            turns.append([
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [{"function": {
+                        "name": name,
+                        "arguments": dict(arguments) if isinstance(arguments, Mapping) else {},
+                    }}],
+                },
+                {
+                    "role": "tool",
+                    "content": json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str),
+                },
+            ])
+
+        kept, omitted = self._fit_observations(head, turns, definitions)
+        messages = list(head)
+        if omitted:
+            messages.append(self._placeholder(omitted))
+        for turn in kept:
+            messages.extend(turn)
         return messages
 
     def payload(
@@ -246,13 +403,11 @@ class OllamaDecider:
     ) -> dict[str, Any]:
         body: dict[str, Any] = {
             "model": self.model,
-            "messages": self.messages(user_message, checkpoint),
+            "messages": self.messages(user_message, checkpoint, definitions),
             "stream": False,
             "tools": build_tools_payload(definitions),
-            "options": {"temperature": self._temperature},
+            "options": {"temperature": self._temperature, "num_ctx": self._num_ctx},
         }
-        if self._num_ctx is not None:
-            body["options"]["num_ctx"] = self._num_ctx
         if self._think is not None:
             body["think"] = bool(self._think)
         if self._keep_alive is not None:

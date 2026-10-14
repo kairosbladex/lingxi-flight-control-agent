@@ -16,6 +16,8 @@
   每个动作都经过 `ToolRegistry` schema 校验 + 模拟器 `preview/confirm` 两阶段。
 - **安全快路径**：急停等安全动作走确定性精确匹配，不经过模型。实测走模型要 9 秒才能发出急停，
   快路径 1 毫秒；且模型服务不可达时快路径照常可用。详见 `docs/safety-fast-path.md`。
+- **上下文预算**：发送前按 `num_ctx` 核对 prompt 预算并确定性压缩，绝不依赖服务端截断。
+  默认 `num_ctx=32768`；system prompt 与当前 user 消息永不被丢。实测见 `docs/model-selection.md`。
 
 ## 安全快路径
 
@@ -72,6 +74,25 @@ result = loop.run("接管控制权，然后向前飞10米，再拍张照片")
 再把模型输出收敛回 `ModelDecision`。安全边界仍然全部由 `BoundedAgentLoop` 和 `ToolRegistry` 持有。
 
 选型结论是 `qwen3.5:9b`，理由与全部实测数据见 `docs/model-selection.md`。
+
+**prompt 预算由解码器自己管住。** Ollama 在 prompt 超过 `num_ctx` 时静默丢掉**最前面**的 token，
+也就是 system prompt 里的硬性约束，而且不报错。所以每次发送前都按
+`num_ctx - output_reserve`（默认 `32768 - 2048`）核对预算：system prompt 与当前 user 消息
+永不丢弃，只回放最近 12 条观察，更早的压成`（更早的 N 次工具调用已省略）`；仍然装不下就继续
+往前丢，连头部都装不下时抛 `PromptBudgetExceeded`。估算用保守的字符口径，可注入
+`token_estimator` 覆盖，不依赖 tokenizer。
+
+```python
+from lingxi_flight_control import DEFAULT_KEEP_RECENT_OBSERVATIONS, DEFAULT_NUM_CTX, OllamaDecider
+
+decider = OllamaDecider(model="qwen3.5:9b", num_ctx=DEFAULT_NUM_CTX,
+                        keep_recent_observations=DEFAULT_KEEP_RECENT_OBSERVATIONS)
+```
+
+默认 `num_ctx=32768`（9b 原生 256K，但 256K 的 KV cache 约 19.7GB，已逼近单张 L20 的空闲显存）。
+实测：20 次观察的完整对话 14987 prompt tokens，默认窗口给到 2.37 倍余量，
+压缩后 10440；`num_ctx=8192` 会把 prompt 压在 8097 并丢掉 system prompt。
+全部实测数字与取舍见 `docs/model-selection.md`「上下文预算」一节。
 
 ```python
 from lingxi_flight_control import (

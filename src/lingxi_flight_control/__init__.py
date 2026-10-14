@@ -3,9 +3,14 @@
 from .agent import BoundedAgentLoop, FlightExecutionAgent, ModelDecider, TaskDispatchAgent, ToolRegistry, parse_relative_move
 from .ollama_decider import (
     DEFAULT_BASE_URL,
+    DEFAULT_KEEP_RECENT_OBSERVATIONS,
     DEFAULT_MODEL,
+    DEFAULT_NUM_CTX,
+    DEFAULT_OUTPUT_RESERVE_TOKENS,
     OllamaDecider,
+    PromptBudgetExceeded,
     build_tools_payload,
+    estimate_prompt_tokens,
     http_transport,
 )
 from .safety import DEFAULT_SAFETY_PHRASES, SafetyFastPath, SafetyFastPathDecider
@@ -64,7 +69,12 @@ __all__ = [
     "OllamaDecider",
     "DEFAULT_BASE_URL",
     "DEFAULT_MODEL",
+    "DEFAULT_NUM_CTX",
+    "DEFAULT_OUTPUT_RESERVE_TOKENS",
+    "DEFAULT_KEEP_RECENT_OBSERVATIONS",
+    "PromptBudgetExceeded",
     "build_tools_payload",
+    "estimate_prompt_tokens",
     "http_transport",
     "SafetyFastPath",
     "SafetyFastPathDecider",
