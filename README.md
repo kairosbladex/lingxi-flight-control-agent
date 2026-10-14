@@ -9,6 +9,9 @@
 - 用 `idempotency_key` 拒绝重复命令，用上下文版本拒绝过期命令；
 - MemoryFlightSimulator 工具动态绑定当前 `ExecutionContext`，检查点恢复时拒绝执行批次、无人机或版本已变化的旧上下文；
 - 通过注入的意图解释器生成结构化 `ToolCall`，维持旧任务下发调用方兼容。
+- `full_control.py` 提供显式的 `FlightControlAction`、`RuntimeBinding`、`FlightControlState` 和
+  `MemoryFlightControlSimulator`，覆盖驾驶舱控制权、飞行、航线、相机/云台、红外、载荷和状态读取。
+  这些动作只在内存中预览、确认和执行，回执固定标记 `execution_mode=simulator`。
 
 当前版本不连接 MQTT、真实飞控或生产任务平台；执行器和任务工具均由调用方注入。
 

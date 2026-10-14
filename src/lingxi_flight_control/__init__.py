@@ -2,6 +2,20 @@
 
 from .agent import BoundedAgentLoop, FlightExecutionAgent, ModelDecider, TaskDispatchAgent, ToolRegistry, parse_relative_move
 from .simulator import MemoryFlightSimulator, build_memory_flight_tool_registry
+from .full_control import (
+    FlightControlAction,
+    FlightControlActionRequest,
+    FlightControlReceipt,
+    FlightControlState,
+    FlightControlStatus,
+    MemoryFlightControlSimulator,
+    RuntimeBinding,
+    action_manifest,
+    action_tool_definitions,
+    action_tool_names,
+    mounted_payloads,
+    parse_flight_control_text,
+)
 from .models import (
     CommandStatus,
     AgentCheckpoint,
@@ -44,6 +58,18 @@ __all__ = [
     "ToolRegistry",
     "ToolSchema",
     "build_memory_flight_tool_registry",
+    "FlightControlAction",
+    "FlightControlActionRequest",
+    "FlightControlReceipt",
+    "FlightControlState",
+    "FlightControlStatus",
+    "MemoryFlightControlSimulator",
+    "RuntimeBinding",
+    "action_manifest",
+    "action_tool_definitions",
+    "action_tool_names",
+    "mounted_payloads",
+    "parse_flight_control_text",
     "Vector3",
     "parse_relative_move",
 ]
