@@ -147,6 +147,50 @@ system prompt 里的硬性约束。把口令标记 `ZEBRA-7391` 写进 system pr
 `num_ctx=8192` 被拒绝是刻意的：59 个工具的契约 + system prompt 的保守估算已超出它的预算，
 这个窗口**本来就装不下**；明确报错（并提示调大 `num_ctx`）比静默丢掉硬性约束安全。
 
+### 压缩是可观测的
+
+压缩不能是静默的——否则线上分不清「闸门在工作」和「根本没触发」。`OllamaDecider` 在
+`payload()`（唯一构建待发送载荷的地方）记录读数：
+
+| 读数 | 含义 |
+|---|---|
+| `last_prompt_estimate` | 最近一次待发送 prompt 的估算 tokens（还没构建过为 `None`） |
+| `last_omitted_observations` | 最近一次省略的观察条数 |
+| `compressed_payloads` | 累计发生压缩的载荷次数（含空响应重试） |
+| `omitted_observation_turns` | 累计省略的观察条数 |
+
+```python
+decider = OllamaDecider(model="qwen3.5:9b")
+BoundedAgentLoop(decider, registry).run("读取当前状态")
+print(decider.last_prompt_estimate, decider.last_omitted_observations,
+      decider.compressed_payloads, decider.omitted_observation_turns)
+```
+
+换 `SafetyFastPathDecider` 包装时读数只在真的走了模型的那一步前进（快路径短路不计数），
+`tools/flight_agent_demo.py --cockpit` 会逐步打印 `[prompt预算]` 与收尾的累计行。
+
+### 真实长循环验证（`tools/bench/long_loop_budget.py`）
+
+合成对话只能证明闸门逻辑，这里让**真实 `BoundedAgentLoop`** 先由脚本驱动 16 次
+`read_state`（每步都是一条真实回执），第 17 步交给真实模型，问的正是 system prompt 里的口令：
+
+| 指标 | 实测 |
+|---|---|
+| 循环结果 | `final`，16 条观察，真实模型只被调用 1 次 |
+| 答复 | `ZEBRA-7391`——**口令正确，system prompt 没被丢掉** |
+| 省略观察 | 4（16 − 回放上限 12） |
+| 估算 tokens / 预算 | 16424 / 30720 ✅ |
+| 实测 `prompt_eval_count` | **10421**（未压缩是 34 条消息、估算 19361） |
+| 累计读数 | `compressed_payloads=1`、`omitted_observation_turns=4` |
+
+窗口收紧时闸门继续往前丢观察，头部始终保留（离线计算，不发请求）：
+
+| `num_ctx` | 回放观察 | 估算 tokens | 预算 |
+|---|---|---|---|
+| 32768（默认，仅策略上限） | 12/16 | 16424 | 30720 |
+| 16384 | 9/16 | 14204 | 14336 |
+| 12288 | 3/16 | 9764 | 10240 |
+
 ### 默认值取舍：为什么是 32768
 
 KV cache 实测（`/api/ps` 的 `size_vram`；同一模型换 `num_ctx` 会重新加载）：
@@ -326,6 +370,7 @@ python3 tools/bench/prefill_cost.py qwen3.5:9b qwen3.6:latest    # 预填充成�
 python3 tools/bench/cache_probe.py qwen3.5:9b                    # KV cache 命中
 PYTHONPATH=src python3 tools/bench/loop_cost.py qwen3.5:9b       # 真实循环逐步成本
 PYTHONPATH=src python3 tools/bench/context_budget.py qwen3.5:9b  # 上下文预算 / 截断对比
+PYTHONPATH=src python3 tools/bench/long_loop_budget.py qwen3.5:9b # 真实长循环里的压缩验证
 PYTHONPATH=src python3 tools/flight_agent_demo.py                # 端到端（最小执行器）
 PYTHONPATH=src python3 tools/flight_agent_demo.py --cockpit      # 端到端（59 动作驾驶舱）
 ```

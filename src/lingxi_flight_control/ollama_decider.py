@@ -291,6 +291,15 @@ class OllamaDecider:
         self._clarify_detector = clarify_detector or _looks_like_clarification
         self.last_raw_response: Mapping[str, Any] | None = None
         self.empty_responses = 0
+        # 预算遥测：压缩必须是可观测的，否则线上分不清「闸门在工作」和「根本没触发」。
+        #: 最近一次构建的 prompt 估算 tokens；还没构建过时为 None。
+        self.last_prompt_estimate: int | None = None
+        #: 最近一次构建时被省略的观察条数。
+        self.last_omitted_observations = 0
+        #: 累计发生压缩的载荷次数（每次 ``payload()`` 计一次，含重试）。
+        self.compressed_payloads = 0
+        #: 累计被省略的观察条数。
+        self.omitted_observation_turns = 0
 
     # ---- prompt 预算 -------------------------------------------------------
 
@@ -360,7 +369,20 @@ class OllamaDecider:
         system prompt 与当前 user 消息永远保留；更早的观察按 `_fit_observations` 的
         确定策略压缩。这里必须传 `definitions`，否则 59 个工具契约那 3000 多 tokens
         不会计入预算。
+
+        本方法不写遥测（它常被调用方直接拿来检查消息形状）；预算读数由 ``payload()``
+        在真正构建待发送载荷时记录。
         """
+        messages, _ = self._rebuild(user_message, checkpoint, definitions)
+        return messages
+
+    def _rebuild(
+        self,
+        user_message: str,
+        checkpoint: AgentCheckpoint,
+        definitions: Sequence[ToolDefinition],
+    ) -> tuple[list[dict[str, Any]], int]:
+        """重建对话并返回 (消息, 被省略的观察条数)。"""
         head: list[dict[str, Any]] = [
             {"role": "system", "content": self._system_prompt},
             {"role": "user", "content": user_message},
@@ -396,14 +418,21 @@ class OllamaDecider:
             messages.append(self._placeholder(omitted))
         for turn in kept:
             messages.extend(turn)
-        return messages
+        return messages, omitted
 
     def payload(
         self, user_message: str, checkpoint: AgentCheckpoint, definitions: Sequence[ToolDefinition]
     ) -> dict[str, Any]:
+        messages, omitted = self._rebuild(user_message, checkpoint, definitions)
+        # 唯一的预算记账点：decide() 每次都经过这里，因此读数就是「刚发出去的那个请求」。
+        self.last_prompt_estimate = self.estimate_prompt_tokens(messages, definitions)
+        self.last_omitted_observations = omitted
+        if omitted:
+            self.compressed_payloads += 1
+            self.omitted_observation_turns += omitted
         body: dict[str, Any] = {
             "model": self.model,
-            "messages": self.messages(user_message, checkpoint, definitions),
+            "messages": messages,
             "stream": False,
             "tools": build_tools_payload(definitions),
             "options": {"temperature": self._temperature, "num_ctx": self._num_ctx},

@@ -451,6 +451,62 @@ class PromptBudgetTests(unittest.TestCase):
                                 self.MEASURED_TWENTY_OBSERVATION_TOKENS)
 
 
+class BudgetTelemetryTests(unittest.TestCase):
+    """压缩不能是静默的：每次构建待发送载荷都要能读出估算值与省略条数。
+
+    没有这组计数器，线上无法区分「预算闸门在工作」和「根本没触发压缩」，
+    也就无法在上下文被压到影响决策之前发现问题。
+    """
+
+    def make(self, **kwargs):
+        kwargs.setdefault("num_ctx", 4096)
+        return OllamaDecider(model="m", transport=FakeTransport([]), **kwargs)
+
+    def test_snapshot_is_empty_before_anything_is_built(self):
+        decider = self.make()
+        self.assertIsNone(decider.last_prompt_estimate)
+        self.assertEqual(decider.last_omitted_observations, 0)
+        self.assertEqual(decider.compressed_payloads, 0)
+        self.assertEqual(decider.omitted_observation_turns, 0)
+
+    def test_payload_records_the_estimate_and_the_omissions(self):
+        definitions = budget_tools()
+        decider = self.make()
+        body = decider.payload("向前飞10米",
+                               checkpoint(observations=bulk_observations(30)), definitions)
+
+        self.assertEqual(decider.last_omitted_observations,
+                         30 - DEFAULT_KEEP_RECENT_OBSERVATIONS)
+        self.assertEqual(decider.last_prompt_estimate,
+                         decider.estimate_prompt_tokens(body["messages"], definitions))
+        self.assertLessEqual(decider.last_prompt_estimate, decider.prompt_budget_tokens)
+        self.assertEqual(decider.compressed_payloads, 1)
+        self.assertEqual(decider.omitted_observation_turns, 30 - DEFAULT_KEEP_RECENT_OBSERVATIONS)
+
+    def test_small_conversation_reports_no_compression(self):
+        decider = self.make(num_ctx=DEFAULT_NUM_CTX)
+        decider.payload("向前飞10米", checkpoint(observations=bulk_observations(3)), budget_tools())
+        self.assertEqual(decider.last_omitted_observations, 0)
+        self.assertEqual(decider.compressed_payloads, 0)
+        self.assertIsNotNone(decider.last_prompt_estimate)
+
+    def test_counters_accumulate_across_requests(self):
+        definitions = budget_tools()
+        decider = self.make()
+        for _ in range(3):
+            decider.payload("向前飞10米", checkpoint(observations=bulk_observations(20)), definitions)
+        self.assertEqual(decider.compressed_payloads, 3)
+        self.assertEqual(decider.omitted_observation_turns,
+                          3 * (20 - DEFAULT_KEEP_RECENT_OBSERVATIONS))
+
+    def test_decide_surfaces_the_budget_of_the_request_it_sent(self):
+        transport = FakeTransport([message_response("好")])
+        decider = OllamaDecider(model="m", transport=transport, num_ctx=4096)
+        decider.decide("向前飞10米", checkpoint(observations=bulk_observations(30)), budget_tools())
+        self.assertEqual(decider.last_omitted_observations, 30 - DEFAULT_KEEP_RECENT_OBSERVATIONS)
+        self.assertLessEqual(decider.last_prompt_estimate, decider.prompt_budget_tokens)
+
+
 class ConstructorValidationTests(unittest.TestCase):
     def test_invalid_construction_is_rejected(self):
         for kwargs in ({"model": ""}, {"model": "m", "base_url": ""}, {"model": "m", "timeout": 0},

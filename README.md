@@ -92,7 +92,12 @@ decider = OllamaDecider(model="qwen3.5:9b", num_ctx=DEFAULT_NUM_CTX,
 默认 `num_ctx=32768`（9b 原生 256K，但 256K 的 KV cache 约 19.7GB，已逼近单张 L20 的空闲显存）。
 实测：20 次观察的完整对话 14987 prompt tokens，默认窗口给到 2.37 倍余量，
 压缩后 10440；`num_ctx=8192` 会把 prompt 压在 8097 并丢掉 system prompt。
-全部实测数字与取舍见 `docs/model-selection.md`「上下文预算」一节。
+
+压缩不是静默的：`last_prompt_estimate` / `last_omitted_observations` /
+`compressed_payloads` / `omitted_observation_turns` 四个读数可直接打日志或告警。
+真实循环验证（16 次观察 + 模型答 system prompt 里的口令）：省略 4 条、估算 16424/30720、
+实测 `prompt_eval_count=10421`、口令答对。全部实测数字与取舍见
+`docs/model-selection.md`「上下文预算」一节。
 
 ```python
 from lingxi_flight_control import (

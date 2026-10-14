@@ -34,13 +34,18 @@ from lingxi_flight_control import (
 class TracingDecider:
     """包一层用于打印每一步的思考与决策。"""
 
-    def __init__(self, inner, verbose: bool = True):
+    def __init__(self, inner, verbose: bool = True, meter=None):
         self._inner = inner
         self._verbose = verbose
+        # 原始 OllamaDecider：用它读 prompt 预算遥测（装饰器只转发，不暴露这些读数）。
+        self._meter = meter
         self.step = 0
 
     def decide(self, user_message, checkpoint, tools):
         self.step += 1
+        if self._meter is not None:
+            # 安全快路径不发模型调用，此时读数是上一轮的，先清掉免得打印陈旧预算。
+            self._meter.last_prompt_estimate = None
         started = time.time()
         decision = self._inner.decide(user_message, checkpoint, tools)
         elapsed = time.time() - started
@@ -52,7 +57,17 @@ class TracingDecider:
             else:
                 detail = decision.message
             print(f"  [第{self.step}轮思考 {elapsed:.1f}s] {label}: {detail}")
+            if self._meter is not None and self._meter.last_prompt_estimate is not None:
+                print(f"      [prompt预算] 估算 {self._meter.last_prompt_estimate}"
+                      f"/{self._meter.prompt_budget_tokens} tokens"
+                      f"  回放省略观察 {self._meter.last_omitted_observations} 条")
         return decision
+
+    def report_budget(self) -> str:
+        if self._meter is None:
+            return ""
+        return (f"  [prompt预算累计] 压缩载荷 {self._meter.compressed_payloads} 次, "
+                f"省略观察 {self._meter.omitted_observation_turns} 条")
 
 
 def _print_observations(checkpoint) -> None:
@@ -144,10 +159,10 @@ def main() -> int:
                     "向前飞500米", "上升3米然后后退2米"]
 
     # think=None 表示不发送该字段。显式 think=False 会让 qwen3.5 的工具调用完全失效。
-    decider = SafetyFastPathDecider(
-        OllamaDecider(model=args.model, base_url=args.base_url,
-                      think=True if args.think else None, keep_alive="30m"))
-    traced = TracingDecider(decider, verbose=not args.quiet)
+    brain = OllamaDecider(model=args.model, base_url=args.base_url,
+                          think=True if args.think else None, keep_alive="30m")
+    decider = SafetyFastPathDecider(brain)
+    traced = TracingDecider(decider, verbose=not args.quiet, meter=brain)
     print(f"模型: {args.model}   端点: {args.base_url}   模式: {'驾驶舱' if args.cockpit else '最小执行器'}")
 
     failures = 0
@@ -162,6 +177,10 @@ def main() -> int:
         except Exception as exc:  # 联调脚本：单条失败不应中断其余用例
             failures += 1
             print(f"  [异常] {type(exc).__name__}: {exc}")
+        if not args.quiet:
+            budget = traced.report_budget()
+            if budget:
+                print(budget)
     return 1 if failures else 0
 
 
