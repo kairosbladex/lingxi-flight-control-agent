@@ -179,9 +179,13 @@ print(decider.last_prompt_estimate, decider.last_omitted_observations,
 | 循环结果 | `final`，16 条观察，真实模型只被调用 1 次 |
 | 答复 | `ZEBRA-7391`——**口令正确，system prompt 没被丢掉** |
 | 省略观察 | 4（16 − 回放上限 12） |
-| 估算 tokens / 预算 | 16424 / 30720 ✅ |
-| 实测 `prompt_eval_count` | **10421**（未压缩是 34 条消息、估算 19361） |
+| 估算 tokens（三档） | 不压不投影 19361 → 只压缩 16424 → **压缩+投影 15008** |
+| 实测 `prompt_eval_count` | **9156**（只压缩 10421；不压不投影是 34 条消息） |
 | 累计读数 | `compressed_payloads=1`、`omitted_observation_turns=4` |
+
+开投影后同一条驾驶舱 e2e 逐步读数也随之下降（第 3 步 9139 → 8369，
+第 4 步 9961 → 8878），而「读取当前状态」的答复仍然完整报出 14 个字段——
+`state` 域刻意保留了全部状态块。
 
 窗口收紧时闸门继续往前丢观察，头部始终保留（离线计算，不发请求）：
 
@@ -209,26 +213,41 @@ KV cache 实测（`/api/ps` 的 `size_vram`；同一模型换 `num_ctx` 会重�
 不为用不到的深度白占显存。不选 16384：压缩后虽能用（8728），但留给大回执和长用户消息的余量太小；
 不选 65536 以上：prompt 已被 `keep_recent_observations=12` 封顶在 ~10.4K，更大的窗口只是白占 KV cache。
 
-### 顺带评估：`read_state` 回执的紧凑投影（只记结论，未改代码）
+### 回执投影：从源头压低每次观察
 
-单条 `read_state` 回执 1386 字符里 `state` 占 1055 字符（76%），而大部分字段每步都用不上：
+预算闸门保证「不截断」，投影再从源头把每次观察本身变小。`FlightControlReceipt` 是驾驶舱 UI
+的对外契约（`test_full_control.py` 逐字段断言），所以投影做在「观察 → 模型 prompt」的回放层：
+检查点里仍保存完整回执，模型看到的是 `project_observation_result()` 的投影，按
+`OllamaDecider(result_projector=project_observation_result)` 注入。
 
-| 块 | 字符 | 每步用得上吗 |
-|---|---|---|
-| 请求回声（`command_id`/`idempotency_key`/`confirmation_*`/`expires_at`） | 92 | ❌ 循环内部记账 |
-| `state.parameters`（5 个速度参数） | 122 | 仅参数设置类动作 |
-| `state.camera`（7 字段） | 143 | 仅相机/云台域 |
-| `state.infrared`（4 字段） | 78 | 仅红外域 |
-| 其余遥测（控制权/姿态/位置/电量/任务/航线等） | 712 | 按域取用 |
+只丢**确定**没用的东西：
 
-按域做紧凑投影（状态/动作/错误 + 控制权/高度/经纬度/电量/任务与航线状态 + 相机 3 字段 +
-红外 3 字段）后是 **435 字符，即原回执的 31%**；按实测 571 tokens/次回放内插，单次约 180 tokens，
-默认 12 条回放从 ~6850 降到 ~2150 tokens。
+- 请求回声与循环内部字段（`command_id`/`idempotency_key`/`confirmation_*`/`expires_at`/
+  `last_command_id`）——确认握手由 `BoundedAgentLoop` 自己持有，模型从不经手；
+- `parameters`/`camera`/`infrared`/`payloads`/`virtual_buttons` 五个重块，只在对应域出现；
+- 连续遥测（控制权/高度/经纬度/电量/任务与航线状态……）任何域都保留；
+- `read_state`（域 `state`）保留全部状态块——它的唯一目的就是「把状态说全」；
+- 不认识的动作/形状**原样返回**，错误回执也永远原样回放。
 
-**先只记录结论。** 改动面不在解码器：`FlightControlReceipt` 是驾驶舱 UI 的对外契约
-（`test_full_control.py`、`test_full_control_registry.py` 逐字段断言），投影必须做在
-「观察 → 模型 prompt」的回放层，并需要一张与 `ACTION_SPECS` 的 `domain` 对齐的字段白名单表。
-它与本文的预算闸门互补：闸门保证不截断，投影从源头压低增长。
+实测（59 工具栏，单条回执字符数）：
+
+| 动作（域） | 原回执 | 投影后 | 比例 |
+|---|---|---|---|
+| `read_state`（state） | 1386 | 1150 | 83% |
+| `move_forward`（flight） | 1406 | 746 | **53%** |
+| `camera_photo`（camera） | 1406 | 901 | 64% |
+| `infrared_set_limits`（infrared） | 1413 | 845 | 60% |
+| `set_move_speed`（parameters） | 1408 | 886 | 63% |
+| `payload_searchlight`（payload） | 1413 | 769 | 54% |
+| `control_acquire`（control） | 1526 | 767 | **50%** |
+| `route_pause`（route） | 1520 | 738 | 49% |
+
+20 次 `read_state` 观察的回放估算 16621 → 15025 tokens（`read_state` 是最不利于投影的一档，
+因为它刻意保留全部状态块；真实任务里 flight/camera 域的动作占多数，收益接近对半）。
+
+**没有做的更狠一档**：连 `state` 也换成「摘要状态」（控制权/高度/经纬度/电量/任务与航线 +
+相机 3 字段 + 红外 3 字段）可压到 435 字符（31%），代价是模型回答「读取当前状态」时只能
+报告这些字段——`read_state` 的语义就是「说全」，所以留作可选。
 
 ## 运维注意
 

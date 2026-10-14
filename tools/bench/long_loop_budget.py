@@ -27,6 +27,7 @@ from lingxi_flight_control import (
     ToolCall,
     build_full_control_tool_registry,
     estimate_prompt_tokens,
+    project_observation_result,
 )
 from lingxi_flight_control.ollama_decider import DEFAULT_SYSTEM_PROMPT
 
@@ -65,21 +66,24 @@ def main() -> int:
     definitions = registry.definitions()
 
     brain = OllamaDecider(model=model, system_prompt=SYSTEM_PROMPT, base_url=BASE_URL,
-                          keep_alive="30m", think=None)
+                          keep_alive="30m", think=None,
+                          result_projector=project_observation_result)
     decider = ScriptedThenModel(scripted, brain)
     loop = BoundedAgentLoop(decider, registry, max_steps=scripted + 4)
     result = loop.run(USER_MESSAGE, confirmed=True)
     checkpoint = result.checkpoint
 
-    # 不压缩会是什么规模：用「窗口无限大 + 不回放上限」的同一套代码重建一遍。
-    uncompressed = OllamaDecider(
+    # 三种口径，用同一套构建代码：完全不压 / 只压缩 / 压缩 + 回执投影。
+    raw_decider = OllamaDecider(
         model=model, system_prompt=SYSTEM_PROMPT, num_ctx=10 ** 6, output_reserve=1,
         keep_recent_observations=10 ** 6, transport=lambda *_: {})
-    raw_messages = uncompressed.messages(USER_MESSAGE, checkpoint, definitions)
+    compress_only = OllamaDecider(model=model, system_prompt=SYSTEM_PROMPT, transport=lambda *_: {})
+    raw_messages = raw_decider.messages(USER_MESSAGE, checkpoint, definitions)
+    compressed_messages = compress_only.messages(USER_MESSAGE, checkpoint, definitions)
 
     response = brain.last_raw_response or {}
     print(f"模型={model}  脚本步数={scripted}  默认num_ctx={DEFAULT_NUM_CTX}  "
-          f"回放上限={DEFAULT_KEEP_RECENT_OBSERVATIONS}")
+          f"回放上限={DEFAULT_KEEP_RECENT_OBSERVATIONS}  回执投影=on")
     print(json.dumps({
         "循环结果": result.status.value,
         "观察条数": len(checkpoint.observations),
@@ -87,15 +91,22 @@ def main() -> int:
         "答复": result.message.strip()[:40],
         "口令正确": MARKER in result.message,
     }, ensure_ascii=False))
+    for label, decider_, messages in (
+        ("未压缩·未投影（全部观察）", raw_decider, raw_messages),
+        ("只压缩（不投影）", compress_only, compressed_messages),
+        (f"压缩+投影（实际发送）", brain, None),
+    ):
+        estimate = (decider_.last_prompt_estimate if messages is None
+                    else estimate_prompt_tokens(messages, definitions))
+        print(json.dumps({
+            "场景": label,
+            "消息数": (len(brain.messages(USER_MESSAGE, checkpoint, definitions))
+                      if messages is None else len(messages)),
+            "估算 tokens": estimate,
+        }, ensure_ascii=False))
     print(json.dumps({
-        "场景": "未压缩（全部观察）",
-        "消息数": len(raw_messages),
-        "估算 tokens": estimate_prompt_tokens(raw_messages, definitions),
-    }, ensure_ascii=False))
-    print(json.dumps({
-        "场景": f"循环内压缩 num_ctx={DEFAULT_NUM_CTX}",
+        "场景": f"实际发送（num_ctx={DEFAULT_NUM_CTX}）",
         "省略观察": brain.last_omitted_observations,
-        "估算 tokens": brain.last_prompt_estimate,
         "预算": brain.prompt_budget_tokens,
         "实测 prompt_eval_count": response.get("prompt_eval_count"),
         "实测 eval_count": response.get("eval_count"),

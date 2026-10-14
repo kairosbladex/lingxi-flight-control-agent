@@ -95,9 +95,11 @@ decider = OllamaDecider(model="qwen3.5:9b", num_ctx=DEFAULT_NUM_CTX,
 
 压缩不是静默的：`last_prompt_estimate` / `last_omitted_observations` /
 `compressed_payloads` / `omitted_observation_turns` 四个读数可直接打日志或告警。
-真实循环验证（16 次观察 + 模型答 system prompt 里的口令）：省略 4 条、估算 16424/30720、
-实测 `prompt_eval_count=10421`、口令答对。全部实测数字与取舍见
-`docs/model-selection.md`「上下文预算」一节。
+回执还会按域投影后再回放（`OllamaDecider(result_projector=project_observation_result)`）：
+请求回声与领域重块不再喂给模型，`read_state` 保留全部状态；实测 flight/control 类回执
+字符数减半，长循环实测 `prompt_eval_count` 10421 → 9156。
+真实循环验证（16 次观察 + 模型答 system prompt 里的口令）：省略 4 条、估算 15008/30720、
+口令答对。全部实测数字与取舍见 `docs/model-selection.md`「上下文预算」一节。
 
 ```python
 from lingxi_flight_control import (

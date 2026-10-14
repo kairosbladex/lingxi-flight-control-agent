@@ -507,6 +507,43 @@ class BudgetTelemetryTests(unittest.TestCase):
         self.assertLessEqual(decider.last_prompt_estimate, decider.prompt_budget_tokens)
 
 
+class ResultProjectorTests(unittest.TestCase):
+    """回执投影挂在解码器上；它只作用于 result，永远不碰 error 回执。"""
+
+    def test_projector_trims_replayed_results(self):
+        seen = []
+
+        def projector(name, result):
+            seen.append(name)
+            return {"status": result["status"]}
+
+        decider = OllamaDecider(model="m", transport=FakeTransport([]), result_projector=projector)
+        cp = checkpoint(observations=[{"tool": "read_state", "arguments": {},
+                                       "result": {"status": "accepted", "command_id": "c"}}])
+        messages = decider.messages("读取当前状态", cp)
+        self.assertEqual(json.loads(messages[3]["content"]), {"status": "accepted"})
+        self.assertEqual(seen, ["read_state"])
+
+    def test_projector_never_touches_error_observations(self):
+        # 错误回执是模型自纠的唯一线索，必须原样回放。
+        decider = OllamaDecider(model="m", transport=FakeTransport([]),
+                                result_projector=lambda _name, _result: {"dropped": True})
+        cp = checkpoint(observations=[{"tool": "hover",
+                                       "error": {"code": "tool_exception", "message": "boom"}}])
+        self.assertIn("boom", decider.messages("悬停5秒", cp)[3]["content"])
+
+    def test_without_projector_results_are_replayed_verbatim(self):
+        decider = OllamaDecider(model="m", transport=FakeTransport([]))
+        cp = checkpoint(observations=[{"tool": "read_state", "arguments": {},
+                                       "result": {"status": "accepted", "command_id": "c"}}])
+        self.assertEqual(json.loads(decider.messages("读取当前状态", cp)[3]["content"]),
+                         {"status": "accepted", "command_id": "c"})
+
+    def test_non_callable_projector_is_rejected(self):
+        with self.assertRaises(ValueError):
+            OllamaDecider(model="m", result_projector="nope")
+
+
 class ConstructorValidationTests(unittest.TestCase):
     def test_invalid_construction_is_rejected(self):
         for kwargs in ({"model": ""}, {"model": "m", "base_url": ""}, {"model": "m", "timeout": 0},

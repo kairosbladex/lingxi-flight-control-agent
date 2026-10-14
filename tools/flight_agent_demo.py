@@ -28,6 +28,7 @@ from lingxi_flight_control import (
     RuntimeBinding,
     SafetyFastPathDecider,
     build_full_control_tool_registry,
+    project_observation_result,
 )
 
 
@@ -159,8 +160,10 @@ def main() -> int:
                     "向前飞500米", "上升3米然后后退2米"]
 
     # think=None 表示不发送该字段。显式 think=False 会让 qwen3.5 的工具调用完全失效。
+    # 回执按域投影：非驾驶舱工具不认识，会原样回放，所以最小执行器路径同样安全。
     brain = OllamaDecider(model=args.model, base_url=args.base_url,
-                          think=True if args.think else None, keep_alive="30m")
+                          think=True if args.think else None, keep_alive="30m",
+                          result_projector=project_observation_result)
     decider = SafetyFastPathDecider(brain)
     traced = TracingDecider(decider, verbose=not args.quiet, meter=brain)
     print(f"模型: {args.model}   端点: {args.base_url}   模式: {'驾驶舱' if args.cockpit else '最小执行器'}")

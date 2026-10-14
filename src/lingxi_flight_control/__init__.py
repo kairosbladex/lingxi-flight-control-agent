@@ -30,6 +30,7 @@ from .full_control import (
     build_full_control_tool_registry,
     mounted_payloads,
     parse_flight_control_text,
+    project_observation_result,
 )
 from .models import (
     CommandStatus,
@@ -102,6 +103,7 @@ __all__ = [
     "parameter_json_schema",
     "mounted_payloads",
     "parse_flight_control_text",
+    "project_observation_result",
     "Vector3",
     "parse_relative_move",
 ]

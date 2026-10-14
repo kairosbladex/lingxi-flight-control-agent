@@ -1023,3 +1023,57 @@ def action_manifest() -> dict[str, Any]:
 
 def mounted_payloads() -> tuple[str, ...]:
     return ("megaphone", "searchlight", "methane", "dropper")
+
+
+# ---- 观察回执投影：回放给模型时少喂用不上的字段 ------------------------------
+
+#: 请求回声与循环内部字段：模型下一步既不需要它们，也没有地方用。
+#: （确认握手由 `BoundedAgentLoop` 自己持有，模型从不经手 confirmation_*。）
+_PROJECTION_ECHO_FIELDS = frozenset({
+    "command_id", "idempotency_key", "confirmation_id", "confirmation_binding",
+    "expires_at", "execution_mode",
+})
+
+#: 体积大、但只服务单一领域的 state 块。域 -> 该域要保留的块。
+_PROJECTION_DOMAIN_BLOCKS: Mapping[str, tuple[str, ...]] = {
+    "control": ("virtual_buttons",),
+    "camera": ("camera",),
+    "infrared": ("infrared",),
+    "payload": ("payloads",),
+    "parameters": ("parameters",),
+    # read_state 的唯一目的就是把状态说全，只有它保留全部块。
+    "state": ("parameters", "camera", "infrared", "payloads", "virtual_buttons"),
+}
+_PROJECTION_BLOCKS = frozenset(_PROJECTION_DOMAIN_BLOCKS["state"])
+#: 纯循环记账字段，回放时没有信息量。
+_PROJECTION_INTERNAL_STATE_FIELDS = frozenset({"last_command_id"})
+
+
+def project_observation_result(action: Any, result: Any) -> Any:
+    """把驾驶舱回执投影成模型下一步真正需要的字段。
+
+    只丢掉**确定**没用的东西：请求回声、循环记账，以及不属于该领域的重块；
+    连续遥测（控制权/高度/经纬度/电量/任务与航线状态……）任何域都保留。
+
+    不认识的动作或形状**原样返回**：宁可多花 token，也不猜着删——投影出错的代价是
+    模型看不见本该看见的状态。回执本身仍是驾驶舱 UI 的对外契约，这里只影响回放。
+    """
+    if not isinstance(result, Mapping) or "state" not in result:
+        return result
+    try:
+        spec = ACTION_SPECS.get(FlightControlAction(action))
+    except (TypeError, ValueError):
+        return result
+    state = result["state"]
+    if spec is None or not isinstance(state, Mapping):
+        return result
+
+    keep_blocks = _PROJECTION_DOMAIN_BLOCKS.get(spec.domain, ())
+    projected = {key: value for key, value in result.items()
+                 if key not in _PROJECTION_ECHO_FIELDS}
+    projected["state"] = {
+        key: value for key, value in state.items()
+        if (key not in _PROJECTION_BLOCKS and key not in _PROJECTION_INTERNAL_STATE_FIELDS)
+        or key in keep_blocks
+    }
+    return projected

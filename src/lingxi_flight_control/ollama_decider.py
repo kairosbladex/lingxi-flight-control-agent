@@ -252,6 +252,7 @@ class OllamaDecider:
         transport: Transport | None = None,
         clarify_detector: Callable[[str], bool] | None = None,
         token_estimator: Callable[[str], int] | None = None,
+        result_projector: Callable[[str, Any], Any] | None = None,
     ):
         if not model or not model.strip():
             raise ValueError("model name is required")
@@ -271,6 +272,8 @@ class OllamaDecider:
             raise ValueError("keep_recent_observations must be a non-negative integer")
         if token_estimator is not None and not callable(token_estimator):
             raise ValueError("token_estimator must be callable")
+        if result_projector is not None and not callable(result_projector):
+            raise ValueError("result_projector must be callable")
         if max_attempts <= 0:
             raise ValueError("max_attempts must be positive")
         self.model = model
@@ -285,6 +288,7 @@ class OllamaDecider:
         self._output_reserve = output_reserve
         self._keep_recent_observations = keep_recent_observations
         self._token_estimator = token_estimator
+        self._result_projector = result_projector
         self._keep_alive = keep_alive
         self._max_attempts = int(max_attempts)
         self._transport = transport or http_transport
@@ -395,6 +399,9 @@ class OllamaDecider:
             arguments = observation.get("arguments")
             if "result" in observation:
                 payload: Any = observation["result"]
+                # 投影只作用于成功回执；error 回执是模型自纠的唯一线索，原样回放。
+                if self._result_projector is not None:
+                    payload = self._result_projector(name, payload)
             else:
                 payload = observation.get("error", {})
             turns.append([
