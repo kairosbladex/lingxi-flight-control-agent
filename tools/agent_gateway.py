@@ -100,6 +100,11 @@ def resolve_actor(headers: Mapping[str, str], operators: Mapping[str, str]) -> s
     return operators.get(token.strip()) if token else None
 
 
+def is_public_path(path: str) -> bool:
+    """`/healthz` 免鉴权：供守护进程/监控探活，内容只有状态与 TTL。"""
+    return urlsplit(path or "").path.rstrip("/") in {"", "/healthz"}
+
+
 def is_origin_allowed(origin: str | None, allowed: tuple[str, ...]) -> bool:
     if not origin:
         return False
@@ -160,8 +165,9 @@ def build_gateway(host: str, port: int, *, upstream: str, operators: Mapping[str
             if is_origin_allowed(origin, allowed_origins):
                 self.send_header("Access-Control-Allow-Origin", str(origin).rstrip("/"))
                 self.send_header("Vary", "Origin")
+                # X-Agent-Actor 只是为兼容老客户端放行，转发前一律丢弃。
                 self.send_header("Access-Control-Allow-Headers",
-                                 "Content-Type, X-Operator-Token, X-Trace-Id")
+                                 "Content-Type, X-Operator-Token, X-Trace-Id, X-Agent-Actor")
                 self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 
         def _json(self, status: int, payload: Mapping[str, Any]) -> None:
@@ -195,9 +201,11 @@ def build_gateway(host: str, port: int, *, upstream: str, operators: Mapping[str
                                         "message": "来源不在白名单内"})
 
             actor = resolve_actor(self.headers, operators)
-            if actor is None:
+            if actor is None and not is_public_path(path):
                 audit(f"{time.strftime('%Y-%m-%dT%H:%M:%S%z')} actor=- {self.command} {path} 401 UNAUTHENTICATED")
                 return self._json(401, UNAUTHENTICATED)
+            if actor is None:
+                actor = "anonymous-probe"
 
             try:
                 length = int(self.headers.get("Content-Length") or 0)

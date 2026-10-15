@@ -11,6 +11,7 @@ import unittest
 
 from tools.agent_gateway import (
     GatewayConfigError,
+    is_public_path,
     forward_headers,
     is_origin_allowed,
     load_gateway_token,
@@ -113,6 +114,14 @@ class ForwardHeaderTests(unittest.TestCase):
         forwarded = forward_headers({"X-Trace-Id": "bad\nvalue"}, "actor-1", "secret")
         self.assertTrue(forwarded["X-Trace-Id"].startswith("gateway-"))
         self.assertNotIn("X-Agent-Actor-forged", forwarded)
+
+
+class PublicPathTests(unittest.TestCase):
+    def test_only_healthz_is_public(self):
+        for path in ('/healthz', '/healthz/', '/healthz?x=1', '/'):
+            self.assertTrue(is_public_path(path), path)
+        for path in ('/api/flight-preview/preview', '/api/flight-preview/pose', '/healthz/secret'):
+            self.assertFalse(is_public_path(path), path)
 
 
 class UpstreamTests(unittest.TestCase):
