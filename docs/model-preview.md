@@ -63,6 +63,7 @@
 | 上下文版本已变化 | 409 | `STALE_CONTEXT` |
 | 该无人机尚未写入位姿 | 404 | `POSE_NOT_FOUND` |
 | 预览卡不存在或已被替代 | 404 | `NOT_FOUND` |
+| 缺少或错误的服务网关凭证 | 401 | `UNAUTHENTICATED` |
 | 方法不支持 | 405 | `METHOD_NOT_ALLOWED` |
 | 未预期异常（兜底） | 500 | `INTERNAL_ERROR` |
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import hmac
 import json
 import math
 import re
@@ -119,11 +120,16 @@ class StandalonePreviewService:
     def __init__(self, decider_factory: Callable[[], ModelDecider], *,
                  clock: Callable[[], float] = time.time,
                  pose_ttl_sec: float = DEFAULT_POSE_TTL_SEC,
-                 card_ttl_sec: float = DEFAULT_CARD_TTL_SEC):
+                 card_ttl_sec: float = DEFAULT_CARD_TTL_SEC,
+                 gateway_token: str | None = None):
         if not callable(decider_factory):
             raise ValueError("decider_factory must be callable")
         if pose_ttl_sec <= 0 or card_ttl_sec <= 0:
             raise ValueError("TTLs must be positive")
+        if gateway_token is not None and not str(gateway_token).strip():
+            raise ValueError("gateway_token 不能是空字符串")
+        # 操作者身份只能由持有该凭证的网关注入；不配置时保持本地开发行为。
+        self._gateway_token = str(gateway_token) if gateway_token is not None else None
         self._decider_factory = decider_factory
         self._clock = clock
         self._pose_ttl_sec = float(pose_ttl_sec)
@@ -144,6 +150,8 @@ class StandalonePreviewService:
         try:
             route, query = self._route(path)
             payload = _json_object(body)
+            if self._gateway_token is not None and route != "healthz":
+                self._require_gateway(headers)
             if route == "healthz" and method.upper() == "GET":
                 return self._ok({"status": "ok", "execution_mode": self.execution_mode,
                                  "pose_ttl_sec": self._pose_ttl_sec,
@@ -178,6 +186,13 @@ class StandalonePreviewService:
         if name in {"pose", "preview", "confirm", "cancel"}:
             return name, parse_qs(parsed.query)
         return None, parse_qs(parsed.query)
+
+    def _require_gateway(self, headers: Mapping[str, str]) -> None:
+        """身份由网关注入：没有正确凭证的请求一律拒绝，客户端不能自报操作者。"""
+        supplied = headers.get("X-Agent-Gateway") or headers.get("x-agent-gateway") or ""
+        if not hmac.compare_digest(str(supplied), self._gateway_token or ""):
+            raise StandalonePreviewError(
+                "UNAUTHENTICATED", "缺少或错误的服务网关凭证，操作者身份必须由网关注入", 401)
 
     def _trace_id(self, headers: Mapping[str, str]) -> str:
         value = headers.get("X-Trace-Id") or headers.get("x-trace-id")

@@ -164,6 +164,50 @@ class StandalonePreviewTests(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertEqual(payload["error_code"], "INVALID_REQUEST")
 
+    def test_actor_identity_requires_gateway_credential_when_configured(self):
+        """配了网关凭证后：客户端自带的 X-Agent-Actor 不再算身份，凭证不对一律 401。"""
+        service = StandalonePreviewService(
+            lambda: self.decider, clock=lambda: self.now, gateway_token="g" * 32)
+        forged = {"X-Agent-Actor": "forged-operator", "X-Trace-Id": "trace-1"}
+        response = service.handle("POST", "/api/flight-preview/preview", json.dumps({
+            **self.context, "text": "往前飞10米", "command_id": "cmd-1",
+            "idempotency_key": "idem-1", "pose": self.pose,
+        }), forged)
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.payload["error_code"], "UNAUTHENTICATED")
+        self.assertEqual(self.decider.calls, 0)
+
+        wrong = {**forged, "X-Agent-Gateway": "wrong-secret"}
+        response = service.handle("POST", "/api/flight-preview/preview", json.dumps({
+            **self.context, "text": "往前飞10米", "command_id": "cmd-1",
+            "idempotency_key": "idem-1", "pose": self.pose,
+        }), wrong)
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(self.decider.calls, 0)
+
+        # /healthz 不需要凭证：守护进程探活要用
+        health = service.handle("GET", "/healthz", b"", forged)
+        self.assertEqual(health.status_code, 200)
+
+    def test_gateway_injected_identity_is_what_gets_recorded(self):
+        """相同的令牌、不同的注入身份，位姿互不可见 —— 证明身份真的按网关注入走。"""
+        service = StandalonePreviewService(
+            lambda: self.decider, clock=lambda: self.now, gateway_token="g" * 32)
+        common = {**self.context, "pose": self.pose}
+        operator_a = {"X-Agent-Actor": "operator-a", "X-Agent-Gateway": "g" * 32}
+        operator_b = {"X-Agent-Actor": "operator-b", "X-Agent-Gateway": "g" * 32}
+        self.assertEqual(service.handle("POST", "/api/flight-preview/pose",
+                                        json.dumps(common), operator_a).status_code, 200)
+        read_a = service.handle("GET", f"/api/flight-preview/pose?project_id=project-1"
+                                       f"&hangar_id=hangar-1&drone_id=drone-1&task_id=task-1"
+                                       f"&context_version=1", b"", operator_a)
+        read_b = service.handle("GET", f"/api/flight-preview/pose?project_id=project-1"
+                                       f"&hangar_id=hangar-1&drone_id=drone-1&task_id=task-1"
+                                       f"&context_version=1", b"", operator_b)
+        self.assertEqual(read_a.status_code, 200)
+        self.assertEqual(read_b.status_code, 404)
+        self.assertEqual(read_b.payload["error_code"], "POSE_NOT_FOUND")
+
     def test_out_of_range_pose_is_invalid_pose_not_stale(self):
         status, payload = self.call("POST", "/api/flight-preview/pose",
                                     {**self.context, "pose": {**self.pose, "latitude": 200.0}})

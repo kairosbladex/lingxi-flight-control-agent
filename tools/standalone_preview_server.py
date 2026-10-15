@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 from lingxi_flight_control import (
@@ -26,14 +27,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--pose-ttl-sec", type=float, default=DEFAULT_POSE_TTL_SEC)
     parser.add_argument("--card-ttl-sec", type=float, default=DEFAULT_CARD_TTL_SEC)
     parser.add_argument("--allowed-origin", default="*")
+    parser.add_argument("--gateway-token-env", default=None,
+                        help="持有该凭证的网关才能调用（凭证值从该环境变量读）；不设则保持本地开发行为")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    gateway_token = None
+    if args.gateway_token_env:
+        gateway_token = os.environ.get(args.gateway_token_env)
+        if not gateway_token:
+            print(f"环境变量 {args.gateway_token_env} 未设置，拒绝以无凭证方式启动", file=sys.stderr)
+            return 2
     service = StandalonePreviewService(
         lambda: OllamaDecider(model=args.model, base_url=args.base_url, keep_alive="30m"),
         pose_ttl_sec=args.pose_ttl_sec, card_ttl_sec=args.card_ttl_sec,
+        gateway_token=gateway_token,
     )
     server = build_standalone_server(service, args.host, args.port,
                                      allowed_origin=args.allowed_origin)
