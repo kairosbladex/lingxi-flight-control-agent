@@ -25,6 +25,7 @@ from .full_control import (
     _CONTROL_FREE_ACTIONS, parameter_json_schema,
 )
 from .models import DecisionKind, LoopStatus, ModelDecision, ToolDefinition, ToolSchema
+from .ollama_decider import ModelOutputTruncatedError, ModelTimeoutError, PromptBudgetExceeded
 from .safety import SafetyFastPath
 from .session import MemoryCheckpointStore, SessionError, SessionExpired, SessionNotFound, validate_session_id
 from .standalone_preview import StandaloneResponse
@@ -59,6 +60,22 @@ _NON_IMMEDIATE = re.compile(
     r'|[\d零一二两三四五六七八九十百半]+\s*(?:米|度|倍)\s*(?:左右|上下)'
     r'|\b(?:in|after)\s+\d+\s*(?:seconds?|minutes?|hours?)\b', re.I)
 _CONTINUE = frozenset({'继续', '下一步', '继续下一步', 'continue', 'next'})
+_MODEL_FAILURE_MESSAGES = {
+    'MODEL_TIMEOUT': '模型响应超时，本次未执行动作。',
+    'MODEL_OUTPUT_TRUNCATED': '模型输出未完整生成，本次未执行动作。',
+    'RUN_BUDGET_EXCEEDED': '本轮理解预算已耗尽，请缩短指令后重试。',
+    'MODEL_ERROR': '未获得可靠的动作建议，请补充或重试。',
+}
+
+
+def _model_failure_code(error):
+    if isinstance(error, (ModelTimeoutError, TimeoutError)):
+        return 'MODEL_TIMEOUT'
+    if isinstance(error, ModelOutputTruncatedError):
+        return 'MODEL_OUTPUT_TRUNCATED'
+    if isinstance(error, PromptBudgetExceeded):
+        return 'RUN_BUDGET_EXCEEDED'
+    return 'MODEL_ERROR'
 
 
 def build_proposal_registry(executor):
@@ -387,16 +404,36 @@ class CockpitService:
         started = time.monotonic()
         try:
             safety_call = None if any(mark in text for mark in '?？') else SafetyFastPath().recognize(text)
-            decider = None if safety_call else self._factory()
+            model_failure_code = None
+            try:
+                decider = None if safety_call else self._factory()
+            except Exception as exc:
+                model_failure_code = _model_failure_code(exc)
+                decider = None
             owner = self
             class BudgetedDecider:
+                def check_budget(self):
+                    nonlocal model_failure_code
+                    if session.epoch != epoch:
+                        raise ValueError('run cancelled')
+                    if time.monotonic() - started > owner._timeout:
+                        model_failure_code = 'RUN_BUDGET_EXCEEDED'
+                        raise ValueError(_MODEL_FAILURE_MESSAGES[model_failure_code])
+
                 def decide(self, user_message, checkpoint, tools):
-                    if session.epoch != epoch or time.monotonic() - started > owner._timeout:
-                        raise ValueError('run cancelled or timed out')
-                    decision = (ModelDecision(DecisionKind.TOOL_CALL, tool_call=safety_call)
-                                if safety_call else decider.decide(user_message, checkpoint, tools))
-                    if session.epoch != epoch or time.monotonic() - started > owner._timeout:
-                        raise ValueError('run cancelled or timed out')
+                    nonlocal model_failure_code
+                    self.check_budget()
+                    if model_failure_code:
+                        raise ValueError(_MODEL_FAILURE_MESSAGES[model_failure_code])
+                    try:
+                        decision = (ModelDecision(DecisionKind.TOOL_CALL, tool_call=safety_call)
+                                    if safety_call else decider.decide(user_message, checkpoint, tools))
+                    except Exception as exc:
+                        model_failure_code = _model_failure_code(exc)
+                        # The loop records exception text in its checkpoint. Only
+                        # fixed messages may cross that boundary, never HTTP bodies.
+                        raise ValueError(_MODEL_FAILURE_MESSAGES[model_failure_code]) from None
+                    self.check_budget()
                     return decision
             result = BoundedAgentLoop(BudgetedDecider(), build_proposal_registry(self.executor),
                                       max_steps=self._max_steps).run(model_input)
@@ -405,7 +442,8 @@ class CockpitService:
                     response = self._base(status='stale_context', message='本次理解已取消，迟到结果未采用。', request_id=request_id)
                 else:
                     self._version(payload)
-                    response = self._proposal(result, grounding_text, request_id, session)
+                    response = self._proposal(result, grounding_text, request_id, session,
+                                              model_failure_code=model_failure_code)
                     session.clarification = response['status'] == 'clarification'
                     history += [{'role': 'user', 'text': text}, {'role': 'assistant', 'status': response['status'], 'text': response['message']}]
                     result.checkpoint.context['conversation'] = history[-12:]
@@ -419,7 +457,7 @@ class CockpitService:
                     session.requests[request_id] = (fingerprint, self._base(status='error',
                         error_code='MODEL_ERROR', message='本次理解失败，未执行动作。', request_id=request_id))
 
-    def _proposal(self, result, grounding_text, request_id, session):
+    def _proposal(self, result, grounding_text, request_id, session, *, model_failure_code=None):
         common = {'request_id': request_id, 'state': self._state()}
         if result.tool_call and result.checkpoint.confirmation_binding:
             call = result.tool_call
@@ -440,8 +478,10 @@ class CockpitService:
             return self._base(status='clarification', message=result.message, **common)
         if result.status == LoopStatus.FINAL:
             return self._base(status='final', message='本轮没有执行新动作。当前状态见状态栏；如需控制，请明确动作和参数。', **common)
-        return self._base(status='error', error_code='MODEL_ERROR',
-            message='未获得可靠的动作建议，请补充或重试。', **common)
+        code = model_failure_code or ('RUN_BUDGET_EXCEEDED'
+            if result.status == LoopStatus.MAX_STEPS_EXCEEDED else 'MODEL_ERROR')
+        return self._base(status='error', error_code=code,
+            message=_MODEL_FAILURE_MESSAGES[code], **common)
 
     def _finish(self, session_id, payload, cancel):
         self._fields(payload, _CONFIRM_FIELDS, _CONFIRM_FIELDS)

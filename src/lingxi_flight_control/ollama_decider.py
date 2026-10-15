@@ -71,6 +71,14 @@ class PromptBudgetExceeded(ValueError):
     """压缩到底也装不进预算：宁可硬失败，也不让服务端静默截断 system prompt。"""
 
 
+class ModelTimeoutError(ValueError):
+    """模型 HTTP 请求超时；兼容既有捕获 ValueError 的调用方。"""
+
+
+class ModelOutputTruncatedError(ValueError):
+    """生成被截断，已有工具字段也不能作为完整意图使用。"""
+
+
 def estimate_tokens(text: str, *, estimator: Callable[[str], int] | None = None) -> int:
     """不依赖 tokenizer 的保守 token 估算；``estimator`` 可注入自定义计数函数。"""
     if estimator is not None:
@@ -191,26 +199,27 @@ def http_transport(url: str, payload: Mapping[str, Any], timeout: float) -> Mapp
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             raw = response.read()
-    except urllib.error.HTTPError as exc:  # 4xx/5xx 带上响应体，便于定位模型模板问题
-        detail = ""
+    except urllib.error.HTTPError as exc:
+        # The legacy loop persists exception text. Never read or echo upstream
+        # bodies/reason phrases; retain only the HTTP status and release the body.
         try:
-            detail = exc.read().decode("utf-8", "replace")[:400]
-        except Exception:  # pragma: no cover - 读取失败时保持原错误
-            detail = ""
-        raise ValueError(f"model server rejected the request: HTTP {exc.code} {detail}") from exc
+            exc.close()
+        except Exception:  # pragma: no cover - cleanup must not expose another upstream error
+            pass
+        raise ValueError(f"model server rejected the request: HTTP {exc.code}") from None
     except TimeoutError as exc:
         # 冷启动加载模型可能需要数分钟；报错要能区分「加载慢」和「服务挂了」。
-        raise ValueError(
+        raise ModelTimeoutError(
             f"model server did not respond within {timeout:.0f}s "
             "(a cold model load can exceed this; raise timeout or set keep_alive to keep it resident)"
         ) from exc
     except urllib.error.URLError as exc:
         if isinstance(exc.reason, TimeoutError):
-            raise ValueError(
+            raise ModelTimeoutError(
                 f"model server did not respond within {timeout:.0f}s "
                 "(a cold model load can exceed this; raise timeout or set keep_alive to keep it resident)"
             ) from exc
-        raise ValueError(f"model server is unreachable: {exc.reason}") from exc
+        raise ValueError("model server is unreachable") from None
     try:
         data = json.loads(raw)
     except (TypeError, ValueError) as exc:
@@ -607,7 +616,7 @@ class OllamaDecider:
 
         重试是安全的：空响应意味着模型没有给出任何工具调用，也就没有任何动作被执行，
         因此重试的只是「决策」本身，不会重复执行副作用。非空但结构非法的响应不重试，
-        那是协议问题，应该直接暴露。
+        那是协议问题，应该直接暴露。生成截断同样硬失败，不接受部分输出或重试。
         """
         last_message = ""
         for attempt in range(1, self._max_attempts + 1):
@@ -615,10 +624,12 @@ class OllamaDecider:
             try:
                 body = self.payload(user_message, checkpoint, tools)
                 response = self._transport(self._endpoint, body, self._timeout)
-                self.last_raw_response = response
                 # 错误信封在协议层解释，自定义传输层同样受保护。
                 if isinstance(response.get("error"), str) and response["error"]:
-                    raise ValueError(f"model server error: {response['error']}")
+                    raise ValueError("model server returned an error response")
+                self.last_raw_response = response
+                if response.get("done_reason") == "length":
+                    raise ModelOutputTruncatedError("model output was truncated")
                 decision, empty_reason = self._interpret(response)
             except Exception:
                 # 只补遥测，原异常原样上抛；硬失败不重试，也不能误记为空响应。

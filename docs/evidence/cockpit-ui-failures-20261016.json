@@ -1,0 +1,52 @@
+{
+  "source": "offline-http-fixture",
+  "initialScreenshot": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-OoXwys/01-ready.png",
+  "confirmationScreenshot": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-OoXwys/02-confirmation.png",
+  "modelFailureScreenshot": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-OoXwys/03-model-timeout.png",
+  "modelFailureChecks": [
+    {
+      "errorCode": "MODEL_TIMEOUT",
+      "renderedMessage": "理解指令超时，操作未执行，请稍后重新提出指令。",
+      "oldCardCleared": true,
+      "rawExceptionVisible": false,
+      "observationWindowMs": 500,
+      "requestPaths": ["/api/flight-control/agent/messages"]
+    },
+    {
+      "errorCode": "MODEL_OUTPUT_TRUNCATED",
+      "renderedMessage": "模型回答被截断，操作未执行，请简短描述本次动作。",
+      "oldCardCleared": true,
+      "rawExceptionVisible": false,
+      "observationWindowMs": 500,
+      "requestPaths": ["/api/flight-control/agent/messages"]
+    },
+    {
+      "errorCode": "RUN_BUDGET_EXCEEDED",
+      "renderedMessage": "本轮理解预算已耗尽，操作未执行，请简短描述本次动作。",
+      "oldCardCleared": true,
+      "rawExceptionVisible": false,
+      "observationWindowMs": 500,
+      "requestPaths": ["/api/flight-control/agent/messages"]
+    },
+    {
+      "errorCode": "MODEL_ERROR",
+      "renderedMessage": "未生成可靠的动作建议，操作未执行，请重新描述本次动作。",
+      "oldCardCleared": true,
+      "rawExceptionVisible": false,
+      "observationWindowMs": 500,
+      "requestPaths": ["/api/flight-control/agent/messages"]
+    }
+  ],
+  "apiRequests": 33,
+  "confirmedRequests": 3,
+  "forbiddenRequests": 0,
+  "browserErrors": [],
+  "physicalDeviceRequests": 0,
+  "scenarios": [
+    "clarification", "confirmation", "cancel", "refresh-retains-card", "reset",
+    "sequential-confirmation", "expiry", "http-error", "MODEL_TIMEOUT",
+    "MODEL_OUTPUT_TRUNCATED", "RUN_BUDGET_EXCEEDED", "MODEL_ERROR",
+    "changed-context", "late-response", "platform-receipt-label-fixture",
+    "checkpoint-warning-preserves-receipt"
+  ]
+}

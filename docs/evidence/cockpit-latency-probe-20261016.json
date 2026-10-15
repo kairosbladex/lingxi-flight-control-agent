@@ -1,0 +1,178 @@
+{
+  "schema_version": "cockpit-latency-probe/v1",
+  "recorded_at": "2026-10-15T18:01:55.926821+00:00",
+  "scope": "single_decision_diagnostic_pairs_only",
+  "model": "qwen3.5:9b",
+  "before": {
+    "server_version": "0.21.0",
+    "model_digest": "6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7",
+    "resident": false,
+    "loaded_model_count": 2
+  },
+  "after": {
+    "server_version": "0.21.0",
+    "model_digest": "6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7",
+    "resident": true,
+    "loaded_model_count": 2
+  },
+  "model_digest_unchanged": true,
+  "fixture_sha256": "355395aa8c3e367afcca06080ae06caa7fa9277d2d68b5ecde47f5d06725a7cd",
+  "prompt_sha256": "895eb7f5995bbee79cf8abe0610cb324150983bea6fce3e5867141cd129a11b7",
+  "budgets": {
+    "max_model_calls": 8,
+    "max_model_seconds": 300,
+    "request_timeout_sec": 35,
+    "output_tokens_per_call": 2048
+  },
+  "rows": [
+    {
+      "id": "movement_01",
+      "variant": "auto",
+      "generation": {
+        "done_reason": "stop",
+        "prompt_eval_count": 3726,
+        "eval_count": 157,
+        "load_duration": 12509124067,
+        "prompt_eval_duration": 4815915350,
+        "eval_duration": 5225163283,
+        "total_duration": 22891229108
+      },
+      "status": "returned",
+      "kind": "tool_call",
+      "tool": "move_forward",
+      "arguments": {
+        "distance_m": 10
+      },
+      "wall_ms": 22913.988
+    },
+    {
+      "id": "movement_01",
+      "variant": "off",
+      "generation": {
+        "done_reason": "stop",
+        "prompt_eval_count": 3728,
+        "eval_count": 29,
+        "load_duration": 314328981,
+        "prompt_eval_duration": 1570419337,
+        "eval_duration": 955407128,
+        "total_duration": 2901783026
+      },
+      "status": "returned",
+      "kind": "tool_call",
+      "tool": "move_forward",
+      "arguments": {
+        "distance_m": 10
+      },
+      "wall_ms": 2923.82
+    },
+    {
+      "id": "yaw_06",
+      "variant": "off",
+      "generation": {
+        "done_reason": "stop",
+        "prompt_eval_count": 3732,
+        "eval_count": 64,
+        "load_duration": 303558816,
+        "prompt_eval_duration": 1585042164,
+        "eval_duration": 2185372175,
+        "total_duration": 4170622935
+      },
+      "status": "returned",
+      "kind": "final",
+      "tool": null,
+      "arguments": null,
+      "wall_ms": 4196.747
+    },
+    {
+      "id": "yaw_06",
+      "variant": "auto",
+      "generation": {
+        "done_reason": "stop",
+        "prompt_eval_count": 3730,
+        "eval_count": 203,
+        "load_duration": 319652645,
+        "prompt_eval_duration": 1593879620,
+        "eval_duration": 7205315428,
+        "total_duration": 9271562231
+      },
+      "status": "returned",
+      "kind": "final",
+      "tool": null,
+      "arguments": null,
+      "wall_ms": 9293.331
+    },
+    {
+      "id": "missing_01",
+      "variant": "auto",
+      "generation": {
+        "done_reason": "stop",
+        "prompt_eval_count": 3720,
+        "eval_count": 109,
+        "load_duration": 194791821,
+        "prompt_eval_duration": 1600169799,
+        "eval_duration": 3924460122,
+        "total_duration": 5854906714
+      },
+      "status": "returned",
+      "kind": "clarify",
+      "tool": null,
+      "arguments": null,
+      "wall_ms": 5869.908
+    },
+    {
+      "id": "missing_01",
+      "variant": "off",
+      "generation": {
+        "done_reason": "stop",
+        "prompt_eval_count": 3722,
+        "eval_count": 29,
+        "load_duration": 311444679,
+        "prompt_eval_duration": 1650598515,
+        "eval_duration": 1070144096,
+        "total_duration": 3124601691
+      },
+      "status": "returned",
+      "kind": "tool_call",
+      "tool": "move_forward",
+      "arguments": {
+        "distance_m": 10
+      },
+      "wall_ms": 3186.357
+    },
+    {
+      "id": "limits_02",
+      "variant": "off",
+      "generation": {
+        "done_reason": "stop",
+        "prompt_eval_count": 3728,
+        "eval_count": 28,
+        "load_duration": 278149988,
+        "prompt_eval_duration": 1622747743,
+        "eval_duration": 977896216,
+        "total_duration": 2942302396
+      },
+      "status": "returned",
+      "kind": "tool_call",
+      "tool": "move_backward",
+      "arguments": {
+        "distance_m": 5
+      },
+      "wall_ms": 3175.722
+    },
+    {
+      "id": "limits_02",
+      "variant": "auto",
+      "status": "error",
+      "error_type": "ModelTimeoutError",
+      "wall_ms": 35007.067
+    }
+  ],
+  "mutating_tool_calls": 0,
+  "platform_calls": 0,
+  "confirmations": 0,
+  "limitations": [
+    "Shared model service; no isolated hardware or independent flight truth.",
+    "One pair per input; single decisions do not prove full-loop latency or accuracy.",
+    "Missing duration fields remain unknown; hidden reasoning and response text are not saved."
+  ]
+}

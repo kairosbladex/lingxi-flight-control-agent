@@ -325,6 +325,29 @@ class _Pending:
     confirmation_binding: str
     expires_at: float
     status: FlightControlStatus = FlightControlStatus.PREVIEW_REQUIRED
+    route_context: tuple[int, str | None, str, int | None] | None = None
+
+
+_ROUTE_REQUIRED_STATES = {
+    FlightControlAction.ROUTE_PAUSE: "running",
+    FlightControlAction.ROUTE_RESUME: "paused",
+    FlightControlAction.EXECUTE_ROUTE: "uploaded",
+}
+_ROUTE_INVALIDATING_ACTIONS = frozenset(_ROUTE_REQUIRED_STATES) | {
+    FlightControlAction.UPLOAD_ROUTE,
+    FlightControlAction.CONTINUE_FROM_BREAKPOINT,
+    FlightControlAction.POINT_FLIGHT,
+    FlightControlAction.POINT_ORBIT,
+    # These replace the flight intent or end the current authorization. A card
+    # from another conversation must not revive the earlier route afterward.
+    FlightControlAction.EMERGENCY_STOP,
+    FlightControlAction.TAKEOFF,
+    FlightControlAction.LAND,
+    FlightControlAction.LAND_ALTERNATE,
+    FlightControlAction.RETURN_HOME,
+    FlightControlAction.CANCEL_RETURN_HOME,
+    FlightControlAction.CONTROL_RELEASE,
+}
 
 
 def _now() -> float:
@@ -466,6 +489,7 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         self._ttl_sec = float(ttl_sec)
         self._pending: dict[str, _Pending] = {}
         self._by_key: dict[str, FlightControlReceipt] = {}
+        self._route_revision = 0
 
     def runtime_context(self) -> ExecutionContext:
         """始终由当前绑定派生。
@@ -494,8 +518,25 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         execution_mode = self.state.execution_mode
         self.state = FlightControlState(context_version=binding.context_version)
         self.state.execution_mode = execution_mode
+        self._route_revision = 0
         # 同步父类持有的执行上下文，保持两套 API 一致。
         self.context = _context_for(binding)
+
+    def _route_context(self) -> tuple[int, str | None, str, int | None]:
+        # The generation also detects replacing an upload with the same id and
+        # pause/resume or release/acquire cycles returning to the same state.
+        return (self._route_revision, self.state.route_id,
+                self.state.route_status, self.state.breakpoint_index)
+
+    def _route_precondition_error(self, action: FlightControlAction) -> tuple[str, str] | None:
+        expected = _ROUTE_REQUIRED_STATES.get(action)
+        if expected is None:
+            return None
+        if not isinstance(self.state.route_id, str) or not self.state.route_id.strip():
+            return "ROUTE_NOT_LOADED", "没有可操作的模拟航线，请先上传航线"
+        if self.state.route_status != expected:
+            return "ROUTE_STATE_MISMATCH", "当前模拟航线状态不支持此动作，请核对启动、暂停或恢复意图"
+        return None
 
     def preview(self, request: FlightControlActionRequest) -> FlightControlReceipt:
         request.validate()
@@ -526,10 +567,18 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         if action not in _CONTROL_FREE_ACTIONS and self.state.control_owner != self.binding.actor_id:
             return _status_receipt(FlightControlStatus.REJECTED, request, self.binding, self.state,
                                    error_code="CONTROL_NOT_OWNED", message="请先获取模拟控制权")
+        error = self._route_precondition_error(action)
+        if error is not None:
+            return _status_receipt(FlightControlStatus.REJECTED, request, self.binding, self.state,
+                                   error_code=error[0], message=error[1])
+        route_context = self._route_context() if action in _ROUTE_REQUIRED_STATES else None
         confirmation_id = uuid4().hex
-        binding_hash = _json_hash({"binding": self.binding.to_dict(), "request": request.to_dict()})
+        binding_data = {"binding": self.binding.to_dict(), "request": request.to_dict()}
+        if route_context is not None:
+            binding_data["route_context"] = route_context
+        binding_hash = _json_hash(binding_data)
         pending = _Pending(request, self.binding, confirmation_id, binding_hash,
-                           float(self._clock()) + self._ttl_sec)
+                           float(self._clock()) + self._ttl_sec, route_context=route_context)
         self._pending[confirmation_id] = pending
         return _status_receipt(FlightControlStatus.PREVIEW_REQUIRED, request, self.binding, self.state,
                                confirmation_id=confirmation_id, confirmation_binding=binding_hash,
@@ -561,6 +610,20 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             return _status_receipt(FlightControlStatus.EXPIRED, request, self.binding, self.state,
                                    confirmation_id=confirmation_id, confirmation_binding=pending.confirmation_binding,
                                    error_code="CONFIRMATION_EXPIRED", message="确认卡已经过期")
+        action = FlightControlAction(request.action)
+        if action in _ROUTE_REQUIRED_STATES:
+            if self.state.control_owner != self.binding.actor_id:
+                error = ("CONTROL_NOT_OWNED", "模拟控制权已变化，请重新检查")
+            elif pending.route_context != self._route_context():
+                error = ("ROUTE_STATE_CHANGED", "模拟航线已变化，请重新生成确认卡")
+            else:
+                error = self._route_precondition_error(action)
+            if error is not None:
+                self._pending.pop(confirmation_id, None)
+                return _status_receipt(FlightControlStatus.REJECTED, request, self.binding, self.state,
+                                       confirmation_id=confirmation_id,
+                                       confirmation_binding=pending.confirmation_binding,
+                                       error_code=error[0], message=error[1])
         result = self._apply(request)
         result = _status_receipt(FlightControlStatus.ACCEPTED, request, self.binding, self.state,
                                  confirmation_id=confirmation_id, confirmation_binding=pending.confirmation_binding,
@@ -708,6 +771,8 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             s.payloads["dropper"] = {"last_drop": True, "payload": p.get("payload", "default")}
         elif action in {FlightControlAction.PAYLOAD_MEGAPHONE, FlightControlAction.PAYLOAD_SEARCHLIGHT, FlightControlAction.PAYLOAD_METHANE}:
             s.payloads[action.value.removeprefix("payload_")] = p.get("enabled", True)
+        if action in _ROUTE_INVALIDATING_ACTIONS:
+            self._route_revision += 1
         s.revision += 1
         s.last_action = action.value
         s.last_command_id = request.command_id
