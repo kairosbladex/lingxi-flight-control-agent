@@ -21,6 +21,7 @@ from lingxi_flight_control import (
     ToolSchema,
 )
 from lingxi_flight_control.models import AgentCheckpoint
+from lingxi_flight_control.ollama_decider import PromptBudgetExceeded
 from lingxi_flight_control.telemetry import (
     EVENT_COMPRESSED,
     EVENT_DECIDE,
@@ -62,6 +63,10 @@ def checkpoint_with_observations(count: int) -> AgentCheckpoint:
                     for _ in range(count)]
     return AgentCheckpoint(user_input="向前飞10米", context={}, messages=[], tool_calls=[],
                            observations=observations)
+
+
+def exploding_sink(event):
+    raise RuntimeError("log collector down")
 
 
 class RecordingDecider:
@@ -190,6 +195,109 @@ class EventContractTests(unittest.TestCase):
         payload = self.sink.events[0].to_dict()
         self.assertTrue(payload["generation_truncated"])
 
+    def test_decide_reports_when_the_prompt_exactly_fills_its_budget(self):
+        checkpoint = checkpoint_with_observations(0)
+        reference = OllamaDecider(model="m", transport=FakeTransport([]))
+        estimate = reference.estimate_prompt_tokens(reference.messages("查询", checkpoint))
+        decider = OllamaDecider(model="m", num_ctx=estimate + 2048,
+                                telemetry=self.telemetry,
+                                transport=FakeTransport([tool_call_response("read_state", {})]))
+        decider.decide("查询", checkpoint, ())
+        payload = self.sink.dicts()[0]
+        self.assertEqual(payload["prompt_estimate"], payload["prompt_budget"])
+        self.assertEqual(payload["budget_used_ratio"], 1.0)
+        self.assertTrue(payload["near_budget"])
+
+    def test_empty_retry_and_compression_are_unchanged_when_sink_raises(self):
+        outcomes = []
+        broken = Telemetry(exploding_sink)
+        for telemetry in (Telemetry.disabled(), self.telemetry, broken):
+            transport = FakeTransport([
+                {"message": {"content": ""}, "done_reason": "length", "eval_count": 20},
+                tool_call_response("read_state", {}),
+            ])
+            decider = OllamaDecider(model="m", keep_recent_observations=1,
+                                    telemetry=telemetry, transport=transport)
+            decision = decider.decide("查询", checkpoint_with_observations(3), ())
+            outcomes.append((decision, transport.calls, decider.empty_responses,
+                             decider.compressed_payloads, decider.omitted_observation_turns))
+        self.assertEqual(outcomes[0], outcomes[1])
+        self.assertEqual(outcomes[0], outcomes[2])
+        self.assertEqual(outcomes[0][2:], (1, 2, 4))
+        self.assertEqual(self.sink.names,
+                         [EVENT_COMPRESSED, EVENT_DECIDE, EVENT_COMPRESSED, EVENT_DECIDE])
+        decisions = [e.to_dict() for e in self.sink.events if e.name == EVENT_DECIDE]
+        self.assertEqual([e["attempt"] for e in decisions], [1, 2])
+        self.assertEqual([e["kind"] for e in decisions], ["empty", "tool_call"])
+        self.assertTrue(decisions[0]["empty_response"])
+        self.assertTrue(decisions[0]["generation_truncated"])
+        self.assertEqual(broken.sink_errors, 4)
+
+    def test_hard_model_failures_emit_once_without_retry_or_stale_generation(self):
+        failures = (
+            RuntimeError("transport unavailable"),
+            {"error": "model unavailable"},
+            {"message": {"tool_calls": "malformed"}, "done_reason": "length", "eval_count": 19},
+        )
+        for failure in failures:
+            with self.subTest(failure=failure):
+                sink = MemorySink()
+                broken = Telemetry(exploding_sink)
+                outcomes = []
+                for telemetry in (Telemetry.disabled(), Telemetry(sink), broken):
+                    transport = FakeTransport([tool_call_response("read_state", {}), failure])
+                    decider = OllamaDecider(model="m", telemetry=telemetry, transport=transport)
+                    decider.decide("查询", checkpoint_with_observations(0), ())
+                    error_type = RuntimeError if isinstance(failure, Exception) else ValueError
+                    with self.assertRaises(error_type) as raised:
+                        decider.decide("再查", checkpoint_with_observations(0), ())
+                    if isinstance(failure, Exception):
+                        self.assertIs(raised.exception, failure, "必须原样上抛传输异常")
+                    outcomes.append((str(raised.exception), transport.calls, decider.empty_responses))
+                    self.assertEqual(len(transport.calls), 2, "硬失败不得额外重试")
+                    self.assertEqual(decider.empty_responses, 0)
+                self.assertEqual(outcomes[0], outcomes[1])
+                self.assertEqual(outcomes[0], outcomes[2])
+                self.assertEqual(sink.names, [EVENT_DECIDE, EVENT_DECIDE])
+                event = sink.dicts()[-1]
+                self.assertEqual(set(event), set(EVENT_FIELDS[EVENT_DECIDE]))
+                self.assertEqual(event["kind"], "error")
+                self.assertEqual(event["attempt"], 1)
+                self.assertFalse(event["empty_response"])
+                expected_generation = failure if isinstance(failure, dict) else {}
+                for field in ("done_reason", "eval_count", "prompt_eval_count"):
+                    self.assertEqual(event[field], expected_generation.get(field))
+                self.assertEqual(broken.sink_errors, 2)
+
+    def test_budget_rejection_never_sends_or_reuses_previous_readings(self):
+        outcomes = []
+        broken = Telemetry(exploding_sink)
+        for telemetry in (Telemetry.disabled(), self.telemetry, broken):
+            transport = FakeTransport([tool_call_response("read_state", {})])
+            decider = OllamaDecider(model="m", system_prompt="safe", num_ctx=1024,
+                                    output_reserve=64, keep_recent_observations=1,
+                                    token_estimator=len, telemetry=telemetry, transport=transport)
+            decider.decide("查询", checkpoint_with_observations(3), ())
+            with self.assertRaises(PromptBudgetExceeded) as raised:
+                decider.decide("x" * 2000, checkpoint_with_observations(0), ())
+            outcomes.append((str(raised.exception), transport.calls))
+            self.assertEqual(len(transport.calls), 1)
+            self.assertIsNone(decider.last_raw_response)
+            self.assertIsNone(decider.last_prompt_estimate)
+            self.assertEqual(decider.last_omitted_observations, 0)
+            self.assertEqual(decider.compressed_payloads, 1)
+        self.assertEqual(outcomes[0], outcomes[1])
+        self.assertEqual(outcomes[0], outcomes[2])
+        self.assertEqual(self.sink.names, [EVENT_COMPRESSED, EVENT_DECIDE, EVENT_DECIDE])
+        event = self.sink.dicts()[-1]
+        self.assertEqual(event["kind"], "error")
+        self.assertEqual(event["prompt_budget"], 960)
+        self.assertIsNone(event["prompt_estimate"])
+        self.assertIsNone(event["budget_used_ratio"])
+        self.assertIsNone(event["eval_count"])
+        self.assertFalse(event["compressed"])
+        self.assertEqual(broken.sink_errors, 3)
+
     def test_compressed_event_fires_only_when_observations_are_omitted(self):
         decider = OllamaDecider(model="m", keep_recent_observations=1, telemetry=self.telemetry,
                                 transport=FakeTransport([]))
@@ -207,12 +315,42 @@ class EventContractTests(unittest.TestCase):
         decider.payload("向前飞10米", checkpoint_with_observations(1), ())
         self.assertEqual(self.sink.events, [], "没有省略就不该有压缩事件")
 
+    def test_compression_fallback_events_preserve_the_payload(self):
+        checkpoint = checkpoint_with_observations(2)
+        checkpoint.observations[0]["tool"] = "x" * 6000
+        original_observations = json.loads(json.dumps(checkpoint.observations))
+        reference = OllamaDecider(model="m", transport=FakeTransport([]), system_prompt="safe")
+        minimum = reference.estimate_prompt_tokens(
+            reference.messages("查询", checkpoint_with_observations(1)))
+        for mode, num_ctx in (("compact", 4096), ("none", minimum + 2048)):
+            with self.subTest(mode=mode):
+                sink = MemorySink()
+                broken = Telemetry(exploding_sink)
+                payloads = []
+                for telemetry in (Telemetry.disabled(), Telemetry(sink), broken):
+                    decider = OllamaDecider(model="m", transport=FakeTransport([]),
+                                            system_prompt="safe", keep_recent_observations=1,
+                                            num_ctx=num_ctx, telemetry=telemetry)
+                    payloads.append(decider.payload("查询", checkpoint, ()))
+                self.assertEqual(payloads[0], payloads[1])
+                self.assertEqual(payloads[0], payloads[2])
+                self.assertEqual(sink.names, [EVENT_COMPRESSED])
+                event = sink.dicts()[0]
+                self.assertEqual(set(event), set(EVENT_FIELDS[EVENT_COMPRESSED]))
+                self.assertEqual(event["omission_mode"], mode)
+                self.assertEqual(event["kept_observations"], 1)
+                self.assertEqual(event["omitted_observations"], 1)
+                self.assertEqual(broken.sink_errors, 1)
+        self.assertEqual(checkpoint.observations, original_observations)
+
     def test_fail_closed_and_unknown_tool_events(self):
         loop = BoundedAgentLoop(
             RecordingDecider(ModelDecision(DecisionKind.TOOL_CALL,
                                            tool_call=ToolCall("missing", {}))),
             ToolRegistry(), telemetry=self.telemetry)
-        result = loop.run("查询")
+        checkpoint = checkpoint_with_observations(0)
+        checkpoint.step_count = 3
+        result = loop.run(checkpoint.user_input, checkpoint=checkpoint)
         self.assertIs(result.status, LoopStatus.TOOL_ERROR)
         self.assertEqual([event.name for event in self.sink.events],
                          [EVENT_FAIL_CLOSED, EVENT_UNKNOWN_TOOL])
@@ -220,6 +358,7 @@ class EventContractTests(unittest.TestCase):
         self._assert_field_set(EVENT_UNKNOWN_TOOL)
         self.assertEqual(self.sink.events[0].to_dict()["reason"], "unknown_tool")
         self.assertEqual(self.sink.events[1].to_dict()["name"], "missing")
+        self.assertEqual([e.fields["step"] for e in self.sink.events], [3, 3])
 
     def test_tool_exception_event_carries_the_platform_failure(self):
         definition = ToolDefinition("read_value", "test", ToolSchema({}, ()),
@@ -228,20 +367,23 @@ class EventContractTests(unittest.TestCase):
             RecordingDecider(ModelDecision(DecisionKind.TOOL_CALL,
                                            tool_call=ToolCall("read_value", {}))),
             ToolRegistry({"read_value": definition}), telemetry=self.telemetry)
-        result = loop.run("查询")
+        checkpoint = checkpoint_with_observations(0)
+        checkpoint.step_count = 3
+        result = loop.run(checkpoint.user_input, checkpoint=checkpoint)
         self.assertEqual(result.error["code"], "tool_exception")
         self.assertEqual([event.name for event in self.sink.events], [EVENT_FAIL_CLOSED])
         payload = self.sink.events[0].to_dict()
         self.assertEqual(payload["reason"], "tool_exception")
         self.assertEqual(payload["tool"], "read_value")
         self.assertIn("division", payload["message"])
+        self.assertEqual(payload["step"], 3)
 
     def test_stale_context_events(self):
         registry = ToolRegistry(
             runtime_context_provider=lambda: ExecutionContext("exec-1", "drone-1", 0, True))
         checkpoint = AgentCheckpoint(
             user_input="继续", context={}, messages=[], tool_calls=[], observations=[],
-            runtime_context=ExecutionContext("exec-1", "drone-2", 0, True).to_dict())
+            runtime_context=ExecutionContext("exec-1", "drone-2", 0, True).to_dict(), step_count=3)
         result = BoundedAgentLoop(ExplodingDecider(), registry,
                                   telemetry=self.telemetry).run("继续", checkpoint=checkpoint)
         self.assertEqual(result.error["code"], "stale_context")
@@ -249,6 +391,93 @@ class EventContractTests(unittest.TestCase):
                          [EVENT_FAIL_CLOSED, EVENT_STALE_CONTEXT])
         self._assert_field_set(EVENT_STALE_CONTEXT)
         self.assertEqual(self.sink.events[0].to_dict()["reason"], "stale_context")
+        self.assertEqual([e.fields["step"] for e in self.sink.events], [3, 3])
+
+    def test_safety_failures_still_reject_execution_with_broken_sink(self):
+        cases = (
+            ("model_error", {"error": "model unavailable"}),
+            ("model_error", {"message": {"content": "MQTT payload 执行成功"}}),
+            ("unknown_tool", tool_call_response("missing", {})),
+            ("invalid_arguments", tool_call_response("read_value", {"value": float("nan")})),
+            ("stale_context", tool_call_response("read_value", {})),
+            ("runtime_context_error", tool_call_response("read_value", {})),
+            ("checkpoint_mismatch", tool_call_response("read_value", {})),
+        )
+        for reason, response in cases:
+            with self.subTest(reason=reason, response=response):
+                sink = MemorySink()
+                broken = Telemetry(exploding_sink)
+                outcomes = []
+                for telemetry in (Telemetry.disabled(), Telemetry(sink), broken):
+                    calls = []
+                    definition = ToolDefinition("read_value", "test", ToolSchema({}, ()),
+                                                handler=lambda args: calls.append(args))
+                    runtime = ExecutionContext("exec-1", "drone-1", 0, True)
+                    registry = ToolRegistry({"read_value": definition},
+                                            runtime_context_provider=lambda: runtime)
+                    checkpoint = checkpoint_with_observations(0)
+                    checkpoint.step_count = 3
+                    checkpoint.runtime_context = runtime.to_dict()
+                    kwargs = {}
+                    user_input = checkpoint.user_input
+                    if reason == "stale_context":
+                        checkpoint.runtime_context["context_version"] = 1
+                    elif reason == "runtime_context_error":
+                        kwargs["runtime_context"] = {"execution_id": "missing-fields"}
+                    elif reason == "checkpoint_mismatch":
+                        user_input = "另一个请求"
+                    transport = FakeTransport([response])
+                    decider = OllamaDecider(model="m", transport=transport, telemetry=telemetry)
+                    result = BoundedAgentLoop(decider, registry, telemetry=telemetry).run(
+                        user_input, checkpoint=checkpoint, **kwargs)
+                    self.assertIs(result.status, LoopStatus.TOOL_ERROR)
+                    self.assertEqual(calls, [])
+                    self.assertEqual(result.checkpoint.executed_tool_calls, [])
+                    outcomes.append((result, transport.calls))
+                self.assertEqual(outcomes[0], outcomes[1])
+                self.assertEqual(outcomes[0], outcomes[2])
+                failures = [e.to_dict() for e in sink.events if e.name == EVENT_FAIL_CLOSED]
+                self.assertEqual(len(failures), 1)
+                self.assertEqual(failures[0]["reason"], reason)
+                self.assertEqual(failures[0]["step"], 3)
+                self.assertGreater(broken.sink_errors, 0)
+
+    def test_sink_failure_preserves_confirmation_and_authorized_execution(self):
+        outcomes = []
+        broken = Telemetry(exploding_sink)
+        for telemetry in (Telemetry.disabled(), self.telemetry, broken):
+            calls = []
+            definition = ToolDefinition("write_value", "test", ToolSchema({}, ()),
+                                        handler=lambda args: calls.append(args) or {"status": "accepted"},
+                                        side_effect=True)
+            transport = FakeTransport([tool_call_response("write_value", {}),
+                                       tool_call_response("write_value", {}),
+                                       {"message": {"content": "已收到回执"}}])
+            decider = OllamaDecider(model="m", transport=transport, telemetry=telemetry)
+            loop = BoundedAgentLoop(decider, ToolRegistry({"write_value": definition}),
+                                    telemetry=telemetry)
+            waiting = loop.run("测试")
+            self.assertIs(waiting.status, LoopStatus.CLARIFICATION)
+            self.assertEqual(calls, [], "未确认时不得调用 handler")
+            result = loop.run("测试", checkpoint=waiting.checkpoint, confirmed=True)
+            self.assertIs(result.status, LoopStatus.FINAL)
+            self.assertEqual(calls, [{}], "确认后仅执行一次测试 handler")
+            outcomes.append((waiting.message, result, transport.calls))
+        self.assertEqual(outcomes[0], outcomes[1])
+        self.assertEqual(outcomes[0], outcomes[2])
+        self.assertEqual(self.sink.names, [EVENT_DECIDE] * 3)
+        self.assertEqual(broken.sink_errors, 3)
+
+    def test_continued_tool_exception_does_not_claim_a_fail_closed_exit(self):
+        transport = FakeTransport([tool_call_response("read_value", {}),
+                                   {"message": {"content": "停止查询"}}])
+        decider = OllamaDecider(model="m", transport=transport, telemetry=self.telemetry)
+        definition = ToolDefinition("read_value", "test", ToolSchema({}, ()), handler=lambda _: 1 / 0)
+        result = BoundedAgentLoop(decider, ToolRegistry({"read_value": definition}),
+                                  continue_on_tool_error=True, telemetry=self.telemetry).run("查询")
+        self.assertIs(result.status, LoopStatus.FINAL)
+        self.assertEqual(result.checkpoint.observations[0]["error"]["code"], "tool_exception")
+        self.assertEqual(self.sink.names, [EVENT_DECIDE, EVENT_DECIDE])
 
     def test_event_sequence_is_deterministic_across_two_identical_runs(self):
         def run_once():
@@ -299,12 +528,15 @@ class EventContractTests(unittest.TestCase):
                     list(result.checkpoint.executed_tool_calls), list(calls))
 
         baseline = run(Telemetry.disabled())
+        recorded = run(self.telemetry)
         exploding = Telemetry(ExplodingSink())
         observed = run(exploding)
+        self.assertEqual(baseline, recorded)
         self.assertEqual(baseline, observed)
         self.assertIs(baseline[0], LoopStatus.TOOL_ERROR)
         self.assertGreater(exploding.sink_errors, 0)
         self.assertEqual(exploding.emitted, 0)
+        self.assertEqual([e.fields["step"] for e in self.sink.events], [1, 1])
 
 
 if __name__ == "__main__":

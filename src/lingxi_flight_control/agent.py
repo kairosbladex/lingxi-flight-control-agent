@@ -420,9 +420,9 @@ class BoundedAgentLoop:
                 checkpoint.status = LoopStatus.TOOL_ERROR
                 checkpoint.observations.append(
                     {"tool": call.name, "arguments": dict(call.arguments), "error": error})
-                # 执行器异常必须 fail-closed，同时它也是最需要线上可见的一类失败。
-                self._telemetry.fail_closed(reason="tool_exception", message=str(exc), tool=call.name)
                 if not self._continue_on_tool_error:
+                    self._emit_failure("tool_exception", str(exc), call,
+                                       step=checkpoint.step_count)
                     return AgentRunResult(LoopStatus.TOOL_ERROR, checkpoint, tool_call=call, error=error)
                 continue
             if _contains_unsafe_content(output) or not _json_safe(output):
@@ -450,25 +450,25 @@ class BoundedAgentLoop:
             word in text for word in ("正射影像", "倾斜摄影")
         )
 
-    def _emit_failure(self, reason: str, message: str, call: ToolCall | None) -> None:
+    def _emit_failure(self, reason: str, message: str, call: ToolCall | None, *, step: int) -> None:
         """硬失败遥测：总闸门 ``fail_closed`` + 更具体的专用事件。
 
         `unknown_tool` 与 `stale_context` 额外再发一条专用事件（字段更贴切）；
         要统计「所有硬失败」就 grep ``fail_closed``，要区分类型就看 ``reason``。
         """
         self._telemetry.fail_closed(reason=reason, message=message,
-                                    tool=call.name if call is not None else None)
+                                    tool=call.name if call is not None else None, step=step)
         if reason == "unknown_tool" and call is not None:
-            self._telemetry.unknown_tool(name=call.name, message=message)
+            self._telemetry.unknown_tool(name=call.name, message=message, step=step)
         elif reason == "stale_context":
-            self._telemetry.stale_context(reason=reason, message=message)
+            self._telemetry.stale_context(reason=reason, message=message, step=step)
 
     def _error(self, checkpoint: AgentCheckpoint, message: str, call: ToolCall | None = None,
                *, reason: str = "tool_error") -> AgentRunResult:
         error = {"code": "tool_error", "message": message}
         checkpoint.last_error = error
         checkpoint.status = LoopStatus.TOOL_ERROR
-        self._emit_failure(reason, message, call)
+        self._emit_failure(reason, message, call, step=checkpoint.step_count)
         return AgentRunResult(LoopStatus.TOOL_ERROR, checkpoint, tool_call=call, error=error)
 
     def _stale_context(self, checkpoint: AgentCheckpoint, message: str) -> AgentRunResult:
@@ -477,7 +477,7 @@ class BoundedAgentLoop:
         checkpoint.confirmed = False
         checkpoint.confirmation_binding = None
         checkpoint.status = LoopStatus.TOOL_ERROR
-        self._emit_failure("stale_context", message, None)
+        self._emit_failure("stale_context", message, None, step=checkpoint.step_count)
         return AgentRunResult(LoopStatus.TOOL_ERROR, checkpoint, error=error)
 
     def _check_runtime_freshness(self, checkpoint: AgentCheckpoint) -> AgentRunResult | None:

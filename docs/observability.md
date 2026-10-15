@@ -56,22 +56,26 @@ def timestamped(event: TelemetryEvent) -> None:
   否则 `unknown_tool` 事件的 `name` 字段会和形参撞名，把 `TypeError` 抛进决策路径。
   `test_fields_named_like_emit_parameters_cannot_break_the_run` 覆盖这一点。
 
+预算拒绝、空响应重试、传输/协议错误、三档压缩及确认后执行也使用同一输入，分别关闭遥测、
+注入内存 sink、注入必抛异常的 sink；比对请求体、返回结果、异常、重试次数和 handler 调用。
+安全拒绝路径另外断言 handler 调用次数为 0。
+
 ## 事件清单
 
 所有事件都带 `schema_version`（当前 `1`）和 `event`。字段集合在 `EVENT_FIELDS` 里集中定义，
 测试 `test_decide_event_fields_and_generation_readings` 等会逐事件断言字段名与文档一致。
 
-### `decide` —— 每次模型决策请求（`OllamaDecider.decide`，含重试的每一次）
+### `decide` —— 每次模型决策尝试（`OllamaDecider.decide`，含重试与发送前预算拒绝）
 
 回答问题：「预算闸门在工作吗、离撞墙还有多远、生成有没有被截断」。
 
 | 字段 | 含义 |
 | --- | --- |
 | `attempt` | 第几次尝试（空响应会重试，`max_attempts` 默认 2） |
-| `kind` | `tool_call` / `final` / `clarify` / `empty`（模型什么都没给） |
+| `kind` | `tool_call` / `final` / `clarify` / `empty`（模型什么都没给）/ `error`（本次尝试抛异常） |
 | `tool` | 本轮调用的工具名，或 `null` |
-| `empty_response` | 本次响应是否不可用（会触发重试） |
-| `prompt_estimate` | 本请求 prompt 的保守估算 tokens |
+| `empty_response` | 本次是否为空响应；仅此类响应允许有界重试，硬错误为 `false` |
+| `prompt_estimate` | 本请求 prompt 的保守估算 tokens；构建失败时为 `null` |
 | `prompt_budget` | `num_ctx - output_reserve` = 32768 - 2048 = **30720** |
 | `num_ctx` / `output_reserve` | 两个真源参数，便于按配置聚合 |
 | `budget_used_ratio` | `prompt_estimate / prompt_budget`，保留 4 位小数 |
@@ -81,6 +85,11 @@ def timestamped(event: TelemetryEvent) -> None:
 | `done_reason` | Ollama 的停止原因 |
 | `eval_count` / `prompt_eval_count` | 生成 token 数 / 服务端看到的 prompt token 数 |
 | `generation_truncated` | `done_reason == "length"`，即生成被窗口截断 |
+
+传输异常、服务端错误信封、协议解析错误及发送前预算拒绝都会产生一条 `kind=error`。
+原异常继续上抛，不新增重试；由循环捕获时随后产生 `reason=model_error` 的 `fail_closed`，
+`message` 保留原有失败原因。未收到本次响应时生成字段为 `null`，构建失败时预算估算及
+`budget_used_ratio` 为 `null`，不会沿用上一次成功请求的读数。预算拒绝不会调用传输层。
 
 ### `compressed` —— 预算闸门真的压了观察（`OllamaDecider.payload`）
 
@@ -113,6 +122,9 @@ def timestamped(event: TelemetryEvent) -> None:
 | `tool_error` | 其它硬失败（保守兜底） |
 
 字段：`reason`、`message`（截断到 `MAX_MESSAGE_CHARS = 500`）、`tool`、`step`。
+`step` 取失败当时的 `checkpoint.step_count`（首次决策前为 0，续跑保留已有计数）；
+专用事件使用同一计数，不为了打点增加步骤。显式启用 `continue_on_tool_error=True` 时，
+可继续的 handler 异常保留在检查点观察中，不误报为已 fail-closed 退出。
 
 ### `unknown_tool` / `stale_context` —— 两个专用事件
 
@@ -138,8 +150,11 @@ def timestamped(event: TelemetryEvent) -> None:
 ## 复现命令
 
 ```bash
-# 离线测试（16 条遥测用例：字段契约、序列确定性、sink 异常不影响结果）
+# 离线测试（24 条遥测用例：字段契约、序列确定性、sink 异常不影响结果）
 PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_telemetry.py'
+
+# 全量离线回归（含禁止网络连接的守护测试）
+bash tools/ci/offline_tests.sh
 
 # 真实模型 e2e + 结构化遥测（stdout JSON line），然后 grep 三类读数
 PYTHONPATH=src python3 tools/flight_agent_demo.py --cockpit --telemetry > /tmp/cockpit.jsonl 2>&1
@@ -147,6 +162,11 @@ grep '"event": "decide"' /tmp/cockpit.jsonl | head -3          # 预算 / 生成
 grep '"event": "compressed"' /tmp/cockpit.jsonl | head -3      # 哪一步开始压、压到哪一档
 grep '"near_budget": true' /tmp/cockpit.jsonl                  # 该告警的情况（当前实测无）
 ```
+
+收尾验收（2026-10-15，Python 3.13.2，本机离线）：基线 `ea133a4` 的遥测 **16/16**、
+全量 **265/265** 通过；补齐异常尝试与实际失败步骤后，以上两条离线命令分别为
+**24/24**、**273/273** 通过，网络守护通过。原有事件字段集合不变，新增 `kind=error` 取值。
+本轮未重跑真实模型；下述为先前已有的模型实测记录。
 
 实测（本仓库，`qwen3.5:9b`，2026-10-15，`--cockpit --telemetry`，四口令全部 `final`）：
 共 **18** 条 `decide` 事件，全部 `done_reason=stop`、`generation_truncated=false`、

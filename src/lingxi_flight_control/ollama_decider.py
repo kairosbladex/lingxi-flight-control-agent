@@ -505,6 +505,9 @@ class OllamaDecider:
     def payload(
         self, user_message: str, checkpoint: AgentCheckpoint, definitions: Sequence[ToolDefinition]
     ) -> dict[str, Any]:
+        # 构建失败时不能把上一次请求的预算读数记到本次失败上。
+        self.last_prompt_estimate = None
+        self.last_omitted_observations = 0
         messages, omitted, omission_mode, kept = self._rebuild(user_message, checkpoint, definitions)
         # 唯一的预算记账点：decide() 每次都经过这里，因此读数就是「刚发出去的那个请求」。
         self.last_prompt_estimate = self.estimate_prompt_tokens(messages, definitions)
@@ -550,13 +553,19 @@ class OllamaDecider:
         """
         last_message = ""
         for attempt in range(1, self._max_attempts + 1):
-            body = self.payload(user_message, checkpoint, tools)
-            response = self._transport(self._endpoint, body, self._timeout)
-            self.last_raw_response = response
-            # 错误信封在协议层解释，自定义传输层同样受保护。
-            if isinstance(response.get("error"), str) and response["error"]:
-                raise ValueError(f"model server error: {response['error']}")
-            decision, empty_reason = self._interpret(response)
+            self.last_raw_response = None
+            try:
+                body = self.payload(user_message, checkpoint, tools)
+                response = self._transport(self._endpoint, body, self._timeout)
+                self.last_raw_response = response
+                # 错误信封在协议层解释，自定义传输层同样受保护。
+                if isinstance(response.get("error"), str) and response["error"]:
+                    raise ValueError(f"model server error: {response['error']}")
+                decision, empty_reason = self._interpret(response)
+            except Exception:
+                # 只补遥测，原异常原样上抛；硬失败不重试，也不能误记为空响应。
+                self._emit_decide(attempt, None, failed=True)
+                raise
             self._emit_decide(attempt, decision)
             if decision is not None:
                 return decision
@@ -567,7 +576,8 @@ class OllamaDecider:
         raise ValueError(
             f"model returned an unusable response after {self._max_attempts} attempts: {last_message}")
 
-    def _emit_decide(self, attempt: int, decision: ModelDecision | None) -> None:
+    def _emit_decide(self, attempt: int, decision: ModelDecision | None, *,
+                     failed: bool = False) -> None:
         """把这次决策的预算读数与生成读数发成一条事件。
 
         这里回答线上最想知道的三个问题：预算闸门有没有触发（``compressed`` /
@@ -575,12 +585,12 @@ class OllamaDecider:
         生成有没有被窗口截断（``generation_truncated`` 即 ``done_reason == "length"``）。
         """
         tool = decision.tool_call.name if decision is not None and decision.tool_call else None
-        kind = "empty" if decision is None else str(decision.kind.value)
+        kind = "error" if failed else ("empty" if decision is None else str(decision.kind.value))
         self._telemetry.decide(
             attempt=attempt,
             kind=kind,
             tool=tool,
-            empty_response=decision is None,
+            empty_response=decision is None and not failed,
             prompt_estimate=self.last_prompt_estimate,
             prompt_budget=self.prompt_budget_tokens,
             num_ctx=self._num_ctx,
