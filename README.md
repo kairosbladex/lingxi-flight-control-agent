@@ -8,6 +8,10 @@
   确认只返回 `confirmed_not_dispatched`，没有真实发送能力；按机头方向计算目标点。
   接口、验证和边界见 [模型预览说明](docs/model-preview.md)。
 
+- **独立产品入口**：`tools/standalone_preview_server.py` 提供不依赖 Java 和旧前端的
+  HTTP 预览服务。它接收外部遥测适配器写入的位姿，直接调用本仓库的模型 Agent，
+  返回预览、确认和取消结果；服务内没有 MQTT、真实飞控或平台写接口。
+
 - 将单个中文方向和距离解析为 `RelativeMove`；
 - 在已确认的 `ExecutionContext` 中执行相对移动；
 - 用 `idempotency_key` 拒绝重复命令，用上下文版本拒绝过期命令；
@@ -89,6 +93,28 @@ loop = BoundedAgentLoop(
 
 当前版本不连接 MQTT、真实飞控或生产任务平台；执行器由调用方注入（本次交付的是可注入挂点
 与报文夹具，未接真实平台）。
+
+## 独立预览产品
+
+启动服务：
+
+```bash
+PYTHONPATH=src python3 tools/standalone_preview_server.py \
+  --host 127.0.0.1 --port 8793
+```
+
+服务端点：
+
+- `GET /healthz`
+- `POST /api/flight-preview/pose`：写入开发/测试遥测，位姿必须在 15 秒内；
+- `GET /api/flight-preview/pose?...`：读取当前位姿；
+- `POST /api/flight-preview/preview`：模型理解并生成预览卡；
+- `POST /api/flight-preview/confirm`、`/cancel`：确认或取消预览，仍不下发。
+
+请求需要 `X-Agent-Actor` 和可追踪的 `X-Trace-Id`；项目、机库、无人机、任务、站点、
+上下文版本和位姿都由服务端校验。前端项目默认调用 `/api/flight-preview`，可用
+`VITE_FLIGHT_AGENT_API_BASE` 覆盖为独立服务地址。生产接入时只需另写一个经过鉴权的
+遥测适配器，把实时 `lng/lat/alt/yaw` 映射到 `/pose`，不需要修改 Java 或原有前端。
 
 ## 模型大脑
 
