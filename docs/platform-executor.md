@@ -133,9 +133,9 @@ PYTHONPATH=src python3 tools/flight_agent_demo.py --cockpit --executor loopback
 
 ## 未做的事与下一步
 
-- 真实平台适配器（MQTT/串口/HTTP 厂商接口）未实现，因为**没有凭据与协议文档**。
-  拿到终端点、认证方式与报文格式后，实现一个 `RuntimeExecutor` 子类即可，
-  工具契约与循环语义都不需要改。
+- 2026-10-16 已新增默认关闭的 `KtdPlatformExecutor`，经 `ktd_backend` 既有 HTTP 接口编译
+  15项明确写动作。权威状态、控制权租约和逐机型能力仍缺在线契约，不能启用真实设备；
+  具体限制与源码证据见 [Java适配候选](ktd-platform-contract.md)。不直连厂商 MQTT/串口。
 - 真机报文夹具未录制。现场录制后，把 `source` 改成 `platform-recording`、
   `execution_mode` 改成真实模式名（注意上文禁用词约束），并替换 `recordings`。
 - 在线健康检查、断链重连、命令超时与重试策略属于执行器实现，尚未定义。

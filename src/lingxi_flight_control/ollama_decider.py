@@ -268,6 +268,7 @@ class OllamaDecider:
         think: bool | None = None,
         num_ctx: int = DEFAULT_NUM_CTX,
         output_reserve: int = DEFAULT_OUTPUT_RESERVE_TOKENS,
+        max_output_tokens: int | None = None,
         keep_recent_observations: int = DEFAULT_KEEP_RECENT_OBSERVATIONS,
         omission_summary: bool = DEFAULT_OMISSION_SUMMARY,
         keep_alive: str | None = None,
@@ -292,6 +293,10 @@ class OllamaDecider:
             raise ValueError("output_reserve must be a non-negative integer")
         if output_reserve >= num_ctx:
             raise ValueError("num_ctx must exceed output_reserve so the prompt has a budget")
+        if max_output_tokens is not None and (
+                isinstance(max_output_tokens, bool) or not isinstance(max_output_tokens, int)
+                or not 0 < max_output_tokens <= output_reserve):
+            raise ValueError("max_output_tokens must be positive and fit the output reserve")
         if (isinstance(keep_recent_observations, bool)
                 or not isinstance(keep_recent_observations, int) or keep_recent_observations < 0):
             raise ValueError("keep_recent_observations must be a non-negative integer")
@@ -313,6 +318,7 @@ class OllamaDecider:
         self._think = think
         self._num_ctx = num_ctx
         self._output_reserve = output_reserve
+        self._max_output_tokens = max_output_tokens
         self._keep_recent_observations = keep_recent_observations
         self._omission_summary = omission_summary
         self._token_estimator = token_estimator
@@ -584,6 +590,8 @@ class OllamaDecider:
             "tools": build_tools_payload(definitions),
             "options": {"temperature": self._temperature, "num_ctx": self._num_ctx},
         }
+        if self._max_output_tokens is not None:
+            body["options"]["num_predict"] = self._max_output_tokens
         if self._think is not None:
             body["think"] = bool(self._think)
         if self._keep_alive is not None:

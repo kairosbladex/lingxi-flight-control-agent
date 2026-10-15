@@ -6,6 +6,13 @@
 
 ## 当前范围
 
+- **自然语言完整交互（2026-10-16）**：`tools/cockpit_server.py` 将现有模型循环、59项动作契约、
+  检查点和执行器接到独立前端 `lingxi-flight-agent-ui`。支持多轮补参、逐动作确认、取消、
+  会话隔离和回执展示；默认仅本机模拟器。启动与验收见 [交付说明](docs/natural-language-cockpit.md)。
+- **Java 适配候选**：`KtdPlatformExecutor` 编译15个已核验写动作，默认关闭，
+  需要服务端权威状态、权限、控制权租约及持久幂等日志。HTTP受理不代表设备完成。
+  当前正式Java接口缺少完整权威快照契约，尚不能安全启用；见 [接口核对](docs/ktd-platform-contract.md)。
+
 - **模型预览链路**：驾驶舱文字入口可接真实模型生成相对位移预览，并编译测试平台已有接口的请求格式。
   确认只返回 `confirmed_not_dispatched`，没有真实发送能力；按机头方向计算目标点。
   接口、验证和边界见 [模型预览说明](docs/model-preview.md)。
@@ -26,7 +33,7 @@
   每个动作都经过 `ToolRegistry` schema 校验 + 执行器 `preview/confirm` 两阶段。
 - **执行器可注入**：`executor.py` 定义 `RuntimeExecutor` 协议（预览/确认 + 状态读取），
   `SimulatorExecutor` 包住现有模拟器（零行为变化），`LoopbackExecutor` 与 `FixtureExecutor`
-  用于本机回环与报文夹具回放。**当前没有接真实平台**（无凭据），详见 `docs/platform-executor.md`。
+  用于本机回环与报文夹具回放。**当前没有启用真实平台**，详见 `docs/platform-executor.md`。
 - **安全快路径**：急停等安全动作走确定性精确匹配，不经过模型。实测走模型要 9 秒才能发出急停，
   快路径 1 毫秒；且模型服务不可达时快路径照常可用。详见 `docs/safety-fast-path.md`。
 - **上下文预算**：发送前按 `num_ctx` 核对 prompt 预算并确定性压缩，绝不依赖服务端截断。

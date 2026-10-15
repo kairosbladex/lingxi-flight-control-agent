@@ -1,0 +1,24 @@
+{
+  "source": "offline-http-fixture",
+  "initialScreenshot": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-Mdm1Yo/01-ready.png",
+  "confirmationScreenshot": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-Mdm1Yo/02-confirmation.png",
+  "apiRequests": 21,
+  "confirmedRequests": 3,
+  "forbiddenRequests": 0,
+  "browserErrors": [],
+  "physicalDeviceRequests": 0,
+  "scenarios": [
+    "clarification",
+    "confirmation",
+    "cancel",
+    "refresh-retains-card",
+    "reset",
+    "sequential-confirmation",
+    "expiry",
+    "http-error",
+    "changed-context",
+    "late-response",
+    "platform-receipt-label-fixture",
+    "checkpoint-warning-preserves-receipt"
+  ]
+}
