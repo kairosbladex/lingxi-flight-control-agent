@@ -23,6 +23,7 @@ from .models import (
     ToolParameter,
     ToolSchema,
 )
+from .telemetry import Telemetry
 
 
 def parse_relative_move(text: str, *, idempotency_key: str) -> RelativeMove:
@@ -247,13 +248,19 @@ class BoundedAgentLoop:
     """模型决定、白名单校验、受控工具执行和检查点更新的有限循环。"""
 
     def __init__(self, decider: ModelDecider, registry: ToolRegistry, *, max_steps: int = 8,
-                 continue_on_tool_error: bool = False):
+                 continue_on_tool_error: bool = False, telemetry: Telemetry | None = None):
         if max_steps <= 0:
             raise ValueError("max_steps must be positive")
         self._decider = decider
         self._registry = registry
         self._max_steps = max_steps
         self._continue_on_tool_error = continue_on_tool_error
+        # 默认安静：库不该意外往 stdout 写东西。要事件就注入 Telemetry(sink=...)。
+        self._telemetry = telemetry if telemetry is not None else Telemetry.disabled()
+
+    @property
+    def telemetry(self) -> Telemetry:
+        return self._telemetry
 
     def run(
         self,
@@ -293,12 +300,14 @@ class BoundedAgentLoop:
             return self._stale_context(checkpoint, str(exc))
         except (TypeError, ValueError) as exc:
             if checkpoint is not None:
-                return self._error(checkpoint, f"invalid runtime context: {exc}")
+                return self._error(checkpoint, f"invalid runtime context: {exc}",
+                               reason="runtime_context_error")
             checkpoint = AgentCheckpoint(
                 user_input=user_message, context={}, messages=[], tool_calls=[], observations=[],
                 max_steps=self._max_steps,
             )
-            return self._error(checkpoint, f"invalid runtime context: {exc}")
+            return self._error(checkpoint, f"invalid runtime context: {exc}",
+                               reason="runtime_context_error")
 
         if checkpoint is None:
             checkpoint = AgentCheckpoint(
@@ -307,7 +316,8 @@ class BoundedAgentLoop:
                 runtime_context=current_runtime.to_dict() if current_runtime else None,
             )
         if checkpoint.user_input != user_message:
-            return self._error(checkpoint, "checkpoint user input does not match")
+            return self._error(checkpoint, "checkpoint user input does not match",
+                               reason="checkpoint_mismatch")
         try:
             stored_runtime = _checkpoint_runtime_context(checkpoint)
         except ValueError as exc:
@@ -338,7 +348,7 @@ class BoundedAgentLoop:
                     raise ValueError("model output contains forbidden execution or connection data")
                 decision.validate()
             except Exception as exc:
-                return self._error(checkpoint, str(exc))
+                return self._error(checkpoint, str(exc), reason="model_error")
             if decision.kind == DecisionKind.FINAL:
                 checkpoint.step_count += 1
                 checkpoint.status = LoopStatus.FINAL
@@ -355,16 +365,19 @@ class BoundedAgentLoop:
             if freshness_error is not None:
                 return freshness_error
             if not _json_safe(call.arguments):
-                return self._error(checkpoint, "tool arguments must be JSON-serializable", call)
+                return self._error(checkpoint, "tool arguments must be JSON-serializable", call,
+                                    reason="invalid_arguments")
             checkpoint.tool_calls.append({"name": call.name, "arguments": dict(call.arguments)})
             definition = self._registry.get(call.name)
             if definition is None:
                 # 调用不存在的工具是模型越界，不是参数写错，保持硬失败。
-                return self._error(checkpoint, f"unknown tool: {call.name}", call)
+                return self._error(checkpoint, f"unknown tool: {call.name}", call,
+                                    reason="unknown_tool")
             try:
                 errors = self._registry.validate(call)
             except Exception as exc:
-                return self._error(checkpoint, f"invalid tool schema or arguments: {exc}", call)
+                return self._error(checkpoint, f"invalid tool schema or arguments: {exc}", call,
+                                    reason="invalid_arguments")
             if errors:
                 # 参数写错可以自纠：把校验错误作为观察结果回喂，让模型改，而不是让整个 run 死掉。
                 # 这里必须计步，否则模型一直给错参数就会死循环。一次失败也打断授权链，
@@ -380,7 +393,8 @@ class BoundedAgentLoop:
             try:
                 binding = _binding(checkpoint, call)
             except (TypeError, ValueError) as exc:
-                return self._error(checkpoint, f"tool arguments cannot be bound safely: {exc}", call)
+                return self._error(checkpoint, f"tool arguments cannot be bound safely: {exc}", call,
+                                    reason="invalid_arguments")
             if (definition.side_effect or definition.requires_confirmation) and (
                 not checkpoint.confirmed or checkpoint.confirmation_binding != binding
             ):
@@ -406,11 +420,14 @@ class BoundedAgentLoop:
                 checkpoint.status = LoopStatus.TOOL_ERROR
                 checkpoint.observations.append(
                     {"tool": call.name, "arguments": dict(call.arguments), "error": error})
+                # 执行器异常必须 fail-closed，同时它也是最需要线上可见的一类失败。
+                self._telemetry.fail_closed(reason="tool_exception", message=str(exc), tool=call.name)
                 if not self._continue_on_tool_error:
                     return AgentRunResult(LoopStatus.TOOL_ERROR, checkpoint, tool_call=call, error=error)
                 continue
             if _contains_unsafe_content(output) or not _json_safe(output):
-                return self._error(checkpoint, "tool output is forbidden or not JSON-serializable", call)
+                return self._error(checkpoint, "tool output is forbidden or not JSON-serializable",
+                                   call, reason="unsafe_output")
             checkpoint.step_count += 1
             checkpoint.confirmed = False
             checkpoint.confirmation_binding = None
@@ -433,27 +450,42 @@ class BoundedAgentLoop:
             word in text for word in ("正射影像", "倾斜摄影")
         )
 
-    @staticmethod
-    def _error(checkpoint: AgentCheckpoint, message: str, call: ToolCall | None = None) -> AgentRunResult:
+    def _emit_failure(self, reason: str, message: str, call: ToolCall | None) -> None:
+        """硬失败遥测：总闸门 ``fail_closed`` + 更具体的专用事件。
+
+        `unknown_tool` 与 `stale_context` 额外再发一条专用事件（字段更贴切）；
+        要统计「所有硬失败」就 grep ``fail_closed``，要区分类型就看 ``reason``。
+        """
+        self._telemetry.fail_closed(reason=reason, message=message,
+                                    tool=call.name if call is not None else None)
+        if reason == "unknown_tool" and call is not None:
+            self._telemetry.unknown_tool(name=call.name, message=message)
+        elif reason == "stale_context":
+            self._telemetry.stale_context(reason=reason, message=message)
+
+    def _error(self, checkpoint: AgentCheckpoint, message: str, call: ToolCall | None = None,
+               *, reason: str = "tool_error") -> AgentRunResult:
         error = {"code": "tool_error", "message": message}
         checkpoint.last_error = error
         checkpoint.status = LoopStatus.TOOL_ERROR
+        self._emit_failure(reason, message, call)
         return AgentRunResult(LoopStatus.TOOL_ERROR, checkpoint, tool_call=call, error=error)
 
-    @staticmethod
-    def _stale_context(checkpoint: AgentCheckpoint, message: str) -> AgentRunResult:
+    def _stale_context(self, checkpoint: AgentCheckpoint, message: str) -> AgentRunResult:
         error = {"code": "stale_context", "message": message}
         checkpoint.last_error = error
         checkpoint.confirmed = False
         checkpoint.confirmation_binding = None
         checkpoint.status = LoopStatus.TOOL_ERROR
+        self._emit_failure("stale_context", message, None)
         return AgentRunResult(LoopStatus.TOOL_ERROR, checkpoint, error=error)
 
     def _check_runtime_freshness(self, checkpoint: AgentCheckpoint) -> AgentRunResult | None:
         try:
             current_runtime = self._registry.runtime_context()
         except (TypeError, ValueError) as exc:
-            return self._error(checkpoint, f"invalid runtime context: {exc}")
+            return self._error(checkpoint, f"invalid runtime context: {exc}",
+                               reason="runtime_context_error")
         if current_runtime is None:
             return None
         try:

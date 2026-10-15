@@ -29,6 +29,7 @@ from lingxi_flight_control import (
     OllamaDecider,
     RuntimeBinding,
     SafetyFastPathDecider,
+    Telemetry,
     build_full_control_tool_registry,
     coerce_executor,
     load_fixture,
@@ -127,11 +128,12 @@ def _print_result(result, checkpoint, extra: str = "") -> None:
         print(extra)
 
 
-def run_simple(decider, command: str, *, max_steps: int) -> None:
+def run_simple(decider, command: str, *, max_steps: int, telemetry=None) -> None:
     """最小执行器路径：工具无副作用，不需要确认。"""
     simulator = MemoryFlightSimulator(ExecutionContext("exec-demo", "drone-01", 0, True))
     print(f"\n{'=' * 78}\n[最小执行器] 用户: {command}\n{'-' * 78}")
-    result = BoundedAgentLoop(decider, simulator.tool_registry(), max_steps=max_steps).run(command)
+    result = BoundedAgentLoop(decider, simulator.tool_registry(), max_steps=max_steps,
+                              telemetry=telemetry).run(command)
     if result.status is not LoopStatus.FINAL:
         print(f"  [终止] status={result.status.value} error={result.error}")
     _print_observations(result.checkpoint)
@@ -157,7 +159,8 @@ def build_cockpit_executor(name: str, binding: RuntimeBinding, fixture_path: str
 
 
 def run_cockpit(decider, command: str, *, max_steps: int, auto_confirm: bool,
-                executor_name: str = "simulator", fixture_path: str = DEFAULT_FIXTURE) -> None:
+                executor_name: str = "simulator", fixture_path: str = DEFAULT_FIXTURE,
+                telemetry=None) -> None:
     """完整驾驶舱路径：每个动作都要经过预览/确认两阶段。"""
     binding = RuntimeBinding("actor-demo", "project-demo", "hangar-01", "drone-01", "batch-01", 1)
     executor = build_cockpit_executor(executor_name, binding, fixture_path)
@@ -165,7 +168,8 @@ def run_cockpit(decider, command: str, *, max_steps: int, auto_confirm: bool,
     if executor_name == "fixture":
         print(f"  [夹具] {fixture_path} source={executor.fixture_source}："
               f"只回放录到的动作，其余动作会被 FIXTURE_NOT_FOUND 拒绝")
-    loop = BoundedAgentLoop(decider, build_full_control_tool_registry(executor), max_steps=max_steps)
+    loop = BoundedAgentLoop(decider, build_full_control_tool_registry(executor),
+                            max_steps=max_steps, telemetry=telemetry)
 
     checkpoint = None
     result = None
@@ -207,6 +211,8 @@ def main() -> int:
     parser.add_argument("--no-auto-confirm", action="store_true", help="不自动放行确认")
     parser.add_argument("--max-steps", type=int, default=24)
     parser.add_argument("--quiet", action="store_true")
+    parser.add_argument("--telemetry", action="store_true",
+                        help="打开结构化遥测（stdout JSON line，一行一个事件）")
     args = parser.parse_args()
 
     if args.commands:
@@ -222,9 +228,11 @@ def main() -> int:
 
     # think=None 表示不发送该字段。显式 think=False 会让 qwen3.5 的工具调用完全失效。
     # 回执按域投影：非驾驶舱工具不认识，会原样回放，所以最小执行器路径同样安全。
+    telemetry = Telemetry() if args.telemetry else None
     brain = OllamaDecider(model=args.model, base_url=args.base_url,
                           think=True if args.think else None, keep_alive="30m",
-                          result_projector=project_observation_result)
+                          result_projector=project_observation_result,
+                          telemetry=telemetry)
     decider = SafetyFastPathDecider(brain)
     traced = TracingDecider(decider, verbose=not args.quiet, meter=brain)
     print(f"模型: {args.model}   端点: {args.base_url}   模式: {'驾驶舱' if args.cockpit else '最小执行器'}")
@@ -238,9 +246,10 @@ def main() -> int:
             if args.cockpit:
                 run_cockpit(traced, command, max_steps=args.max_steps,
                             auto_confirm=not args.no_auto_confirm,
-                            executor_name=args.executor, fixture_path=args.fixture)
+                            executor_name=args.executor, fixture_path=args.fixture,
+                            telemetry=telemetry)
             else:
-                run_simple(traced, command, max_steps=args.max_steps)
+                run_simple(traced, command, max_steps=args.max_steps, telemetry=telemetry)
         except Exception as exc:  # 联调脚本：单条失败不应中断其余用例
             failures += 1
             print(f"  [异常] {type(exc).__name__}: {exc}")
@@ -249,6 +258,12 @@ def main() -> int:
             budget = traced.report_budget()
             if budget:
                 print(budget)
+            if telemetry is not None:
+                counters = telemetry.counters()
+                print(f"  [遥测] 事件 {counters['emitted']}/{counters['submitted']} 条"
+                      f"  sink 异常 {counters['sink_errors']}"
+                      f"  字段违约 {counters['schema_errors']}"
+                      f"  内部异常 {counters['internal_errors']}")
     return 1 if failures else 0
 
 

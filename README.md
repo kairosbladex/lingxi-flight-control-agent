@@ -148,6 +148,33 @@ PYTHONPATH=src python3 tools/flight_agent_demo.py "先向前飞10米，然后原
 冷启动加载模型可能超过默认 180 秒超时。生产环境建议设 `keep_alive="30m"` 常驻，
 或把 `timeout` 调大；超时错误会明确提示这两条出路。
 
+## 可观测性（遥测）
+
+5 个内存读数已升级成结构化事件 + 可注入 sink（默认 stdout JSON line，字段名稳定）：
+
+```python
+from lingxi_flight_control import MemorySink, Telemetry, OllamaDecider, BoundedAgentLoop
+
+telemetry = Telemetry()                                  # 不传 sink 即 stdout，一行一个 JSON
+decider = OllamaDecider(model="qwen3.5:9b", telemetry=telemetry)
+loop = BoundedAgentLoop(decider, registry, telemetry=telemetry)
+```
+
+五类事件：`decide`（每次模型决策的预算与生成读数）、`compressed`（闸门真的压了，
+带 `omission_mode`）、`fail_closed`（任何硬失败，带稳定 `reason` 词表）、
+`unknown_tool`、`stale_context`。**不注入 `telemetry` 时一个事件都不发**（默认安静）。
+
+硬性保证：sink 抛异常、字段契约不符、甚至字段名撞 `emit` 形参，都只记数不抛出——
+`Telemetry.emit` 是位置-only 参数 + 全 try 包裹，`sink_errors`/`schema_errors`/`internal_errors`
+可观测。测试会把「sink 必炸」的 run 与 `Telemetry.disabled()` 的 run 逐字段比对。
+事件字段、阈值与阈值依据（预算 30720、实测峰值 9169、最坏生成 780、`near_budget` 0.9）
+见 `docs/observability.md`。
+
+```bash
+PYTHONPATH=src python3 tools/flight_agent_demo.py --cockpit --telemetry
+# → stdout 里 grep '"event": "decide"' / '"event": "compressed"' / '"near_budget": true'
+```
+
 ## 运行
 
 ```bash

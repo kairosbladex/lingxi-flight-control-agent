@@ -31,6 +31,7 @@ from .models import (
     ToolDefinition,
     parameter_json_schema,
 )
+from .telemetry import Telemetry
 
 DEFAULT_BASE_URL = "http://192.168.130.238:11434"
 DEFAULT_MODEL = "qwen3.5:9b"
@@ -274,6 +275,7 @@ class OllamaDecider:
         clarify_detector: Callable[[str], bool] | None = None,
         token_estimator: Callable[[str], int] | None = None,
         result_projector: Callable[[str, Any], Any] | None = None,
+        telemetry: Telemetry | None = None,
     ):
         if not model or not model.strip():
             raise ValueError("model name is required")
@@ -313,6 +315,10 @@ class OllamaDecider:
         self._omission_summary = omission_summary
         self._token_estimator = token_estimator
         self._result_projector = result_projector
+        if telemetry is not None and not isinstance(telemetry, Telemetry):
+            raise ValueError("telemetry must be a Telemetry instance")
+        # 默认安静：不注入时就一个事件都不发。
+        self._telemetry = telemetry if telemetry is not None else Telemetry.disabled()
         self._keep_alive = keep_alive
         self._max_attempts = int(max_attempts)
         self._transport = transport or http_transport
@@ -344,6 +350,10 @@ class OllamaDecider:
         """
         return generation_telemetry(self.last_raw_response)
 
+    @property
+    def telemetry(self) -> Telemetry:
+        return self._telemetry
+
     def estimate_prompt_tokens(
         self, messages: Sequence[Mapping[str, Any]], definitions: Sequence[ToolDefinition] = ()
     ) -> int:
@@ -361,22 +371,24 @@ class OllamaDecider:
 
     def _omission_candidates(
         self, labels: Sequence[tuple[str, bool]]
-    ) -> tuple[dict[str, Any] | None, ...]:
+    ) -> tuple[tuple[dict[str, Any] | None, str], ...]:
         """省略说明的确定性降级阶梯：完整摘要 → 紧凑占位 → 不放说明。
 
         裸占位只说「有更早的调用」，模型不知道**做过什么、成没成**，于是容易重复调用已经
         成功过的工具。摘要把「工具名 + 状态」留下来，同时它自己仍然受同一套预算约束：
         **摘要优先被压**——预算不够先牺牲摘要的信息量，观察本身永远晚一步才被丢。
+
+        返回 (候选消息或 None, 档位名)；档位名进遥测，线上据此看到压到了哪一档。
         """
         compact = {"role": "assistant", "content": f"（更早的 {len(labels)} 次工具调用已省略）"}
         if not labels:
-            return (None,)
+            return ((None, "none"),)
         if not self._omission_summary:
-            return (compact, None)
+            return ((compact, "compact"), (None, "none"))
         return (
-            {"role": "assistant", "content": self._summarize(labels)},
-            compact,
-            None,
+            ({"role": "assistant", "content": self._summarize(labels)}, "summary"),
+            (compact, "compact"),
+            (None, "none"),
         )
 
     def _fit_observations(
@@ -385,8 +397,8 @@ class OllamaDecider:
         turns: list[list[dict[str, Any]]],
         definitions: Sequence[ToolDefinition],
         labels: Sequence[tuple[str, bool]],
-    ) -> tuple[list[list[dict[str, Any]]], dict[str, Any] | None]:
-        """确定性地挑出还能回放的观察轮次，返回 (保留的轮次, 省略说明或 None)。
+    ) -> tuple[list[list[dict[str, Any]]], dict[str, Any] | None, str]:
+        """确定性地挑出还能回放的观察轮次，返回 (保留的轮次, 省略说明, 档位名)。
 
         三层保护：
         1. 只回放最近 ``keep_recent_observations`` 条，把稳态增长封顶；
@@ -398,14 +410,14 @@ class OllamaDecider:
         kept = list(turns[len(turns) - cap:]) if cap < len(turns) else list(turns)
         while True:
             omitted = len(turns) - len(kept)
-            for omission in self._omission_candidates(labels[:omitted]):
+            for omission, mode in self._omission_candidates(labels[:omitted]):
                 candidate = list(head)
                 if omission is not None:
                     candidate.append(omission)
                 for turn in kept:
                     candidate.extend(turn)
                 if self.estimate_prompt_tokens(candidate, definitions) <= self.prompt_budget_tokens:
-                    return kept, omission
+                    return kept, omission, mode
             if not kept:
                 raise PromptBudgetExceeded(
                     f"prompt budget is {self.prompt_budget_tokens} tokens, but the system prompt "
@@ -437,7 +449,7 @@ class OllamaDecider:
         本方法不写遥测（它常被调用方直接拿来检查消息形状）；预算读数由 ``payload()``
         在真正构建待发送载荷时记录。
         """
-        messages, _ = self._rebuild(user_message, checkpoint, definitions)
+        messages, _, _, _ = self._rebuild(user_message, checkpoint, definitions)
         return messages
 
     def _rebuild(
@@ -445,8 +457,8 @@ class OllamaDecider:
         user_message: str,
         checkpoint: AgentCheckpoint,
         definitions: Sequence[ToolDefinition],
-    ) -> tuple[list[dict[str, Any]], int]:
-        """重建对话并返回 (消息, 被省略的观察条数)。"""
+    ) -> tuple[list[dict[str, Any]], int, str, int]:
+        """重建对话并返回 (消息, 被省略的观察条数, 省略档位, 保留的观察条数)。"""
         head: list[dict[str, Any]] = [
             {"role": "system", "content": self._system_prompt},
             {"role": "user", "content": user_message},
@@ -482,24 +494,36 @@ class OllamaDecider:
             ])
             labels.append((name, "result" in observation))
 
-        kept, omission = self._fit_observations(head, turns, definitions, labels)
+        kept, omission, mode = self._fit_observations(head, turns, definitions, labels)
         messages = list(head)
         if omission is not None:
             messages.append(omission)
         for turn in kept:
             messages.extend(turn)
-        return messages, len(turns) - len(kept)
+        return messages, len(turns) - len(kept), mode, len(kept)
 
     def payload(
         self, user_message: str, checkpoint: AgentCheckpoint, definitions: Sequence[ToolDefinition]
     ) -> dict[str, Any]:
-        messages, omitted = self._rebuild(user_message, checkpoint, definitions)
+        messages, omitted, omission_mode, kept = self._rebuild(user_message, checkpoint, definitions)
         # 唯一的预算记账点：decide() 每次都经过这里，因此读数就是「刚发出去的那个请求」。
         self.last_prompt_estimate = self.estimate_prompt_tokens(messages, definitions)
         self.last_omitted_observations = omitted
         if omitted:
             self.compressed_payloads += 1
             self.omitted_observation_turns += omitted
+            # 「哪一步开始压、压到哪一档」必须线上可见，否则分不清闸门在工作还是没触发。
+            self._telemetry.compressed(
+                omitted_observations=omitted,
+                kept_observations=kept,
+                omission_mode=omission_mode,
+                prompt_estimate=self.last_prompt_estimate,
+                prompt_budget=self.prompt_budget_tokens,
+                num_ctx=self._num_ctx,
+                output_reserve=self._output_reserve,
+                compressed_payloads=self.compressed_payloads,
+                omitted_observation_turns=self.omitted_observation_turns,
+            )
         body: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
@@ -533,6 +557,7 @@ class OllamaDecider:
             if isinstance(response.get("error"), str) and response["error"]:
                 raise ValueError(f"model server error: {response['error']}")
             decision, empty_reason = self._interpret(response)
+            self._emit_decide(attempt, decision)
             if decision is not None:
                 return decision
             last_message = empty_reason
@@ -541,6 +566,28 @@ class OllamaDecider:
                 continue
         raise ValueError(
             f"model returned an unusable response after {self._max_attempts} attempts: {last_message}")
+
+    def _emit_decide(self, attempt: int, decision: ModelDecision | None) -> None:
+        """把这次决策的预算读数与生成读数发成一条事件。
+
+        这里回答线上最想知道的三个问题：预算闸门有没有触发（``compressed`` /
+        ``omitted_observations``）、离闸门还有多远（``budget_used_ratio`` / ``near_budget``）、
+        生成有没有被窗口截断（``generation_truncated`` 即 ``done_reason == "length"``）。
+        """
+        tool = decision.tool_call.name if decision is not None and decision.tool_call else None
+        kind = "empty" if decision is None else str(decision.kind.value)
+        self._telemetry.decide(
+            attempt=attempt,
+            kind=kind,
+            tool=tool,
+            empty_response=decision is None,
+            prompt_estimate=self.last_prompt_estimate,
+            prompt_budget=self.prompt_budget_tokens,
+            num_ctx=self._num_ctx,
+            output_reserve=self._output_reserve,
+            omitted_observations=self.last_omitted_observations,
+            generation=self.last_generation,
+        )
 
     def _interpret(self, response: Mapping[str, Any]) -> tuple[ModelDecision | None, str]:
         """把一次响应解释成决策；响应为空时返回 (None, 原因)。"""

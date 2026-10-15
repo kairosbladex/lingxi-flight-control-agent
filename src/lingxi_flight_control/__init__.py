@@ -69,6 +69,23 @@ from .models import (
     Vector3,
     parameter_json_schema,
 )
+from .telemetry import (
+    DEFAULT_NEAR_BUDGET_RATIO,
+    EVENT_COMPRESSED,
+    EVENT_DECIDE,
+    EVENT_FAIL_CLOSED,
+    EVENT_FIELDS,
+    EVENT_STALE_CONTEXT,
+    EVENT_UNKNOWN_TOOL,
+    FAIL_CLOSED_REASONS,
+    MAX_MESSAGE_CHARS,
+    OMISSION_MODES,
+    TELEMETRY_SCHEMA_VERSION,
+    MemorySink,
+    StdoutSink,
+    Telemetry,
+    TelemetryEvent,
+)
 
 __all__ = [
     "CommandStatus",
@@ -140,4 +157,19 @@ __all__ = [
     "project_observation_result",
     "Vector3",
     "parse_relative_move",
+    "DEFAULT_NEAR_BUDGET_RATIO",
+    "EVENT_COMPRESSED",
+    "EVENT_DECIDE",
+    "EVENT_FAIL_CLOSED",
+    "EVENT_FIELDS",
+    "EVENT_STALE_CONTEXT",
+    "EVENT_UNKNOWN_TOOL",
+    "FAIL_CLOSED_REASONS",
+    "MAX_MESSAGE_CHARS",
+    "OMISSION_MODES",
+    "TELEMETRY_SCHEMA_VERSION",
+    "MemorySink",
+    "StdoutSink",
+    "Telemetry",
+    "TelemetryEvent",
 ]
