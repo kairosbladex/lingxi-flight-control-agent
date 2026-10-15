@@ -129,6 +129,20 @@ class SelectorSubsetTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     RuleBasedToolSelector(min_candidates=bad)
 
+    def test_selection_is_stable_across_the_steps_of_one_task(self):
+        """同一任务内工具面必须稳定。
+
+        工具段属于 prompt 前缀：只要它在任务中途变化，KV cache 就失效，每一步都要重付
+        一次预填充——这正是 `docs/model-selection.md`「不要做工具分组渐进下发」那条结论的
+        代价。检索只依赖 user 消息（以及已经下发给模型的工具），因此任务内稳定。
+        """
+        message = "接管控制权，然后向前飞10米，再拍张照片"
+        first = self.selector.select(message, self.definitions)
+        state = checkpoint_with(executed=("control_acquire", "move_forward", "camera_photo"))
+        later = self.selector.select(message, self.definitions, checkpoint=state)
+        self.assertEqual(first.names, later.names)
+        self.assertEqual(first.mode, later.mode)
+
     def test_matched_domain_returns_a_strict_subset(self):
         result = self.selector.select("拍张照片", self.definitions)
         self.assertEqual(result.mode, "retrieved")
