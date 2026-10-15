@@ -222,12 +222,26 @@ class LatencyAndAvailabilityTests(unittest.TestCase):
 
     def test_ollama_decider_still_used_for_normal_commands(self):
         # 快路径不改变普通命令的路径：仍然走 OllamaDecider。
-        decider = SafetyFastPathDecider(OllamaDecider(model="m", timeout=1.0))
+        # 传输层必须注入：默认传输层会真的去连模型服务器。这条测试原先依赖
+        # 「本机连不上」才通过——服务器可达时它会拿到真实决策并失败，
+        # 也就是一条会随环境变绿的假测试。注入后既完全离线，又直接断言
+        # 「普通命令确实进了模型传输层」，比只看异常更强。
+        calls: list[str] = []
+
+        def offline_transport(url, payload, timeout):
+            calls.append(url)
+            raise ValueError("model server is unreachable")
+
+        decider = SafetyFastPathDecider(OllamaDecider(model="m", timeout=1.0,
+                                                      transport=offline_transport))
         from lingxi_flight_control.models import AgentCheckpoint
         checkpoint = AgentCheckpoint(user_input="向前飞10米", context={}, messages=[],
                                      tool_calls=[], observations=[])
         with self.assertRaises(ValueError):       # 传输层失败 → 交由循环 fail-closed
             decider.decide("向前飞10米", checkpoint, cockpit_tools())
+        # 传输层异常不在重试范围内（重试只覆盖空响应），所以恰好一次调用。
+        self.assertEqual(len(calls), 1, "普通命令必须走到模型传输层")
+        self.assertTrue(calls[0].endswith("/api/chat"))
 
 
 if __name__ == "__main__":
