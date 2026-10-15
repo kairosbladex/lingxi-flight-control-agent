@@ -214,12 +214,15 @@ def _matches_type(value: Any, expected: str) -> bool:
     }.get(expected, lambda: False)()
 
 
-def _contains_unsafe_content(value: Any) -> bool:
-    """拒绝模型越过边界提供连接信息、厂商报文或虚假的执行结论。
+def contains_unsafe_content(value: Any) -> bool:
+    """拒绝越过边界提供连接信息、厂商报文或虚假的执行结论。
 
     注意：这里只能用无歧义的术语。裸词 ``payload`` 曾被列入，但它同时是载荷领域的
     正常词汇（``mounted_payloads()``、``payload_*`` 动作、状态里的 ``payloads`` 字段），
     会把驾驶舱的合法回执整条判为禁止内容。厂商报文的意图已由「厂商指令」「飞控报文」覆盖。
+
+    执行器适配层也用这个判定：``execution_mode`` 会随回执回给模型，含禁用词的模式名
+    会让每个动作都硬失败，所以它必须在构建期就对自己跑一遍同一张表。
     """
     forbidden = (
         "mqtt", "password", "passwd", "credential", "token", "secret", "私钥", "凭据",
@@ -230,10 +233,14 @@ def _contains_unsafe_content(value: Any) -> bool:
         text = value.lower()
         return any(term in text for term in forbidden)
     if isinstance(value, Mapping):
-        return any(_contains_unsafe_content(k) or _contains_unsafe_content(v) for k, v in value.items())
+        return any(contains_unsafe_content(k) or contains_unsafe_content(v) for k, v in value.items())
     if isinstance(value, (list, tuple, set)):
-        return any(_contains_unsafe_content(item) for item in value)
+        return any(contains_unsafe_content(item) for item in value)
     return False
+
+
+#: 兼容旧名：包内与既有测试都用下划线版本。
+_contains_unsafe_content = contains_unsafe_content
 
 
 class BoundedAgentLoop:

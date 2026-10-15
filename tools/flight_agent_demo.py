@@ -21,15 +21,22 @@ from lingxi_flight_control import (
     DEFAULT_MODEL,
     BoundedAgentLoop,
     ExecutionContext,
+    FixtureExecutor,
     LoopStatus,
+    LoopbackExecutor,
     MemoryFlightControlSimulator,
     MemoryFlightSimulator,
     OllamaDecider,
     RuntimeBinding,
     SafetyFastPathDecider,
     build_full_control_tool_registry,
+    coerce_executor,
+    load_fixture,
     project_observation_result,
 )
+
+#: 夹具执行器的默认夹具（source=simulator-export，不是真机录制）。
+DEFAULT_FIXTURE = "fixtures/cockpit_basic.json"
 
 
 class TracingDecider:
@@ -132,12 +139,33 @@ def run_simple(decider, command: str, *, max_steps: int) -> None:
                   f"模拟器位置: x={simulator.position.x_m} y={simulator.position.y_m} z={simulator.position.z_m}")
 
 
-def run_cockpit(decider, command: str, *, max_steps: int, auto_confirm: bool) -> None:
+def build_cockpit_executor(name: str, binding: RuntimeBinding, fixture_path: str):
+    """按名字装配执行后端；返回归一化后的 RuntimeExecutor。
+
+    ``simulator`` 是零行为变化的默认路径；``loopback`` 用同一套握手换一个模式名，
+    用来证明执行器挂点真的通了；``fixture`` 只回放夹具里录到的动作，其余一律拒绝。
+    """
+    if name == "simulator":
+        backend = MemoryFlightControlSimulator(binding)
+    elif name == "loopback":
+        backend = LoopbackExecutor(binding)
+    elif name == "fixture":
+        backend = FixtureExecutor(load_fixture(fixture_path))
+    else:  # pragma: no cover - argparse 已经限定取值
+        raise ValueError(f"unknown executor: {name}")
+    return coerce_executor(backend)
+
+
+def run_cockpit(decider, command: str, *, max_steps: int, auto_confirm: bool,
+                executor_name: str = "simulator", fixture_path: str = DEFAULT_FIXTURE) -> None:
     """完整驾驶舱路径：每个动作都要经过预览/确认两阶段。"""
     binding = RuntimeBinding("actor-demo", "project-demo", "hangar-01", "drone-01", "batch-01", 1)
-    simulator = MemoryFlightControlSimulator(binding)
-    print(f"\n{'=' * 78}\n[驾驶舱] 用户: {command}\n{'-' * 78}")
-    loop = BoundedAgentLoop(decider, build_full_control_tool_registry(simulator), max_steps=max_steps)
+    executor = build_cockpit_executor(executor_name, binding, fixture_path)
+    print(f"\n{'=' * 78}\n[驾驶舱/{executor.execution_mode}] 用户: {command}\n{'-' * 78}")
+    if executor_name == "fixture":
+        print(f"  [夹具] {fixture_path} source={executor.fixture_source}："
+              f"只回放录到的动作，其余动作会被 FIXTURE_NOT_FOUND 拒绝")
+    loop = BoundedAgentLoop(decider, build_full_control_tool_registry(executor), max_steps=max_steps)
 
     checkpoint = None
     result = None
@@ -156,11 +184,14 @@ def run_cockpit(decider, command: str, *, max_steps: int, auto_confirm: bool) ->
         print(f"  [终止] status={result.status.value} error={result.error}")
     if checkpoint is not None:
         _print_observations(checkpoint)
-        state = simulator.state
+        state = executor.read_state()
+        camera = state.get("camera") or {}
         _print_result(result, checkpoint,
-                      f"控制权={state.control_owner} 高度={state.altitude_m} "
-                      f"纬度={state.latitude:.6f} 经度={state.longitude:.6f} "
-                      f"相机={state.camera['mode']} 照片={state.camera['photo_count']} 版本={state.revision}")
+                      f"模式={executor.execution_mode} 控制权={state.get('control_owner')} "
+                      f"高度={state.get('altitude_m')} "
+                      f"纬度={state.get('latitude', 0.0):.6f} 经度={state.get('longitude', 0.0):.6f} "
+                      f"相机={camera.get('mode')} 照片={camera.get('photo_count')} "
+                      f"版本={state.get('revision')}")
 
 
 def main() -> int:
@@ -170,6 +201,9 @@ def main() -> int:
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
     parser.add_argument("--think", action="store_true", help="开启模型思考模式（更慢）")
     parser.add_argument("--cockpit", action="store_true", help="使用完整 59 动作驾驶舱")
+    parser.add_argument("--executor", choices=("simulator", "loopback", "fixture"),
+                        default="simulator", help="驾驶舱执行后端（默认 simulator）")
+    parser.add_argument("--fixture", default=DEFAULT_FIXTURE, help="--executor fixture 使用的夹具路径")
     parser.add_argument("--no-auto-confirm", action="store_true", help="不自动放行确认")
     parser.add_argument("--max-steps", type=int, default=24)
     parser.add_argument("--quiet", action="store_true")
@@ -203,7 +237,8 @@ def main() -> int:
         try:
             if args.cockpit:
                 run_cockpit(traced, command, max_steps=args.max_steps,
-                            auto_confirm=not args.no_auto_confirm)
+                            auto_confirm=not args.no_auto_confirm,
+                            executor_name=args.executor, fixture_path=args.fixture)
             else:
                 run_simple(traced, command, max_steps=args.max_steps)
         except Exception as exc:  # 联调脚本：单条失败不应中断其余用例

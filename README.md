@@ -11,9 +11,12 @@
 - 通过注入的意图解释器生成结构化 `ToolCall`，维持旧任务下发调用方兼容。
 - `full_control.py` 提供显式的 `FlightControlAction`、`RuntimeBinding`、`FlightControlState` 和
   `MemoryFlightControlSimulator`，覆盖驾驶舱控制权、飞行、航线、相机/云台、红外、载荷和状态读取。
-  这些动作只在内存中预览、确认和执行，回执固定标记 `execution_mode=simulator`。
+  动作只在内存中预览、确认和执行；回执里的 `execution_mode` 由执行器提供，默认 `simulator`。
 - 59 个驾驶舱动作通过 `build_full_control_tool_registry` 全部注册为模型可调用的白名单工具，
-  每个动作都经过 `ToolRegistry` schema 校验 + 模拟器 `preview/confirm` 两阶段。
+  每个动作都经过 `ToolRegistry` schema 校验 + 执行器 `preview/confirm` 两阶段。
+- **执行器可注入**：`executor.py` 定义 `RuntimeExecutor` 协议（预览/确认 + 状态读取），
+  `SimulatorExecutor` 包住现有模拟器（零行为变化），`LoopbackExecutor` 与 `FixtureExecutor`
+  用于本机回环与报文夹具回放。**当前没有接真实平台**（无凭据），详见 `docs/platform-executor.md`。
 - **安全快路径**：急停等安全动作走确定性精确匹配，不经过模型。实测走模型要 9 秒才能发出急停，
   快路径 1 毫秒；且模型服务不可达时快路径照常可用。详见 `docs/safety-fast-path.md`。
 - **上下文预算**：发送前按 `num_ctx` 核对 prompt 预算并确定性压缩，绝不依赖服务端截断。
@@ -48,6 +51,21 @@ loop = BoundedAgentLoop(OllamaDecider(model="qwen3.5:9b"),
 result = loop.run("接管控制权，然后向前飞10米，再拍张照片")
 ```
 
+`build_full_control_tool_registry()` 也接受任何 `RuntimeExecutor`：真实平台适配器、
+`LoopbackExecutor`（本机回环）或 `FixtureExecutor`（报文夹具回放）。换执行器不改工具契约。
+
+```python
+from lingxi_flight_control import LoopbackExecutor, build_full_control_tool_registry
+
+loop = BoundedAgentLoop(
+    OllamaDecider(model="qwen3.5:9b"),
+    build_full_control_tool_registry(LoopbackExecutor(binding)), max_steps=24)
+```
+
+`execution_mode` 由执行器提供，并同时出现在状态、回执与 `action_manifest()` 里；
+模式名会随回执回给模型，所以含 `mqtt`/`凭据` 这类禁用词的模式名会在构建期就被
+`validate_execution_mode()` 拦下——否则每个动作都会 fail-closed。
+
 `ACTION_SPECS` 是动作领域、描述与参数契约的单一真源，`action_manifest()`、
 `action_tool_definitions()` 和工具注册表都由它派生。
 
@@ -65,7 +83,8 @@ result = loop.run("接管控制权，然后向前飞10米，再拍张照片")
   需要「恰好执行一次」时传入 `idempotency_key_factory`。"未经确认就执行"由
   `BoundedAgentLoop` 的确认绑定负责，两者不是同一层保护。
 
-当前版本不连接 MQTT、真实飞控或生产任务平台；执行器和任务工具均由调用方注入。
+当前版本不连接 MQTT、真实飞控或生产任务平台；执行器由调用方注入（本次交付的是可注入挂点
+与报文夹具，未接真实平台）。
 
 ## 模型大脑
 
@@ -133,9 +152,12 @@ PYTHONPATH=src python3 tools/flight_agent_demo.py "先向前飞10米，然后原
 
 ```bash
 PYTHONPATH=src python -m unittest discover -s tests -p 'test_*.py' -v
+# 等价入口（CI 与本地共用同一条命令）
+bash tools/ci/offline_tests.sh
 ```
 
-测试全部离线：`OllamaDecider` 通过注入的传输层测试，不访问网络。
+测试全部离线：`OllamaDecider` 通过注入的传输层测试，不访问网络；`tests/test_offline_guard.py`
+会把 socket 连接换成抛错跑完整套用例，断言零连接尝试。
 
 ## 与 lingxi-agent 的边界
 

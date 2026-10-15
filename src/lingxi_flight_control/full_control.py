@@ -14,7 +14,7 @@ import hashlib
 import json
 import math
 import re
-from typing import Any, Callable, Mapping
+from typing import TYPE_CHECKING, Any, Callable, Mapping
 from uuid import uuid4
 
 from .agent import ToolRegistry
@@ -27,6 +27,9 @@ from .models import (
 )
 from .safety import SafetyFastPath, normalize
 from .simulator import MemoryFlightSimulator
+
+if TYPE_CHECKING:  # 运行时避免与 executor 成环（executor 依赖本模块的类型）
+    from .executor import RuntimeExecutor
 
 #: 精确安全短语表，与 SafetyFastPathDecider 共用同一份定义。
 _SAFETY_FAST_PATH = SafetyFastPath()
@@ -245,7 +248,7 @@ class FlightControlState:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "execution_mode": "simulator",
+            "execution_mode": self.execution_mode,
             "revision": self.revision,
             "context_version": self.context_version,
             "control_owner": self.control_owner,
@@ -299,7 +302,7 @@ class FlightControlReceipt:
     def to_dict(self) -> dict[str, Any]:
         return {
             "status": self.status.value,
-            "execution_mode": "simulator",
+            "execution_mode": self.execution_mode,
             "action": self.action,
             "command_id": self.command_id,
             "idempotency_key": self.idempotency_key,
@@ -424,7 +427,7 @@ def _status_receipt(status: FlightControlStatus, request: FlightControlActionReq
                     error_code: str | None = None, message: str = "", expires_at: float | None = None) -> FlightControlReceipt:
     return FlightControlReceipt(
         status=status,
-        execution_mode="simulator",
+        execution_mode=state.execution_mode,
         action=FlightControlAction(request.action).value,
         command_id=request.command_id,
         idempotency_key=request.idempotency_key,
@@ -475,7 +478,7 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
 
     def snapshot(self) -> dict[str, Any]:
         return {
-            "execution_mode": "simulator",
+            "execution_mode": self.state.execution_mode,
             "binding": self.binding.to_dict(),
             "state": self.state.to_dict(),
         }
@@ -486,7 +489,10 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             return
         self._pending.clear()
         self.binding = binding
+        # 换绑重置状态，但执行模式是执行后端的属性，不能跟着掉回 "simulator"。
+        execution_mode = self.state.execution_mode
         self.state = FlightControlState(context_version=binding.context_version)
+        self.state.execution_mode = execution_mode
         # 同步父类持有的执行上下文，保持两套 API 一致。
         self.context = _context_for(binding)
 
@@ -933,8 +939,12 @@ if set(ACTION_SPECS) != set(FlightControlAction):  # pragma: no cover - 导入�
     raise RuntimeError("ACTION_SPECS must cover every FlightControlAction exactly once")
 
 
-def action_tool_definitions() -> tuple[dict[str, Any], ...]:
-    """Return serializable per-action tools; handlers never cross the model boundary."""
+def action_tool_definitions(execution_mode: str = "simulator") -> tuple[dict[str, Any], ...]:
+    """Return serializable per-action tools; handlers never cross the model boundary.
+
+    ``execution_mode`` 由执行器提供（见 ``executor.RuntimeExecutor``），默认值保持
+    驾驶舱 UI 现有的 ``simulator`` 契约不变。
+    """
     return tuple({
         "name": action.value,
         "description": ACTION_SPECS[action].description,
@@ -946,12 +956,12 @@ def action_tool_definitions() -> tuple[dict[str, Any], ...]:
             "additionalProperties": False,
         },
         "requires_confirmation": action != FlightControlAction.READ_STATE,
-        "execution_mode": "simulator",
+        "execution_mode": execution_mode,
     } for action in FlightControlAction)
 
 
 def build_full_control_tool_registry(
-    simulator: MemoryFlightControlSimulator,
+    executor: "RuntimeExecutor | MemoryFlightControlSimulator",
     *,
     command_id_factory: Callable[[], str] | None = None,
     idempotency_key_factory: Callable[[str, Mapping[str, Any]], str] | None = None,
@@ -959,39 +969,49 @@ def build_full_control_tool_registry(
     """把完整的 59 个驾驶舱动作注册成模型可调用的白名单工具。
 
     每个动作都经过 `preview` -> `confirm` 两阶段：模型给出的参数先被 `ToolRegistry`
-    按 schema 校验，再由模拟器做上下文版本、幂等和预览/确认检查，任何一环不通过都不会改变状态。
+    按 schema 校验，再由执行器做上下文版本、幂等和预览/确认检查，任何一环不通过都不会改变状态。
+
+    ``executor`` 可以是任何 `RuntimeExecutor`（真实平台适配器、回环执行器、夹具回放器），
+    也可以是裸 `MemoryFlightControlSimulator`（自动包成 `SimulatorExecutor`，行为不变）。
+    工具名、参数契约与回执字段都来自单一真源，换执行器不改契约：真正变化的只有
+    ``execution_mode`` 与动作实际打到的后端。
 
     幂等键默认每次调用新生成。跨轮次的「恰好执行一次」需要调用方提供稳定的
     `idempotency_key_factory`（例如绑定上层业务的请求号）；模型自己无法提供可靠的幂等键。
     防「未经确认就执行」由 `BoundedAgentLoop` 的确认绑定负责，两者不是同一层保护。
     """
+    # 局部导入：executor 模块依赖本模块的类型，顶层导入会成环。
+    from .executor import coerce_executor
+
+    runtime = coerce_executor(executor)
     new_command_id = command_id_factory or (lambda: uuid4().hex)
     new_idempotency_key = idempotency_key_factory or (lambda _action, _arguments: uuid4().hex)
 
-    registry = ToolRegistry(runtime_context_provider=simulator.runtime_context)
+    registry = ToolRegistry(runtime_context_provider=runtime.runtime_context)
 
     for action, spec in ACTION_SPECS.items():
         mutating = action != FlightControlAction.READ_STATE
 
         def handler(arguments: Mapping[str, Any], action: FlightControlAction = action) -> dict[str, Any]:
-            binding = simulator.binding
+            # 上下文版本一律从执行器当前绑定派生，避免与执行器持有的事实漂移。
+            context_version = runtime.runtime_context().context_version
             request = FlightControlActionRequest(
                 command_id=new_command_id(),
                 idempotency_key=new_idempotency_key(action.value, arguments),
                 action=action,
                 parameters=dict(arguments),
-                context_version=binding.context_version,
+                context_version=context_version,
             )
-            receipt = simulator.preview(request)
+            receipt = runtime.preview(request)
             if receipt.status is not FlightControlStatus.PREVIEW_REQUIRED:
-                # READ_STATE 直接返回；重复、过期、越权也在这里如实返回。
+                # READ_STATE 直接返回；重复、过期、越权与执行器的拒绝也在这里如实返回。
                 return receipt.to_dict()
-            return simulator.confirm(
+            return runtime.confirm(
                 receipt.confirmation_id,
                 command_id=request.command_id,
                 idempotency_key=request.idempotency_key,
                 confirmation_binding=receipt.confirmation_binding,
-                context_version=binding.context_version,
+                context_version=context_version,
             ).to_dict()
 
         registry.register(ToolDefinition(
@@ -1006,7 +1026,7 @@ def build_full_control_tool_registry(
 
 
 
-def action_manifest() -> dict[str, Any]:
+def action_manifest(execution_mode: str = "simulator") -> dict[str, Any]:
     """Manifest consumed by the cockpit; every UI item has one tool entry."""
     tools = []
     for action, spec in ACTION_SPECS.items():
@@ -1016,9 +1036,9 @@ def action_manifest() -> dict[str, Any]:
             "label": action.value,
             "parameter_names": list(spec.parameters),
             "requires_confirmation": action != FlightControlAction.READ_STATE,
-            "execution_mode": "simulator",
+            "execution_mode": execution_mode,
         })
-    return {"execution_mode": "simulator", "tools": tools}
+    return {"execution_mode": execution_mode, "tools": tools}
 
 
 def mounted_payloads() -> tuple[str, ...]:

@@ -17,6 +17,22 @@ from .ollama_decider import (
 )
 from .safety import DEFAULT_SAFETY_PHRASES, SafetyFastPath, SafetyFastPathDecider
 from .simulator import MemoryFlightSimulator, build_memory_flight_tool_registry
+from .executor import (
+    FIXTURE_SCHEMA_VERSION,
+    FIXTURE_SOURCES,
+    FixtureError,
+    FixtureExecutor,
+    LoopbackExecutor,
+    RuntimeExecutor,
+    SimulatorExecutor,
+    canonical_parameters,
+    coerce_executor,
+    export_fixture,
+    load_fixture,
+    state_from_recorded,
+    validate_execution_mode,
+    validate_fixture,
+)
 from .full_control import (
     ActionSpec,
     FlightControlAction,
@@ -92,6 +108,20 @@ __all__ = [
     "ToolRegistry",
     "ToolSchema",
     "build_memory_flight_tool_registry",
+    "FIXTURE_SCHEMA_VERSION",
+    "FIXTURE_SOURCES",
+    "FixtureError",
+    "FixtureExecutor",
+    "LoopbackExecutor",
+    "RuntimeExecutor",
+    "SimulatorExecutor",
+    "canonical_parameters",
+    "coerce_executor",
+    "export_fixture",
+    "load_fixture",
+    "state_from_recorded",
+    "validate_execution_mode",
+    "validate_fixture",
     "FlightControlAction",
     "FlightControlActionRequest",
     "FlightControlReceipt",
