@@ -19,7 +19,7 @@ from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
 
 from .agent import ModelDecider
-from .preview import FlightPreviewAgent, ReferencePose
+from .preview import FlightPreviewAgent, ReferencePose, StaleReferencePose
 from .full_control import RuntimeBinding
 
 
@@ -220,8 +220,11 @@ class StandalonePreviewService:
         )
         try:
             pose.validate(self._clock())
-        except ValueError as exc:
+        except StaleReferencePose as exc:
             raise StandalonePreviewError("STALE_POSE", str(exc), 409) from exc
+        except ValueError as exc:
+            # 位置/航向越界、字段非法是请求问题，不是「过期」。
+            raise StandalonePreviewError("INVALID_POSE", str(exc), 422) from exc
         return pose
 
     def _agent(self, context: _Context) -> FlightPreviewAgent:
@@ -272,8 +275,10 @@ class StandalonePreviewService:
             raise StandalonePreviewError("POSE_NOT_FOUND", "尚未收到该无人机的实时位姿", 404)
         try:
             pose.validate(self._clock())
-        except ValueError as exc:
+        except StaleReferencePose as exc:
             raise StandalonePreviewError("STALE_POSE", str(exc), 409) from exc
+        except ValueError as exc:
+            raise StandalonePreviewError("INVALID_POSE", str(exc), 422) from exc
         return self._ok({"pose": pose.__dict__, "pose_source": "standalone-telemetry",
                          "project_id": context.project_id, "hangar_id": context.hangar_id,
                          "drone_id": context.drone_id, "task_id": context.task_id}, trace_id)
@@ -292,14 +297,23 @@ class StandalonePreviewService:
                 raise StandalonePreviewError("POSE_NOT_FOUND", "尚未收到该无人机的实时位姿", 404)
             try:
                 pose.validate(self._clock())
-            except ValueError as exc:
+            except StaleReferencePose as exc:
                 raise StandalonePreviewError("STALE_POSE", str(exc), 409) from exc
+            except ValueError as exc:
+                raise StandalonePreviewError("INVALID_POSE", str(exc), 422) from exc
         with self._lock:
             self._poses[context.key] = pose
-        result = self._agent(context).preview(
-            body["text"], command_id=command_id, idempotency_key=idempotency_key,
-            site_id=site_id or "", task_id=context.task_id, pose=pose,
-        )
+        try:
+            result = self._agent(context).preview(
+                body["text"], command_id=command_id, idempotency_key=idempotency_key,
+                site_id=site_id or "", task_id=context.task_id, pose=pose,
+            )
+        except StaleReferencePose as exc:
+            # 模型推理期间位姿过期：已知且可重试，按契约回 409（原先落到 500 兜底）。
+            raise StandalonePreviewError("STALE_POSE", str(exc), 409) from exc
+        except ValueError as exc:
+            # 与 AgentService 同一约定：循环抛出的 ValueError 是请求不合法 → 400。
+            raise StandalonePreviewError("INVALID_REQUEST", str(exc), 400) from exc
         return self._ok(result, trace_id, run_id=command_id)
 
     def _finish(self, route: str, body: Mapping[str, Any], headers: Mapping[str, str], trace_id: str) -> StandaloneResponse:
@@ -314,11 +328,15 @@ class StandalonePreviewService:
             agent = self._agents.get(context.key)
         if agent is None:
             raise StandalonePreviewError("NOT_FOUND", "预览卡不存在或已被替代", 404)
-        result = agent.confirm(
-            confirmation_id, command_id=command_id, idempotency_key=idempotency_key,
-            confirmation_binding=binding.lower(), context_version=context.context_version,
-            cancel=route == "cancel",
-        )
+        try:
+            result = agent.confirm(
+                confirmation_id, command_id=command_id, idempotency_key=idempotency_key,
+                confirmation_binding=binding.lower(), context_version=context.context_version,
+                cancel=route == "cancel",
+            )
+        except ValueError as exc:
+            # 卡不存在/已过期/与预览不一致都是请求问题，按同一约定回 400，而不是 500。
+            raise StandalonePreviewError("INVALID_REQUEST", str(exc), 400) from exc
         return self._ok(result, trace_id, run_id=confirmation_id)
 
     @staticmethod

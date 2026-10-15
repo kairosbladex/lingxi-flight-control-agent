@@ -26,6 +26,14 @@ PREVIEW_SYSTEM_PROMPT = (
 )
 
 
+class StaleReferencePose(ValueError):
+    """参考位姿已过期。
+
+    这是**已知、可预期、可重试**的状态（模型推理比位姿有效期还长时就会发生），
+    不是服务端内部故障：HTTP 层必须回 ``STALE_POSE``，不能落到 500 兜底。
+    """
+
+
 @dataclass(frozen=True)
 class ReferencePose:
     longitude: float
@@ -43,7 +51,7 @@ class ReferencePose:
         if not -180 <= self.heading_deg <= 360:
             raise ValueError("航向超出范围")
         if not 0 <= now - self.observed_at <= 15:
-            raise ValueError("位置参考已过期，请等待当前设备的新状态")
+            raise StaleReferencePose("位置参考已过期，请等待当前设备的新状态")
 
 
 def platform_request(binding: RuntimeBinding, site_id: str, task_id: str | None,

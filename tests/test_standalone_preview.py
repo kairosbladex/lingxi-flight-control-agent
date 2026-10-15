@@ -107,6 +107,69 @@ class StandalonePreviewTests(unittest.TestCase):
         self.assertEqual(payload["error_code"], "POSE_NOT_FOUND")
         self.assertEqual(self.decider.calls, 0)
 
+    def test_inference_longer_than_pose_ttl_is_stale_pose_not_500(self):
+        """模型比位姿有效期还慢时，契约要求 409 STALE_POSE，不能落到 500 兜底。"""
+
+        class SlowDecider(FakeDecider):
+            def __init__(self, clock_advance):
+                super().__init__()
+                self.advance = clock_advance
+
+            def decide(self, text, checkpoint, tools):
+                self.advance()
+                return super().decide(text, checkpoint, tools)
+
+        def advance():
+            self.now += 16.0
+
+        service = StandalonePreviewService(lambda: SlowDecider(advance), clock=lambda: self.now)
+        response = service.handle("POST", "/api/flight-preview/preview", json.dumps({
+            **self.context, "text": "往前飞10米", "command_id": "cmd-1",
+            "idempotency_key": "idem-1", "pose": self.pose,
+        }), self.headers)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.payload["error_code"], "STALE_POSE")
+        self.assertFalse(response.payload["dispatch_allowed"])
+        self.assertFalse(response.payload["dispatched"])
+
+    def test_agent_value_error_is_invalid_request_not_500(self):
+        """循环抛出的 ValueError 与 AgentService 同一约定：400 INVALID_REQUEST。"""
+        first = self.call("POST", "/api/flight-preview/preview", {
+            **self.context, "text": "往前飞10米", "command_id": "cmd-1",
+            "idempotency_key": "idem-1", "pose": self.pose,
+        })
+        self.assertEqual(first[0], 200)
+
+        status, payload = self.call("POST", "/api/flight-preview/preview", {
+            **self.context, "text": "往右飞5米", "command_id": "cmd-2",
+            "idempotency_key": "idem-1", "pose": self.pose,
+        })
+        self.assertEqual(status, 400)
+        self.assertEqual(payload["error_code"], "INVALID_REQUEST")
+
+    def test_confirm_mismatch_is_invalid_request_not_500(self):
+        status, card = self.call("POST", "/api/flight-preview/preview", {
+            **self.context, "text": "往前飞10米", "command_id": "cmd-1",
+            "idempotency_key": "idem-1", "pose": self.pose,
+        })
+        self.assertEqual(status, 200)
+
+        status, payload = self.call("POST", "/api/flight-preview/confirm", {
+            **{key: self.context[key] for key in ("project_id", "hangar_id", "drone_id", "task_id", "context_version")},
+            "confirmation_id": card["confirmation_id"],
+            "command_id": card["command_id"],
+            "idempotency_key": card["idempotency_key"],
+            "confirmation_binding": "0" * 64,
+        })
+        self.assertEqual(status, 400)
+        self.assertEqual(payload["error_code"], "INVALID_REQUEST")
+
+    def test_out_of_range_pose_is_invalid_pose_not_stale(self):
+        status, payload = self.call("POST", "/api/flight-preview/pose",
+                                    {**self.context, "pose": {**self.pose, "latitude": 200.0}})
+        self.assertEqual(status, 422)
+        self.assertEqual(payload["error_code"], "INVALID_POSE")
+
 
 if __name__ == "__main__":
     unittest.main()

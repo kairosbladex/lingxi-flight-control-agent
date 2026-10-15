@@ -111,6 +111,9 @@ PYTHONPATH=src python3 tools/standalone_preview_server.py \
 - `POST /api/flight-preview/preview`：模型理解并生成预览卡；
 - `POST /api/flight-preview/confirm`、`/cancel`：确认或取消预览，仍不下发。
 
+错误码契约（400/404/409/422/500 分别对应什么，含「推理期间位姿过期 → 409 `STALE_POSE`」）
+见 [模型预览说明](docs/model-preview.md#独立预览服务的错误码)。
+
 请求需要 `X-Agent-Actor` 和可追踪的 `X-Trace-Id`；项目、机库、无人机、任务、站点、
 上下文版本和位姿都由服务端校验。前端项目默认调用 `/api/flight-preview`，可用
 `VITE_FLIGHT_AGENT_API_BASE` 覆盖为独立服务地址。生产接入时只需另写一个经过鉴权的
