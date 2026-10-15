@@ -1,6 +1,8 @@
-# 灵犀飞行执行 Agent
+# 灵犀飞控 Agent（lingxi-flight-control-agent）
 
 独立维护已绑定执行上下文内的受限控制文本解析和内存执行闭环；同时保留任务下发模型作为兼容层。
+
+本项目专门负责无人机飞行控制，对应独立前端为 `lingxi-flight-control-ui`（灵犀飞控助手，当前目录及 Git 远端兼容名称为 `lingxi-flight-agent-ui`）。巡检任务规划、草稿与下发交接属于 `lingxi-task-dispatch-agent`（当前兼容目录为 `lingxi-agent`），对应前端为 `lingxi-task-dispatch-ui`（当前兼容目录为 `lingxi-console`）。保留的任务下发模型只用于旧调用方导入兼容，不改变两个 Agent 的职责与权限隔离。
 
 ## 当前范围
 

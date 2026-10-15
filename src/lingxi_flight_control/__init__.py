@@ -1,4 +1,4 @@
-"""灵犀飞行执行与任务下发 Agent 的最小核心。"""
+"""灵犀无人机飞控 Agent 的核心；保留旧任务下发类型的导入兼容。"""
 
 from .agent import BoundedAgentLoop, FlightExecutionAgent, ModelDecider, TaskDispatchAgent, ToolRegistry, parse_relative_move
 from .ollama_decider import (
