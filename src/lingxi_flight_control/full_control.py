@@ -27,6 +27,7 @@ from .models import (
 )
 from .safety import SafetyFastPath, normalize
 from .simulator import MemoryFlightSimulator
+from .geometry import relative_target
 
 if TYPE_CHECKING:  # 运行时避免与 executor 成环（executor 依赖本模块的类型）
     from .executor import RuntimeExecutor
@@ -621,10 +622,10 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             FlightControlAction.MOVE_UP, FlightControlAction.MOVE_DOWN,
         }:
             distance = float(p["distance_m"])
-            if action == FlightControlAction.MOVE_FORWARD: s.latitude += distance / 111_000
-            if action == FlightControlAction.MOVE_BACKWARD: s.latitude -= distance / 111_000
-            if action == FlightControlAction.MOVE_LEFT: s.longitude -= distance / 111_000
-            if action == FlightControlAction.MOVE_RIGHT: s.longitude += distance / 111_000
+            if action in {FlightControlAction.MOVE_FORWARD, FlightControlAction.MOVE_BACKWARD,
+                          FlightControlAction.MOVE_LEFT, FlightControlAction.MOVE_RIGHT}:
+                s.longitude, s.latitude = relative_target(
+                    s.longitude, s.latitude, s.heading_deg, action.value.removeprefix("move_"), distance)
             if action == FlightControlAction.MOVE_UP: s.altitude_m += distance
             if action == FlightControlAction.MOVE_DOWN: s.altitude_m = max(0.0, s.altitude_m - distance)
             s.ground_speed_mps = float(s.parameters["move_speed_mps"])

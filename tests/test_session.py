@@ -457,7 +457,7 @@ class SessionRunnerTests(unittest.TestCase):
                 self.assertEqual(second["status"], "final")
                 self.assertEqual(second["executed"], [ACQUIRE, MOVE_FORWARD, CAMERA_PHOTO])
                 self.assertEqual(simulator.state.control_owner, "actor-1")
-                self.assertAlmostEqual(simulator.state.latitude, 10 / 111_000)
+                self.assertAlmostEqual(simulator.state.latitude, 0.0000899266130030023)
                 self.assertEqual(simulator.state.camera["photo_count"], 1)
 
     def test_same_request_id_is_replayed_without_running_the_loop(self):

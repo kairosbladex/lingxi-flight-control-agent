@@ -247,7 +247,7 @@ class ServiceLoopContractTests(unittest.TestCase):
         self.assertEqual(second.payload["executed"],
                          [ACQUIRE, MOVE_FORWARD, CAMERA_PHOTO])
         self.assertEqual(simulator.state.control_owner, "actor-1")
-        self.assertAlmostEqual(simulator.state.latitude, 10 / 111_000)
+        self.assertAlmostEqual(simulator.state.latitude, 0.0000899266130030023)
         self.assertEqual(simulator.state.camera["photo_count"], 1)
 
     def test_duplicate_request_id_is_answered_from_the_session_log(self):

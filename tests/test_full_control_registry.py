@@ -156,7 +156,7 @@ class RegistryExecutionTests(unittest.TestCase):
         ])
         self.assertIs(result.status, LoopStatus.FINAL)
         self.assertEqual(self.simulator.state.control_owner, "actor-1")
-        self.assertAlmostEqual(self.simulator.state.latitude, 10 / 111_000)
+        self.assertAlmostEqual(self.simulator.state.latitude, 0.0000899266130030023)
         self.assertEqual([c["name"] for c in result.checkpoint.executed_tool_calls],
                          [ACQUIRE, MOVE_FORWARD])
         # tool_calls 会为确认轮次重复记录，真正执行了几次要看 executed_tool_calls。

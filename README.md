@@ -4,6 +4,10 @@
 
 ## 当前范围
 
+- **模型预览链路**：驾驶舱文字入口可接真实模型生成相对位移预览，并编译测试平台已有接口的请求格式。
+  确认只返回 `confirmed_not_dispatched`，没有真实发送能力；按机头方向计算目标点。
+  接口、验证和边界见 [模型预览说明](docs/model-preview.md)。
+
 - 将单个中文方向和距离解析为 `RelativeMove`；
 - 在已确认的 `ExecutionContext` 中执行相对移动；
 - 用 `idempotency_key` 拒绝重复命令，用上下文版本拒绝过期命令；
