@@ -175,6 +175,34 @@ PYTHONPATH=src python3 tools/flight_agent_demo.py --cockpit --telemetry
 # → stdout 里 grep '"event": "decide"' / '"event": "compressed"' / '"near_budget": true'
 ```
 
+## 服务化与检查点持久化
+
+一次任务可以跨请求、跨进程续跑：检查点存进 `CheckpointStore`（内存实现 + 文件实现，
+JSON、带 schema 版本、TTL、运行时绑定校验），确认握手不再依赖同一个 Python 进程里的对象。
+
+```python
+from lingxi_flight_control import (AgentService, FileCheckpointStore, SessionRunner,
+                                   build_http_server)
+
+store = FileCheckpointStore(".agent-sessions", ttl_sec=1800)
+runner = SessionRunner(loop, store, max_rounds=12)
+service = AgentService(runner, execution_mode=executor.execution_mode)
+build_http_server(service, "127.0.0.1", 8791).serve_forever()
+# POST /sessions/{id}/messages {"text":..., "confirmed":bool, "request_id":...}
+# GET  /sessions/{id}   DELETE /sessions/{id}   GET /healthz
+```
+
+`BoundedAgentLoop.run` 的语义一个字没改：确认绑定仍按 `user_input + context + runtime +
+工具调用` 校验，HTTP 层不新增任何绕过；同一个 `request_id` 重复提交直接回放已存响应，
+不会产生第二次副作用。实测（真实模型，两个 HTTP 请求 + 整段重启）：动作序列
+`['control_acquire','move_forward','camera_photo']`、`final`、重放响应逐字段相同。
+契约、schema、TTL 与复现命令见 `docs/service.md`。
+
+```bash
+PYTHONPATH=src python3 tools/agent_service.py --executor simulator --port 8791
+PYTHONPATH=src python3 tools/bench/service_e2e.py --restart-between-requests
+```
+
 ## 运行
 
 ```bash

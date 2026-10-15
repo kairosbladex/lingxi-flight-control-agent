@@ -86,6 +86,23 @@ from .telemetry import (
     Telemetry,
     TelemetryEvent,
 )
+from .session import (
+    DEFAULT_TTL_SEC,
+    MAX_REQUEST_LOG,
+    RESPONSE_KEYS,
+    SESSION_SCHEMA_VERSION,
+    CheckpointStore,
+    FileCheckpointStore,
+    MemoryCheckpointStore,
+    SessionError,
+    SessionExpired,
+    SessionNotFound,
+    SessionRecord,
+    SessionRunner,
+    SessionTampered,
+    validate_session_id,
+)
+from .service import AgentService, ServiceResponse, build_http_server, decode_json_body
 
 __all__ = [
     "CommandStatus",
@@ -172,4 +189,22 @@ __all__ = [
     "StdoutSink",
     "Telemetry",
     "TelemetryEvent",
+    "DEFAULT_TTL_SEC",
+    "MAX_REQUEST_LOG",
+    "RESPONSE_KEYS",
+    "SESSION_SCHEMA_VERSION",
+    "CheckpointStore",
+    "FileCheckpointStore",
+    "MemoryCheckpointStore",
+    "SessionError",
+    "SessionExpired",
+    "SessionNotFound",
+    "SessionRecord",
+    "SessionRunner",
+    "SessionTampered",
+    "validate_session_id",
+    "AgentService",
+    "ServiceResponse",
+    "build_http_server",
+    "decode_json_body",
 ]
