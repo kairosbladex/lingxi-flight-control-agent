@@ -32,6 +32,7 @@ from .models import (
     parameter_json_schema,
 )
 from .telemetry import Telemetry
+from .tool_selector import SELECTION_MODES, tool_name as _definition_name
 
 DEFAULT_BASE_URL = "http://192.168.130.238:11434"
 DEFAULT_MODEL = "qwen3.5:9b"
@@ -276,6 +277,7 @@ class OllamaDecider:
         token_estimator: Callable[[str], int] | None = None,
         result_projector: Callable[[str, Any], Any] | None = None,
         telemetry: Telemetry | None = None,
+        tool_selector: Any = None,
     ):
         if not model or not model.strip():
             raise ValueError("model name is required")
@@ -319,6 +321,13 @@ class OllamaDecider:
             raise ValueError("telemetry must be a Telemetry instance")
         # 默认安静：不注入时就一个事件都不发。
         self._telemetry = telemetry if telemetry is not None else Telemetry.disabled()
+        if tool_selector is not None and not callable(getattr(tool_selector, "select", None)):
+            raise ValueError("tool_selector must provide a select() method")
+        self._tool_selector = tool_selector
+        # 工具检索读数：这次下发的是全量还是子集、子集多大、检索层出过几次错。
+        self.last_tool_selection = "full"
+        self.last_selected_tools: int | None = None
+        self.selector_errors = 0
         self._keep_alive = keep_alive
         self._max_attempts = int(max_attempts)
         self._transport = transport or http_transport
@@ -358,6 +367,45 @@ class OllamaDecider:
         self, messages: Sequence[Mapping[str, Any]], definitions: Sequence[ToolDefinition] = ()
     ) -> int:
         return estimate_prompt_tokens(messages, definitions, estimator=self._token_estimator)
+
+    # ---- 工具检索 -----------------------------------------------------------
+
+    def _select_tools(
+        self, user_message: str, checkpoint: AgentCheckpoint,
+        definitions: Sequence[ToolDefinition],
+    ) -> tuple[ToolDefinition, ...]:
+        """按意图缩小下发的工具面；任何异常都退化成「全量下发」。
+
+        这是刻意的不对称：检索层有 bug 时只能多花 token，**绝不能**变成工具变少
+        （模型无法调用没下发的工具，那是能力缺失），也绝不能因此让 run 失败。
+        """
+        tools = tuple(definitions)
+        if self._tool_selector is None:
+            self.last_tool_selection = "full"
+            self.last_selected_tools = len(tools)
+            return tools
+        try:
+            result = self._tool_selector.select(user_message, tools, checkpoint=checkpoint)
+            names = tuple(getattr(result, "names", result))
+            mode = str(getattr(result, "mode", "retrieved"))
+            if mode not in SELECTION_MODES:
+                raise ValueError(f"unknown selection mode: {mode!r}")
+            keep = set(names)
+            selected = tuple(tool for tool in tools if _definition_name(tool) in keep)
+            if not selected:
+                raise ValueError("selector returned an empty candidate set")
+        except Exception:
+            self.selector_errors += 1
+            self.last_tool_selection = "full"
+            self.last_selected_tools = len(tools)
+            return tools
+        if len(selected) >= len(tools):
+            self.last_tool_selection = "full"
+            self.last_selected_tools = len(tools)
+            return tools
+        self.last_tool_selection = mode
+        self.last_selected_tools = len(selected)
+        return selected
 
     #: 摘要里的状态标记：成功回执 ✓，失败回执 ✗。
     _SUMMARY_OK = "✓"
@@ -508,6 +556,8 @@ class OllamaDecider:
         # 构建失败时不能把上一次请求的预算读数记到本次失败上。
         self.last_prompt_estimate = None
         self.last_omitted_observations = 0
+        # 检索层在预算之前生效：预算、tools 段与 prompt_eval 三者必须看到同一个工具面。
+        definitions = self._select_tools(user_message, checkpoint, definitions)
         messages, omitted, omission_mode, kept = self._rebuild(user_message, checkpoint, definitions)
         # 唯一的预算记账点：decide() 每次都经过这里，因此读数就是「刚发出去的那个请求」。
         self.last_prompt_estimate = self.estimate_prompt_tokens(messages, definitions)

@@ -1,5 +1,13 @@
-"""59 工具选择准确率：检验模型在工具面扩大后是否退化（未来功能迭代的核心风险）。"""
-import json, re, sys, time, urllib.request
+"""59 工具选择准确率：检验模型在工具面扩大后是否退化（未来功能迭代的核心风险）。
+
+用法（工作项 5 的检索前后对比，两条命令都跑一遍）：
+    PYTHONPATH=src python3 tools/bench/tool_selection.py qwen3.5:9b              # 全量 59 工具
+    PYTHONPATH=src python3 tools/bench/tool_selection.py qwen3.5:9b --selector   # 按意图检索候选子集
+
+两条命令的 46 条用例、工具描述与 SYS 完全一致，唯一变量是「是否按意图检索」，
+因此准确率与 prompt 开销可以直接对比。
+"""
+import json, re, statistics, sys, time, urllib.request
 BASE="http://192.168.130.238:11434"
 
 def num(d="", lo=None, hi=None):
@@ -115,25 +123,66 @@ SYS=("你是无人机飞控执行 Agent，只能通过工具操作无人机。�
      "从下列工具中选出最匹配的一个并调用。")
 
 def chat(model,msgs,tools,timeout=900):
-    body={"model":model,"messages":msgs,"stream":False,"options":{"temperature":0},"tools":tools}
+    body={"model":model,"messages":msgs,"stream":False,"options":{"temperature":0},
+          "tools":tools,"keep_alive":"30m"}
     req=urllib.request.Request(BASE+"/api/chat",data=json.dumps(body).encode(),
         headers={"Content-Type":"application/json"})
     with urllib.request.urlopen(req,timeout=timeout) as r: return json.loads(r.read())
 
-def run(model):
+def _project_imports():
+    """延迟导入项目模块，缺 PYTHONPATH 时给出可操作的提示而不是堆栈。"""
+    try:
+        from lingxi_flight_control.ollama_decider import estimate_tokens
+        from lingxi_flight_control.tool_selector import RuleBasedToolSelector
+    except ImportError as exc:
+        raise SystemExit(f"需要 PYTHONPATH=src 才能估算 token / 使用 --selector：{exc}")
+    return estimate_tokens, RuleBasedToolSelector()
+
+def select_tools(text, tools, selector):
+    """按意图挑候选子集；返回 (下发的工具, 模式)。"""
+    descriptors=[(t["function"]["name"], t["function"]["description"]) for t in tools]
+    result=selector.select(text, descriptors)
+    if result.mode != "retrieved":
+        return tools, result.mode
+    keep=set(result.names)
+    return [t for t in tools if t["function"]["name"] in keep], result.mode
+
+def run(model, use_selector=False):
+    estimate_tokens, selector = _project_imports()
     tools=build_tools(); ok=0; bad=[]; t0=time.time()
+    subset_sizes=[]; tool_token_estimates=[]; prompt_eval_counts=[]; fallbacks=0
     for text,expect in CASES:
+        subset, mode = select_tools(text, tools, selector) if use_selector else (tools, "full")
+        if mode != "retrieved":
+            fallbacks += 1
         try:
-            d=chat(model,[{"role":"system","content":SYS},{"role":"user","content":text}],tools)
+            d=chat(model,[{"role":"system","content":SYS},{"role":"user","content":text}],subset)
             tc=(d.get("message",{}).get("tool_calls") or [])
             got=tc[0]["function"]["name"] if tc else None
+            prompt_eval_counts.append(d.get("prompt_eval_count"))
         except Exception as e:
             got=f"ERR:{e}"
         if got==expect: ok+=1
         else: bad.append({"输入":text,"期望":expect,"实得":got})
-    print(json.dumps({"model":model,"工具数":len(tools),"用例数":len(CASES),
+        subset_sizes.append(len(subset))
+        # 与线上同一套保守估算口径（含 tools 段的模板开销）。
+        tool_token_estimates.append(estimate_tokens(
+            json.dumps(subset,ensure_ascii=False,sort_keys=True))+24)
+    evals=[value for value in prompt_eval_counts if isinstance(value,int)]
+    print(json.dumps({"model":model,"检索":"on" if use_selector else "off",
+        "工具数":len(tools),"平均候选工具数":round(sum(subset_sizes)/len(subset_sizes),1),
+        "候选工具数范围":[min(subset_sizes),max(subset_sizes)],"回退全量用例数":fallbacks,
+        "平均工具段估算tokens":round(sum(tool_token_estimates)/len(tool_token_estimates),1),
+        "平均prompt_eval_count":round(sum(evals)/len(evals),1) if evals else None,
+        "中位prompt_eval_count":statistics.median(evals) if evals else None,
+        "用例数":len(CASES),
         "准确率":f"{ok}/{len(CASES)}", "耗时_s":round(time.time()-t0,1),
         "错例":bad},ensure_ascii=False,indent=1))
 
 if __name__=="__main__":
-    run(sys.argv[1] if len(sys.argv)>1 else "qwen3.5:9b")
+    args=[a for a in sys.argv[1:] if not a.startswith("--")]
+    flags={a for a in sys.argv[1:] if a.startswith("--")}
+    unknown=flags-{"--selector"}
+    if unknown:
+        raise SystemExit(f"未知参数: {sorted(unknown)}（只支持 --selector）")
+    run(args[0] if args else "qwen3.5:9b", use_selector="--selector" in flags)

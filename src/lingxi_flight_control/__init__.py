@@ -103,6 +103,17 @@ from .session import (
     validate_session_id,
 )
 from .service import AgentService, ServiceResponse, build_http_server, decode_json_body
+from .tool_selector import (
+    ALWAYS_INCLUDED,
+    DOMAIN_KEYWORDS,
+    PREREQUISITES,
+    SELECTION_MIN_CANDIDATES,
+    SELECTION_MODES,
+    RuleBasedToolSelector,
+    SelectionResult,
+    ToolSelector,
+    default_domain_of,
+)
 
 __all__ = [
     "CommandStatus",
@@ -207,4 +218,13 @@ __all__ = [
     "ServiceResponse",
     "build_http_server",
     "decode_json_body",
+    "ALWAYS_INCLUDED",
+    "DOMAIN_KEYWORDS",
+    "PREREQUISITES",
+    "SELECTION_MIN_CANDIDATES",
+    "SELECTION_MODES",
+    "RuleBasedToolSelector",
+    "SelectionResult",
+    "ToolSelector",
+    "default_domain_of",
 ]

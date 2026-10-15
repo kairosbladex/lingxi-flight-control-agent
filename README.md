@@ -203,6 +203,40 @@ PYTHONPATH=src python3 tools/agent_service.py --executor simulator --port 8791
 PYTHONPATH=src python3 tools/bench/service_e2e.py --restart-between-requests
 ```
 
+## 工具检索层
+
+59 个工具的契约全量下发占 3213~3525 tokens，且每次请求都要重付。`RuleBasedToolSelector`
+按用户意图挑候选子集，确定性、不依赖模型与 tokenizer：
+
+```python
+from lingxi_flight_control import OllamaDecider, RuleBasedToolSelector
+
+decider = OllamaDecider(model="qwen3.5:9b", tool_selector=RuleBasedToolSelector())
+# decider.last_tool_selection → "full" / "retrieved"；decider.last_selected_tools → 候选数
+```
+
+所有不确定的分支都倒向「全量下发」，因为**少给一个工具会让模型结构上无法完成任务**：
+关键词一个领域都没命中就回退全量；`read_state` 与急停/返航/降落是任何消息都保留的安全底线；
+改变状态的动作会带上前置的 `control_acquire`（否则多步任务第一步就断）；已执行/待确认/
+已回放的观察里的工具永远保留；候选面低于 `min_candidates=8` 也回退全量（过窄的工具面会
+诱导模型调错动作）；检索层抛异常时只记 `selector_errors` 并退化成全量。
+
+实测（46 条用例，同一批用例与 system prompt，唯一变量是「是否检索」，`qwen3.5:9b`）：
+
+| 指标 | 检索前 | 检索后 |
+| --- | --- | --- |
+| 准确率 | 43/46 | **43/46** |
+| 平均候选工具数 | 59.0 | **18.9** |
+| 平均 `prompt_eval_count` | 3235.0 | **1166.0**（−64%） |
+
+安全快路径完全不经过检索层（急停/返航/降落仍走确定性精确匹配），`ToolRegistry` 的校验与
+fail-closed 也没动。设计取舍、错例对比与复现命令见 `docs/tool-retrieval.md`。
+
+```bash
+PYTHONPATH=src python3 tools/bench/tool_selection.py qwen3.5:9b --selector
+PYTHONPATH=src python3 tools/flight_agent_demo.py --cockpit --selector
+```
+
 ## 运行
 
 ```bash

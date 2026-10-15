@@ -28,6 +28,7 @@ from lingxi_flight_control import (
     MemoryFlightSimulator,
     OllamaDecider,
     RuntimeBinding,
+    RuleBasedToolSelector,
     SafetyFastPathDecider,
     Telemetry,
     build_full_control_tool_registry,
@@ -78,6 +79,9 @@ class TracingDecider:
                 print(f"      [prompt预算] 估算 {self._meter.last_prompt_estimate}"
                       f"/{self._meter.prompt_budget_tokens} tokens"
                       f"  回放省略观察 {self._meter.last_omitted_observations} 条")
+                if self._meter.last_selected_tools is not None:
+                    print(f"      [工具检索] {self._meter.last_tool_selection}"
+                          f"  候选 {self._meter.last_selected_tools} 个工具")
             if generation is not None:
                 print(f"      [生成] done_reason={generation['done_reason']}"
                       f"  eval_count={generation['eval_count']}")
@@ -213,6 +217,8 @@ def main() -> int:
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--telemetry", action="store_true",
                         help="打开结构化遥测（stdout JSON line，一行一个事件）")
+    parser.add_argument("--selector", action="store_true",
+                        help="打开工具检索层（按意图下发候选子集，未命中回退全量）")
     args = parser.parse_args()
 
     if args.commands:
@@ -232,10 +238,12 @@ def main() -> int:
     brain = OllamaDecider(model=args.model, base_url=args.base_url,
                           think=True if args.think else None, keep_alive="30m",
                           result_projector=project_observation_result,
-                          telemetry=telemetry)
+                          telemetry=telemetry,
+                          tool_selector=RuleBasedToolSelector() if args.selector else None)
     decider = SafetyFastPathDecider(brain)
     traced = TracingDecider(decider, verbose=not args.quiet, meter=brain)
-    print(f"模型: {args.model}   端点: {args.base_url}   模式: {'驾驶舱' if args.cockpit else '最小执行器'}")
+    print(f"模型: {args.model}   端点: {args.base_url}   模式: {'驾驶舱' if args.cockpit else '最小执行器'}"
+          f"   工具检索: {'on' if args.selector else 'off'}")
 
     failures = 0
     for command in commands:
