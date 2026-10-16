@@ -393,3 +393,19 @@ Java本地提交为 **`d34df8b70e93766dd9d1358cd79ec84c8fa40dab`**，工作区�
 本轮测试替换外部IMqttClient工厂，真实回调安装、路由、转换和队列执行；原永续消费/重连线程与真实Broker均未启动。事务测试使用生产DDL/MyBatis及隔离H2，不触碰业务库。旧Java缓存/原帧/媒体产物哈希维持既有值；回执dispatch ID由真实准备链每次生成，完整文件哈希本来会变化，没有重写Agent冻结样本来掩盖差异。新增元数据不进入浏览器/模型，不新增POM依赖、运行配置或业务迁移。
 
 最后的来源复核点是 `beforeCommit`，不证明SQL驱动提交期间或之后网络持续在线，也不授予后续动作许可。实际发送连接、已鉴权员工、DRC会话与厂商 `control_source` 仍未形成完整持久绑定；接收元数据目前只随进程消息存在。厂商航权/链路拒绝、距离能力false和默认关闭的tracking保持不变。下一接入需从真实发送边界建立这条绑定，再依据独立协议/设备样本核对控制源身份。整体目标仍未达到真实设备控制与完整线上界面验收；回滚使用独立revert，不删除回执或重发飞行命令。
+
+## Java命令发送连接绑定续轮（2026-10-16）
+
+本轮从干净的Java `d34df8b`、Agent `8c91ec6` 和UI `ff2b91b` 继续，任务卡、运行身份与60分钟/120调用预算维护在Java既有交付文档。TDD先实际复现了旧Consumer仍创建命令、其他自身当前有效manager凭相同ID受理ACK/完成回执，以及无来源journal入口绕过的问题，再补齐原operation、平台引擎和journal之间的传输关联。没有另建Agent循环、会话或执行状态机。
+
+Java现先捕获真实平台manager/client/独立UUID代次，与原员工、资源、请求、原始 `bid/tid/fly_to_id` 和同一份报文一起提交，再仅经捕获客户端发布。旧普通发布入口保持兼容，新tracked入口不会借旧发布机制重连、吞错或换线路重发。回执必须精确匹配这三个持久标识，且继续满足原入站来源、时间、retained、幂等和提交前检查；其他当前有效连接、重连新代次、缺失/部分绑定及大小写差异均被拒绝。旧记录仍可查询和幂等返回，不回填或重发；旧无来源journal签名不能新增受信回执。
+
+连接在reserve前缺失返回 `503 COMMAND_CONNECTION_UNAVAILABLE`，锁等待或提交前失效返回 `409 COMMAND_CONNECTION_CHANGED` 并回滚。真实SQL提交期间或之后失效时，已提交记录保留 `unknown / DISPATCH_OUTCOME_UNKNOWN`，不经替代连接发送。外部publish期间可能已经发送，异常和后置检查不能撤销该发送、证明没有位移或证明恰好执行一次；早到的合法回执仍不能被发布返回覆盖。
+
+仅新增人工增量迁移候选 `doc/sql/2026/20261016-add-flight-command-connection.sql`，三个nullable `VARBINARY(256)` 标识严格ASCII、逐字保存，状态更新不能改绑定。原建表脚本和历史行不改。测试使用真实生产DDL/H2/MyBatis与实际引擎/管理器链，仅替换外部Paho客户端；没有启动业务Application、原永续管理线程或真实MQTT。HTTP converter验证不暴露绑定键、manager/client或连接token。
+
+最终2026-10-16 **20:35:32（Asia/Taipei）** 完整11模块Maven门禁 **165/165**，其中inspection162、visualization3，0失败/错误/跳过；较上轮新增38项。主Agent核对19个本轮JUnit suite、23个源码/测试/DDL运行前后哈希与提交内容，全部一致。定向78/78、各阶段红灯、一次并行编译交叠及迁移测试查询修正均如实保留在[完整证据](evidence/cockpit-mqtt-connection-binding-20261016.json)。Java本地提交 **`5f4ce20710606fde7c2730ee6c6a5b0de27cc743`**；已知GitLab下载/推送拒绝未重试。
+
+Agent与指定UI产品代码未改，保留此前547项、116项及77场景结果，本轮未重测或重做模型评测。缓存/原帧/媒体fixture哈希未变；回执ID仍由真实准备链每次生成，不替换Agent历史冻结样本。原Java主目录与UI目录经本轮重新核对仍干净、HEAD不变。实际副作用只有本地候选、隔离测试、证据和开发分支提交；业务库迁移、真实MQTT、设备、模型调用和共享部署均为0。
+
+平台传输绑定已补齐，员工到DRC会话及设备 `control_source` 的权威关系仍缺证据，不能将本轮标成完整航权绑定。原拒绝原因、距离能力false及tracking默认关闭继续保留。完整普通驾驶舱线上像素/业务对照、同版本MySQL、真实Broker/固件及设备效果仍未验收；整体目标保持进行中。后续验收入口见[验收记录](ACCEPTANCE_NATURAL_LANGUAGE_COCKPIT.md)与[继续工作索引](CONTINUE.md)。回滚独立revert本切片，保留nullable列和日志，不回填旧来源或重发未知命令。
