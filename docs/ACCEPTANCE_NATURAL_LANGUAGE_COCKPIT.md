@@ -4,12 +4,16 @@
 
 | 范围 | 当前代码或证据 | 验收边界 |
 | --- | --- | --- |
-| Agent意图、澄清与确认 | `feature/natural-language-cockpit@4f8412fd0ccd4b513ed5ca5a27a2028622691198`；离线590/590 | 补齐伪造审批/角色文本及未请求取放权门禁，prompt v1.1明确控制权字段语义；非完整语言理解或真实飞行准确率 |
-| 指定前端 | `lingxi-flight-agent-ui@77639f2f335019440b37a14d19a1ca21cef95868`；120项、102个离线浏览器场景；已推送核验 | 追加来源明确的机库/无人机头部与本地切换；设备完整内容、天气及完整线上像素/业务仍未验收 |
+| Agent意图、澄清与确认 | `feature/natural-language-cockpit@e0ef1e744b13fd723b12962ea7414b060df2bcf2`；离线619/619；已推送核验 | 原loop/会话/确认/journal接通独立vendor请求；默认关闭，旧59动作及prompt不变；一次厂商结果不授予持续航权或飞行续接 |
+| 指定前端 | `lingxi-flight-agent-ui@21b9239a0e81e194e771bcacfa408f624d87efdd`；140项、115个离线浏览器场景；已推送核验 | 同助手的typed请求卡和独立手动结果，旧102场景保留，无自动查询/重发/飞行续接；设备详情/天气及完整线上像素/业务未验收 |
 | 服务级模型候选 | 修复前102条：90匹配/6不匹配/6超时；prompt v1.1相同6条定向全部匹配，其余96条missing | 同一真实服务/模拟器预览，0确认/写入；59动作仅指标签覆盖，不是59项模型全对，不作整批A/B或飞行准确率结论 |
-| Java候选 | `feature/flight-agent-platform-snapshot@af034e1b16512a67d96d57ef2f12c7518c98a898`，仅本地提交 | 2026-10-17 00:02:07，11模块231/231；默认关闭HTTP请求/分型查询与真实RestAop代理已验证；无Agent入口、持续航权、MySQL、Broker或设备验收 |
+| Java候选 | `feature/flight-agent-platform-snapshot@e623312c173fd698657a39fa22e4ad98c0630a80`，仅本地提交；生产代码仍为af034e1 | 11模块232/232；本轮仅增真实converter导出测试/13案例/2快照，不改变生产；Agent已接入口，持续航权、MySQL、Broker与设备效果未验证 |
 | Java正式线 | 缓存 `prod=98a8da4bf13f4ba623fb816da1a5cb9b09f8453a` | GitLab下载/推送已拒绝，未重试；不称最新远端prod |
 | 原Java工作树 | `/Users/wangxiaolin/IdeaProjects/ktd_backend`，`feature/geo-video-sync-recompute@858f6deec67d93734242a52845215a4d78736d6d` | 本轮重新核对干净且未改 |
+
+本轮 [typed请求链证据](evidence/cockpit-vendor-request-20261017.json) 覆盖29个新增测试方法和最终619/619；[正式回环HTTP](../artifacts/vendor-control-smoke-20261017-final/report.json) 为46 Agent/51自有假Java HTTP、3vendor POST、6脚本模型决定、8份严格18字段报告，25份source前后稳定。原样Java fixture/56正文hash、10源码/测试提交字节及23当次XML由root独立核对；Maven232/232来自Java worker运行，root没有重复执行。所有工程数字与真实模型/业务/设备验收分开；本轮真实模型、平台/业务写入、MQTT/设备和部署/重启均0。以下保留既往阶段的原始验收快照。
+
+UI独立复核见 [根Agent记录](evidence/cockpit-vendor-ui-20261017.json)：root重跑140项、构建及diff，核对最终115场景JSON、67份source/run/build hash、193份可恢复归档hash、11份indexed提交字节，并目视1920确认、414成功和错method警告三图。最终224夹具API/31夹具确认，0禁止/设备请求/浏览器异常；20新单测、13新浏览器场景，旧102保留。Git只存12份相关文件/2360722字节，其他完整原图可按UI provenance中的 `/tmp/lingxi-vendor-ui-20261017.6TxuXx` 恢复，不称全部截图跨主机持久化。浏览器runner由UI worker运行，root未重复执行。
 
 Agent新增17个测试方法，完整唯一门禁 `bash tools/ci/offline_tests.sh` 564/564，socket守护通过；运动28/28、回执17/17，独立23组合成行为全部通过。对完全明确的运动/转向序列核对下一未完成步骤；每步仍要确认，重复确认/查询不多推进，新方向替换旧锚点，LF/CRLF连续补参不丢方向。混合/未知表达沿用原模型路径，不是完整语言解析器。[顺序证据](evidence/cockpit-ordered-motion-20261016.json)保留真实红绿、源码哈希及边界，未重跑模型评测。
 

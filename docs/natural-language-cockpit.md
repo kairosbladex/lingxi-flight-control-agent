@@ -577,3 +577,13 @@ Java仅新增测试导出和合成证据，本地提交 `e623312c173fd698657a39f
 主Agent正式回环HTTP验收为 [vendor-control-smoke报告](../artifacts/vendor-control-smoke-20261017-final/report.json)：46次Agent HTTP、51次自有Java假服务HTTP、3次vendor POST、6次脚本模型决定、8份严格18字段公开回执，97次连接全部限制在两个自有127.0.0.1端口；25份源码/fixture运行前后hash一致。包含三方法、成功/负int-min失败/unknown、重复确认不重发、默认关闭、显式移动拒绝、取消/重置、身份/严格查询与重启关闭后GET。原始包独立解码阶段不改字节；HTTP阶段仅在明确合成副本重绑本次请求标识，差异逐项保存。这不是在线Java或模型准确率验收。两份开发run原样保留，不覆盖正式报告。
 
 实现文件为 `cockpit.py/ktd_platform.py/vendor_control.py/platform_runtime.py`、启动器、三个测试及smoke；完整命令、9份最终源码hash、红绿与验证分层见 [根Agent证据](evidence/cockpit-vendor-request-20261017.json)。回退关闭独立vendor开关/白名单或独立revert，保留journal及未知请求，不自动重发。UI的最终浏览器冻结另行记录；本切片真实模型、业务库、真实MQTT/平台/设备写入和共享部署/重启均0，持续航权/DRC、MySQL及完整线上UI/业务和设备效果仍未验证。
+
+### 指定前端与Git交付
+
+Agent实现 **`e0ef1e744b13fd723b12962ea7414b060df2bcf2`**、UI **`21b9239a0e81e194e771bcacfa408f624d87efdd`** 均在原语义分支提交推送并核验远端SHA。Java `e623312` 仍只本地；原Java主目录当前HEAD仍 `858f6de`、干净，旧参考前端仍 `b009a80`、原冲突保留。没有MR、合并test、个人GitHub同步或共享部署。
+
+UI使用原助手位置及同一会话/五字段确认取消，按kind显示“确认厂商请求/发送厂商请求”和独立结果区；默认能力不存在，方法不在显式enum、参数夹带对象、错模式/种类/结果码/时刻/版本/trace均拒绝。成功仅“厂商请求成功”，control_owned与遥测不从vendor结果更新，也不显示继续。确认超时保留原命令的手动查询，不重发；新输入/重置/资源模式变化隔离迟到查询。原59项按钮不新增或改义，可信本地拒绝与取消清查询引用。
+
+最终140/140、构建及115浏览器场景通过（102旧+13新），224夹具API/31夹具确认、0禁止请求/真实设备/浏览器错误。root独立重跑单测/构建、核最终source及report/提交字节、目视三图，完整分层记录见 [UI根复核](evidence/cockpit-vendor-ui-20261017.json)；浏览器本次运行来自UI worker，root未重复执行。实际Vue标题先红、核心缺能力发确认先红、终态证据/时刻/expiry追补红绿均记录，未伪造没有拍摄的红灯截图。两次旧构建run仅历史，不替代最终 `frozen/run-h0OQTq`。
+
+Git精确12文件/2360722字节保留5份源/测试/README、最终原始JSON、3关键vendor PNG与红绿/来源/恢复索引。193份其余完整run原图/JSON（120891053字节）已可恢复移至 `/tmp/lingxi-vendor-ui-20261017.6TxuXx`，root逐份复核hash；没有删除、覆盖或宣称它们已全部跨主机持久化。来源索引提供原路径、归档路径与hash。回滚仅revert本次UI提交与关闭vendor配置，历史journal/评测/素材不删除。当前整体仍为可运行离线候选，完整线上UI/业务和真机控制仍有明确未验收项。

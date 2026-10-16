@@ -2,11 +2,15 @@
 
 当前目标是自然语言理解、澄清、确认、指定前端与原Java控制接口的完整流程；整体仍在进行中。
 
-2026-10-17当前进展覆盖下文历史快照：Agent产品 `4f8412f`，唯一离线590/590；服务bench `b7f428c` 冻结102条/59项动作，修复前90匹配/6不匹配/6超时。`76339f6`补齐伪角色/审批与未请求取放权门禁，prompt v1.1只说明真实字段语义，最终同6条定向6/6，其余96条missing，不能推为全量改善。[门禁与定向证据](evidence/cockpit-request-authority-20261017.json)及[原全量报告](evidence/cockpit-service-intents-20261016.json)分开保留，旧v1不变。UI `77639f2`已推送核验，追加原设备头部与本地切换，120项/102浏览器场景；root核对74份文件、截图和提交字节，见[UI证据](evidence/cockpit-device-header-20261017.json)。
+2026-10-17最新Agent产品 **`e0ef1e744b13fd723b12962ea7414b060df2bcf2`** 已推送核验：原loop/session/card/pending/SQLite journal接通独立vendor请求确认链，默认关闭且方法allowlist空；原59动作、prompt v1.1与movement门禁不变。最终唯一离线 **619/619**、socket守护及diff通过；29个新方法覆盖完整服务、默认关闭、错方法/键鼠串用、取消、时效、幂等并发/重启/未知不重发及原Java13案例。正式自有回环HTTP46次Agent/51次假Java、3次vendor POST、6次脚本模型决定、8份严格18字段报告，25份source前后hash稳定，真实平台/模型/设备0。见[完整请求链证据](evidence/cockpit-vendor-request-20261017.json)及[正式smoke](../artifacts/vendor-control-smoke-20261017-final/report.json)。
 
-Java最新本地 `af034e1`：专用 `POST /screen/uav/operation/control/vendor-request`、`GET /lingxi/agent/commands/vendor-receipt` 已离线接入原service/journal，独立HTTP关闭、allowlist空、tracking关闭；确认快照在原事务/发送guard重复核验。真实RestAop代理修复后11模块231/231；8源码与23XML经root逐份核对，未推送、未部署。完整证据位于Java工作树 `docs/evidence/vendor-control-http-20261016.json`；原始日志/旧证据字节由相邻raw-bytes JSON可精确复原。新HTTP仍未接Agent确认容器，不得把control_acquire/release暗改为vendor方法。
+Java最新本地 **`e623312c173fd698657a39fa22e4ad98c0630a80`** 仅追加真实HTTP fixture导出测试/证据，生产仍为 `af034e1`；11模块232/232、10份源码/测试及23份XML由root逐项核对，未重复跑Maven、未重试推送或部署。原样13案例/2快照/56份HTTP正文已复制 [fixture](../fixtures/ktd-vendor-http-v1.json) 和相邻provenance（SHA `c73c7be7…`）。独立POST/分型GET复用原service/journal与鉴权，Agent现已接入确认；所有生产控制默认开关和持续航权/链路未知门禁继续保持。
 
-下一切片优先复用现有会话/确认/幂等容器设计typed vendor请求绑定，保留59项动作、分型回执及默认关闭；继续核验employee/DRC/control_source的来源、版本和失效契约。持续航权、真实Broker/固件、MySQL及设备效果仍缺证据。完整设备详情/天气须先补有来源的只读契约。下文保留之前阶段的具体证据，不代表最新代码仍无专用Java HTTP。
+UI最新 **`21b9239a0e81e194e771bcacfa408f624d87efdd`** 已推送核验、工作区干净：140项/构建及115离线浏览器场景（旧102+新13vendor），224夹具API/31确认、0禁止/设备/浏览器错误。root独立重跑单测/构建、核验最终原始JSON/67份source-run-build hash/11份提交字节和三张vendor图，见[UI复核](evidence/cockpit-vendor-ui-20261017.json)。厂商结果手动独立查询，18字段/七状态/signed32，authority/link未知且无continue；取消和明确零发送拒绝清查询引用。Git保留最终原始JSON、3关键PNG及红绿/来源/恢复索引；193份重复完整run原图可从 `/tmp/lingxi-vendor-ui-20261017.6TxuXx` 按UI provenance逐项恢复，未删除或改写。原模型报告、固定旧UI及原Java工作树保持。
+
+后续可继续核验employee/DRC/control_source的来源、版本及失效契约，以及有来源的设备详情/天气只读投影。当前5秒确认窗只针对一次厂商请求，成功不能解锁movement或恢复飞行意图；持续航权、默认Broker provider、真实固件、MySQL及设备效果仍缺证据。前端typed卡与结果使用原助手位置、确认链及独立手动查询，不新增控制按钮。下文是历史快照，不能将其中“无HTTP/Agent入口”的旧结论当作当前状态。
+
+原服务bench `b7f428c` 的102条/59动作、修复前90匹配/6不匹配/6超时，以及prompt v1.1相同6条定向6/6、其余96条missing全部原样保留；本轮没有重新请求真实模型或改变provider。它们与619工程门禁分开，不推断新模型准确率，见[门禁定向证据](evidence/cockpit-request-authority-20261017.json)和[原全量报告](evidence/cockpit-service-intents-20261016.json)。
 
 从 [当前验收记录](ACCEPTANCE_NATURAL_LANGUAGE_COCKPIT.md) 继续，契约见 [Java接入说明](ktd-platform-contract.md)，历史实现与UI来源见 [交付说明](natural-language-cockpit.md)。Java本地 `0eb831bfefd3fcc40d2a9ab91a3d9102ccf71137` 对应[厂商请求事实链证据](evidence/cockpit-vendor-control-20261016.json)、11模块208/208离线门禁；20源码/22XML/4fixture及schema/console哈希与提交字节已由root核对。不重复获取/推送已被拒绝的Java仓库，不改原Java工作树。
 
