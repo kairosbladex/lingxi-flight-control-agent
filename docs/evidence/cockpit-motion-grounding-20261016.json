@@ -1,0 +1,110 @@
+{
+  "schema_version": "cockpit-motion-grounding-verification/v1",
+  "recorded_at": "2026-10-16T11:04:29.512Z",
+  "run_id": "motion-grounding-offline-20261016-dff8be9",
+  "scope": "Public CockpitService -> real OllamaDecider protocol adapter -> real simulator, with synthetic HTTP model replies only.",
+  "baseline_commit": "ad7f76ae643568b5840909fd75c8c6a67148c215",
+  "implementation_commit": "dff8be9cb376d85c4b9c8a230a6b832d51c644fe",
+  "branch": "feature/natural-language-cockpit",
+  "operator": "local-development-synthetic-actor",
+  "runtime": "Python 3.13.2",
+  "source_sha256": {
+    "src/lingxi_flight_control/cockpit.py": "b24d3124b8e45fdb9b604b06c4d1d4746d723d46df67abeba9b8b0cda20d0be4",
+    "tests/test_cockpit_motion_grounding.py": "c8a5cf123127ae4609f863e40fcd88e18e9e98abc954d421d652db273b93b15b"
+  },
+  "red_green": [
+    {
+      "stage": "initial",
+      "test_methods": 7,
+      "failed_subcases": 15,
+      "failures": "Opposite directions, quantities borrowed from other action clauses, direction lost across parameter followup."
+    },
+    {
+      "stage": "peer_counterexamples",
+      "test_methods": 12,
+      "failures": 5,
+      "errors": 1,
+      "failures_scope": "New unknown-expression and revision false refusals plus pre-existing actor/history/English rate gaps were reproduced before repair."
+    },
+    {
+      "stage": "second_parameter_counterexamples",
+      "test_methods": 14,
+      "failures": 1,
+      "errors": 2,
+      "failures_scope": "Filling a later composite step must preserve the earlier completed parameter; half-unit revision must invalidate the old quantity."
+    },
+    {
+      "stage": "final_targeted",
+      "command": "PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_cockpit_motion_grounding.py' -v",
+      "test_methods": 14,
+      "passed": 14,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "stage": "final_full_offline",
+      "command": "bash tools/ci/offline_tests.sh",
+      "test_methods": 547,
+      "passed": 547,
+      "failures": 0,
+      "errors": 0,
+      "elapsed_seconds": 2.557,
+      "external_socket_guard": "passed"
+    }
+  ],
+  "behavior": [
+    "Clear direction and corresponding quantity are checked together before executor.preview.",
+    "A different action clause, explicit gimbal subject or explicit past-command statement cannot supply the only evidence for body motion.",
+    "Single explicit-motion parameter revisions replace old quantities; multiple-step clarification preserves parameters of already complete steps.",
+    "Correct proposals, unknown motion phrasing, clarification followups and separately confirmed composite steps remain on the existing model/session path.",
+    "English distance-per-second and angular-rate phrases remain speed quantities; attached half units are consumed once."
+  ],
+  "examples": [
+    {
+      "input": "向左飞5米",
+      "synthetic_wrong_proposal": "move_right(distance_m=5)",
+      "result": "clarification_no_card"
+    },
+    {
+      "input": "先向前飞10米，再向左飞5米",
+      "synthetic_wrong_proposal": "move_forward(distance_m=5)",
+      "result": "clarification_no_card"
+    },
+    {
+      "input": "向前飞10米 -> 改为一米半",
+      "synthetic_old_proposal": "move_forward(distance_m=10)",
+      "result": "clarification_no_card"
+    },
+    {
+      "input": "先向前飞10米，再朝机尾方向挪6米 -> confirm first -> 继续",
+      "synthetic_correct_proposal": "move_backward(distance_m=6)",
+      "result": "preview_required"
+    },
+    {
+      "input": "先向前飞10米，再向左飞 -> 5米",
+      "synthetic_correct_first_proposal": "move_forward(distance_m=10)",
+      "result": "preview_required"
+    }
+  ],
+  "review": {
+    "root_read_diff": true,
+    "peer": "/root/cockpit_receipts_finish",
+    "peer_counterexamples_reproduced_as_tests": true,
+    "peer_final_report": "Two initial false refusals and two narrower parameter issues were incorporated into tests and repaired by root."
+  },
+  "limits": [
+    "These are engineering regression test methods, not a business accuracy denominator.",
+    "Literal evidence validation is bounded; unrecognized free-form language still depends on the model, existing gates and human confirmation.",
+    "This guard does not prove universal subject/history understanding or order every repeated same-action step.",
+    "The prior 100-input model report remains immutable and belongs to its recorded source hashes; no new live model evaluation was run.",
+    "Real platform deployment, vendor authority, device execution and absolute flight accuracy remain unverified."
+  ],
+  "effects": {
+    "real_model_requests": 0,
+    "platform_requests": 0,
+    "device_requests": 0,
+    "business_writes": 0,
+    "deployments": 0,
+    "simulator_effects": "Only explicit confirmation cases in offline tests; no real dispatch."
+  }
+}
