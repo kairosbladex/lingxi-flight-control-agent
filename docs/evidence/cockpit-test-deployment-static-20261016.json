@@ -1,0 +1,177 @@
+{
+  "schema_version": "flight-static-deployment-audit/v1",
+  "target": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/",
+  "first_snapshot_recorded_at": "2026-10-16T09:14:02.884Z",
+  "hash_inventory_recorded_at": "2026-10-16T09:21:21.960Z",
+  "scope": "Unauthenticated static GET only; downloaded JavaScript was treated as text and never executed.",
+  "request_method": "GET",
+  "cookie_sent": false,
+  "authorization_sent": false,
+  "redirects_followed": false,
+  "tls_verification_disabled": false,
+  "javascript_executed": false,
+  "login_attempts": 0,
+  "platform_api_requests": 0,
+  "mqtt_connections": 0,
+  "device_requests": 0,
+  "limits": {
+    "files": 20,
+    "total_bytes": 52428800,
+    "minutes": 10
+  },
+  "downloaded_files": 7,
+  "downloaded_bytes": 4537806,
+  "local_source_commit": "35574cba46d498e0992de05504756bccf7014ade",
+  "records": [
+    {
+      "file": "index.html",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/",
+      "reference": "User-authorized entry URL",
+      "http_status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 1981,
+      "sha256": "4237ca66d5b2b7465edc8f1bee5f9b63f2510603c1a49e718394248113ffbc00"
+    },
+    {
+      "file": "index-DPadamzi.js",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/index-DPadamzi.js",
+      "reference": "index.html script[type=module][src]",
+      "http_status": 200,
+      "content_type": "application/javascript; charset=utf-8",
+      "bytes": 2591355,
+      "sha256": "aafb81d91da8c66a2d0e0f407661fe9d21ae575181fdda8d7142b1ac33fb4bb4"
+    },
+    {
+      "file": "index-h5SovXmL.css",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/index-h5SovXmL.css",
+      "reference": "index.html link[rel=stylesheet][href]",
+      "http_status": 200,
+      "content_type": "text/css",
+      "bytes": 1215176,
+      "sha256": "3c439f3ab665a80e361c168434464ca024c1711ab5e99f198469545c4ff24b7b"
+    },
+    {
+      "file": "index-CO_tJEWL.js",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/index-CO_tJEWL.js",
+      "reference": "index-DPadamzi.js hangar route dynamic import; UTF-16 character offset 246857",
+      "http_status": 200,
+      "content_type": "application/javascript; charset=utf-8",
+      "bytes": 100886,
+      "sha256": "d5788f8b43ac3050266d0931d8fdd3d8ced0293afea99b80517127251ab4336f"
+    },
+    {
+      "file": "map-BkhFnS-f.js",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/map-BkhFnS-f.js",
+      "reference": "index-DPadamzi.js literal dynamic import ./map-BkhFnS-f.js",
+      "http_status": 200,
+      "content_type": "application/javascript; charset=utf-8",
+      "bytes": 514559,
+      "sha256": "ac3e5f2537f426b27cbd3e09a7d3d9f7ebe4ad4282a6b673894ff010f77a919a"
+    },
+    {
+      "file": "index-kKXzDv0G.css",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/index-kKXzDv0G.css",
+      "reference": "index-DPadamzi.js hangar route __vite__mapDeps index 194; array parsed as JSON, not executed",
+      "http_status": 200,
+      "content_type": "text/css",
+      "bytes": 111559,
+      "sha256": "7ab2cd77262406ae955bd4a53de84438386746b928f47fc1bcf2e89c86211c12"
+    },
+    {
+      "file": "hangar-BDpoe6IY.js",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/hangar-BDpoe6IY.js",
+      "reference": "index-CO_tJEWL.js and map-BkhFnS-f.js literal static imports ./hangar-BDpoe6IY.js",
+      "http_status": 200,
+      "content_type": "application/javascript; charset=utf-8",
+      "bytes": 2290,
+      "sha256": "a36356014fe64f6205dbcf944079e6239644dfb5fce74534198d9d24d4e3cc46"
+    }
+  ],
+  "findings": {
+    "hangar_route_present": true,
+    "initially_inspected_hybrid_components": [
+      "HybridControlCenter",
+      "HybridControlCenterSimple"
+    ],
+    "subsequently_verified_ordinary_components": [
+      "ControlCenterView",
+      "ControlCenterSimpleView"
+    ],
+    "branch_selection": {
+      "condition": "siteData.uavType === HybridWing || siteData.uavTypeName?.includes('复合翼')",
+      "true_branch": "Hybrid controls",
+      "false_branch": "Ordinary controls from maintenanceRecord-D7yDEbKp.js",
+      "predicate_utf16_offset": 79362,
+      "parent_render_utf16_offset": 95256,
+      "ordinary_module_sha256": "910e306d176c350fa033e63f730e1b8ca6140d327f8d91fe3a30ae9c85d39e3b",
+      "actual_site_type_verified": false,
+      "followup_evidence": "cockpit-test-components-20261016.provenance.json"
+    },
+    "deployed_component_character_offsets": {
+      "HybridControlCenter": 18909,
+      "HybridControlCenterSimple": 29875,
+      "controlCenter": 39792
+    },
+    "fixed_mainline_control_components": [
+      "ControlCenterView",
+      "ControlCenterSimpleView"
+    ],
+    "fixed_mainline_reference": "src/views/hangar/components/controlCenter.vue:115-131",
+    "hybrid_components_found_in_fixed_mainline_tree": false,
+    "hybrid_control_labels_only": [
+      "飞行速度 (m/s)",
+      "自定义飞行速度 (19~23m/s)",
+      "一键返航",
+      "取消返航",
+      "一键备降",
+      "取消备降",
+      "跳转航点",
+      "恢复航线",
+      "指点环绕",
+      "目标锁定",
+      "拍照",
+      "开始录像",
+      "结束录像"
+    ],
+    "hybrid_simple_labels": [
+      "无人机操作",
+      "遥测数据",
+      "飞行高度",
+      "飞行航向",
+      "云台角度",
+      "载荷操作"
+    ],
+    "deployed_mode_labels": [
+      "简控模式",
+      "专业模式"
+    ],
+    "hybrid_css_layout": {
+      "selector": ".hybrid-control-center[data-v-137a450e]",
+      "position": "absolute",
+      "left": "50%",
+      "bottom": ".20833rem",
+      "width": "6.25rem",
+      "height": "1.125rem",
+      "display": "flex",
+      "action_grid_columns": "repeat(3,.52083rem)",
+      "action_grid_rows": "repeat(2,.14583rem)"
+    },
+    "static_api_module_contains": [
+      "uavSite/startVideo",
+      "uav-info/startVideo",
+      "/screen/"
+    ],
+    "static_api_module_executed": false,
+    "historical_20261012_entry_bundle": "index-CCBIyw3M.js",
+    "current_entry_bundle": "index-DPadamzi.js"
+  },
+  "not_verified": [
+    "Complete deployed Git commit and complete build provenance",
+    "Actual site's uavType/uavTypeName and selected control branch; the code predicate itself is verified in the follow-up",
+    "Rendered page layout, pixels, viewport behavior and permissions",
+    "Actual telemetry, video streams, device capability or device effects",
+    "Authentication validity and current business context",
+    "Full semantic equivalence between minified deployment and fixed local source"
+  ],
+  "conclusion": "Current deployment contains conditional Hybrid and ordinary control branches. Hybrid controls are selected only for a composite-wing site and do not prove a DJI/PZ UI replacement. The initial seven-file static acquisition is preserved here; the follow-up manifest records eighteen files and isolated Hybrid rendering. Ordinary rendered equality and current device capability remain unverified."
+}

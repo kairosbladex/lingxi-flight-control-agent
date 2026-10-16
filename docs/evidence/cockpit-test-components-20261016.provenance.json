@@ -1,0 +1,236 @@
+{
+  "schema_version": "deployed-cockpit-isolated-visual/v1",
+  "branch_scope_correction": {
+    "existing_screenshots_scope": "Hybrid / composite-wing branch only; not the generic DJI/PZ control console",
+    "selector_file": "index-CO_tJEWL.js",
+    "offset_units": "zero-based UTF-16 character offsets in the original downloaded source",
+    "predicate_offset": 79362,
+    "predicate": "siteData.uavType === Mt.HybridWing || siteData.uavTypeName?.includes('复合翼')",
+    "parent_render_offset": 95256,
+    "parent_render": "q(ct(y.value ? il : Do), {is-hangeruav:true, sitedata:e.siteData, device-type:5, model-type:De.value, current-task-id:i.value, ...})",
+    "site_data_source": "GET /screen/site/{siteId}; response.data assigned to e.siteData at offset 82608. No request was issued by this audit.",
+    "hybrid_branch": "il selects ai (HybridControlCenter) or sl (HybridControlCenterSimple) only by the UI mode at offset 42783",
+    "ordinary_branch": "Do is export C from maintenanceRecord-D7yDEbKp.js, local Gh = scoped Fy. Fy selects Yf (ControlCenterView) or Vy (ControlCenterSimpleView) by UI mode at offset 323359.",
+    "speed_scope": "19/20/23 presets and 19..23 clamp are local Hybrid helper constants, not universal device props",
+    "speed_offsets": {
+      "presets": 14211,
+      "minimum": 14402,
+      "maximum": 14408,
+      "default": 14414,
+      "clamp": 14420,
+      "state_default": 40536
+    },
+    "can_move_prop": "Hybrid canMoveControl comes from M: terminal ID and task ID present, uavActived, controlPower, and uavState not in [0,10,11,14,-1]. It is not a device speed capability declaration.",
+    "dji_pz_relation": "Current Agent Java contract is bounded 0.01..20m relative displacement for explicitly allowed DJI_HANGAR/PZ_HANGAR profiles. The Hybrid speed range, diversion, and other controls must not be copied into that contract. Actual site type remains unverified.",
+    "hybrid_enum_numeric_value": "not inspected; constants module was not downloaded"
+  },
+  "hybridRenderCompletedAt": "2026-10-16T09:45:09.052Z",
+  "ordinaryStaticEvidenceRecordedAt": "2026-10-16T10:02:17.944Z",
+  "archival_adjustments": "Original completedAt refers to Hybrid rendering; named accordingly after the later ordinary CSS acquisition. Original temporary paths are retained, with archived sibling references added.",
+  "downloadedFiles": 18,
+  "newDependencies": 11,
+  "totalBytes": 7074101,
+  "records": [
+    {
+      "file": "index.html",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/",
+      "reference": "User-authorized entry URL",
+      "http_status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 1981,
+      "sha256": "4237ca66d5b2b7465edc8f1bee5f9b63f2510603c1a49e718394248113ffbc00"
+    },
+    {
+      "file": "index-DPadamzi.js",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/index-DPadamzi.js",
+      "reference": "index.html script[type=module][src]",
+      "http_status": 200,
+      "content_type": "application/javascript; charset=utf-8",
+      "bytes": 2591355,
+      "sha256": "aafb81d91da8c66a2d0e0f407661fe9d21ae575181fdda8d7142b1ac33fb4bb4"
+    },
+    {
+      "file": "index-h5SovXmL.css",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/index-h5SovXmL.css",
+      "reference": "index.html link[rel=stylesheet][href]",
+      "http_status": 200,
+      "content_type": "text/css",
+      "bytes": 1215176,
+      "sha256": "3c439f3ab665a80e361c168434464ca024c1711ab5e99f198469545c4ff24b7b"
+    },
+    {
+      "file": "index-CO_tJEWL.js",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/index-CO_tJEWL.js",
+      "reference": "index-DPadamzi.js hangar route dynamic import; UTF-16 character offset 246857",
+      "http_status": 200,
+      "content_type": "application/javascript; charset=utf-8",
+      "bytes": 100886,
+      "sha256": "d5788f8b43ac3050266d0931d8fdd3d8ced0293afea99b80517127251ab4336f"
+    },
+    {
+      "file": "map-BkhFnS-f.js",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/map-BkhFnS-f.js",
+      "reference": "index-DPadamzi.js literal dynamic import ./map-BkhFnS-f.js",
+      "http_status": 200,
+      "content_type": "application/javascript; charset=utf-8",
+      "bytes": 514559,
+      "sha256": "ac3e5f2537f426b27cbd3e09a7d3d9f7ebe4ad4282a6b673894ff010f77a919a"
+    },
+    {
+      "file": "index-kKXzDv0G.css",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/index-kKXzDv0G.css",
+      "reference": "index-DPadamzi.js hangar route __vite__mapDeps index 194; array parsed as JSON, not executed",
+      "http_status": 200,
+      "content_type": "text/css",
+      "bytes": 111559,
+      "sha256": "7ab2cd77262406ae955bd4a53de84438386746b928f47fc1bcf2e89c86211c12"
+    },
+    {
+      "file": "hangar-BDpoe6IY.js",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/hangar-BDpoe6IY.js",
+      "reference": "index-CO_tJEWL.js and map-BkhFnS-f.js literal static imports ./hangar-BDpoe6IY.js",
+      "http_status": 200,
+      "content_type": "application/javascript; charset=utf-8",
+      "bytes": 2290,
+      "sha256": "a36356014fe64f6205dbcf944079e6239644dfb5fce74534198d9d24d4e3cc46"
+    },
+    {
+      "file": "vue-vendor-BAIqUb6N.js",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/vue-vendor-BAIqUb6N.js",
+      "http_status": 200,
+      "bytes": 142734,
+      "sha256": "3e9d439a313275c874f4b8cc02337bd0171eda8d9e5ac44a87e39f17775dc79c"
+    },
+    {
+      "file": "ui-vendor-DqG_w2kj.js",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/ui-vendor-DqG_w2kj.js",
+      "http_status": 200,
+      "bytes": 1054650,
+      "sha256": "f5457ae5441ff0bec9759914b199d44e382c723516cdf01945188cf7e6ae775a"
+    },
+    {
+      "file": "maintenanceRecord-D7yDEbKp.js",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/maintenanceRecord-D7yDEbKp.js",
+      "http_status": 200,
+      "bytes": 381010,
+      "sha256": "910e306d176c350fa033e63f730e1b8ca6140d327f8d91fe3a30ae9c85d39e3b"
+    },
+    {
+      "file": "face-r2GhDcYK.js",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/face-r2GhDcYK.js",
+      "http_status": 200,
+      "bytes": 1693,
+      "sha256": "e38311f162d58566786bf3279be367d2e3da9db1285380eaea4f91fb94b3a056"
+    },
+    {
+      "file": "TipTitle-DDaik21W.js",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/TipTitle-DDaik21W.js",
+      "http_status": 200,
+      "bytes": 410,
+      "sha256": "bb05c66979a97fd02d26f69d1218372086205260f885fd1a205d33dcb228a106"
+    },
+    {
+      "file": "tstate10-CN2JWYGl.js",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/tstate10-CN2JWYGl.js",
+      "http_status": 200,
+      "bytes": 12037,
+      "sha256": "1b1155a4be4ca6f0e60a78da1651f2732ea594eba3b6e40067625bd380e908a7"
+    },
+    {
+      "file": "br5-DQxvqjk7.js",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/br5-DQxvqjk7.js",
+      "http_status": 200,
+      "bytes": 5001,
+      "sha256": "5549d0a57f545617843dbe67c75e2a8cc54f3e469e7f1b4253b4e15968cbba8e"
+    },
+    {
+      "file": "TipTitle-BPd_ueav.css",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/TipTitle-BPd_ueav.css",
+      "http_status": 200,
+      "bytes": 344,
+      "sha256": "8bc9478495146f7d127e91b110c1bf4ed4e59a9f2652d0f4abb228e1601b0cec"
+    },
+    {
+      "file": "task_15-jvO0Y_Ar.js",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/task_15-jvO0Y_Ar.js",
+      "http_status": 200,
+      "bytes": 497,
+      "sha256": "f5b2ad2cc9733b159de15f44075cfd3da321166c14c98c66ae599108874c8ab6"
+    },
+    {
+      "file": "Alibaba-PuHuiTi-Regular-subset-DoIwNFbl.ttf",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/Alibaba-PuHuiTi-Regular-subset-DoIwNFbl.ttf",
+      "http_status": 200,
+      "bytes": 532496,
+      "sha256": "705e2a67f12b617b5c8f9f745933f867545f691c14afed5335fb29e633b69fcf"
+    },
+    {
+      "file": "maintenanceRecord-qT1pJ4yi.css",
+      "url": "https://lxtest.zhuoyilingxi.com:8088/AFMAP/assets/maintenanceRecord-qT1pJ4yi.css",
+      "reference": "Entry bundle hangar route __vite__mapDeps[157]",
+      "http_status": 200,
+      "bytes": 405423,
+      "sha256": "b40022ede6d887c16b4f80db90c4b37999d3e5bc4bd0033e2a24ab8533b24670"
+    }
+  ],
+  "sourceDeclarationsExact": true,
+  "extractedComponents": [
+    "HybridControlCenter",
+    "HybridControlCenterSimple"
+  ],
+  "screenshots": [
+    {
+      "file": "/tmp/flight-static-audit.zkzwIi/deployed-professional-synthetic.png",
+      "archivedFile": "cockpit-test-hybrid-professional-synthetic-20261016.png",
+      "sha256": "e14d51014d9b2b2df38354052a56f372a3e2377992d5224a9d728befdb21d00e",
+      "bounds": {
+        "x": 360,
+        "y": 824.015625,
+        "width": 1200,
+        "height": 216
+      },
+      "images": 8,
+      "missingImages": 0,
+      "branch": "hybrid_composite_wing_only"
+    },
+    {
+      "file": "/tmp/flight-static-audit.zkzwIi/deployed-simple-synthetic.png",
+      "archivedFile": "cockpit-test-hybrid-simple-synthetic-20261016.png",
+      "sha256": "65810a3e5af8657d29aa5dd8d1a150aa3af79699e7b73c16d8539bd6604fc6cc",
+      "bounds": {
+        "x": 825,
+        "y": 813,
+        "width": 1085.015625,
+        "height": 224
+      },
+      "images": 13,
+      "missingImages": 0,
+      "branch": "hybrid_composite_wing_only"
+    }
+  ],
+  "network": {
+    "localStaticRequests": 16,
+    "appDeniedRequests": 0,
+    "backgroundProxyRejections": 13,
+    "platformApiRequests": 0,
+    "deviceRequests": 0,
+    "controlEvents": 0
+  },
+  "originalRootFontRule": "entry bundle sets documentElement.clientWidth / 10; fixture is 1920px wide and uses 192px rem",
+  "adaptations": [
+    "Only original control component declarations and their required dependencies are executed; the business controller/route is excluded.",
+    "Fixture wrapper resets unrelated global #app padding/max-width and provides a dark backdrop plus explanatory banner.",
+    "Ten Chinese translation strings are copied from the current entry bundle; the locale service is omitted.",
+    "Original Pinia trail store is populated only by synthetic $patch; enabled props are synthetic true flags.",
+    "dialogDrag directive is inert; controls are not clicked."
+  ],
+  "limitations": [
+    "Not a screenshot of the complete live cockpit.",
+    "No current device type, real telemetry, permissions, video or map context.",
+    "Synthetic enabled state does not establish actual device capability."
+  ],
+  "sourceProof": "extraction.json records UTF-16 declaration offsets in original downloaded modules; every selected declaration was checked byte-for-byte as a JavaScript string slice.",
+  "visualEvidence": "cockpit-test-hybrid-render-20261016.json",
+  "ordinaryBranchEvidence": "cockpit-test-ordinary-static-20261016.json",
+  "ordinaryBranchScreenshots": "not_available"
+}

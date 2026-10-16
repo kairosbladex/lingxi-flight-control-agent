@@ -1,0 +1,163 @@
+{
+  "schema_version": "ordinary-control-static-evidence/v1",
+  "recordedAt": "2026-10-16T10:02:17.944Z",
+  "source": "maintenanceRecord-D7yDEbKp.js",
+  "sourceSha256": "910e306d176c350fa033e63f730e1b8ca6140d327f8d91fe3a30ae9c85d39e3b",
+  "css": {
+    "file": "maintenanceRecord-qT1pJ4yi.css",
+    "bytes": 405423,
+    "sha256": "b40022ede6d887c16b4f80db90c4b37999d3e5bc4bd0033e2a24ab8533b24670"
+  },
+  "components": {
+    "professional": {
+      "name": "ControlCenterView",
+      "definitionOffset": 263767,
+      "scopedWrapperOffset": 291257,
+      "scope": "data-v-577e60b3",
+      "rootClass": "control-center",
+      "expandedClass": "expand-control"
+    },
+    "simple": {
+      "name": "ControlCenterSimpleView",
+      "definitionOffset": 294680,
+      "scopedWrapperOffset": 317104,
+      "scope": "data-v-7b149345",
+      "rootClass": "control-center-simple-view"
+    }
+  },
+  "wrapper": {
+    "definitionOffset": 322943,
+    "exportedWrapperOffset": 354785,
+    "modeSelectionOffset": 323359,
+    "selection": "v.value == 0 ? Yf : Vy",
+    "initialState": {
+      "expandFlag": true,
+      "bottomTab": "console",
+      "operateType": 1,
+      "controlType": 1,
+      "moveValue": 10,
+      "heightValue": 2,
+      "radiusValue": 5,
+      "moveSpeed": 10,
+      "heightSpeed": 2,
+      "radiusSpeed": 10,
+      "C300": false,
+      "UATAIR": false,
+      "mixedWing": false
+    }
+  },
+  "geometry": [
+    {
+      "selector": ".control-center .expand-control[data-v-577e60b3]",
+      "geometry": [
+        "position:absolute",
+        "left:1.875rem",
+        "bottom:.20833rem",
+        "width:6.25rem",
+        "height:1.125rem",
+        "padding:.04167rem",
+        "display:-webkit-box",
+        "display:-webkit-flex",
+        "display:-ms-flexbox",
+        "display:flex"
+      ]
+    },
+    {
+      "selector": ".control-center .expand-control[data-v-577e60b3] .mouse-operation-content",
+      "geometry": [
+        "padding:.04167rem 0"
+      ]
+    },
+    {
+      "selector": ".control-center .expand-control[data-v-577e60b3] .mouse-operation-content .mouse-operation-title",
+      "geometry": [
+        "margin-bottom:.0625rem",
+        "padding-bottom:.04167rem"
+      ]
+    },
+    {
+      "selector": ".control-center .expand-control[data-v-577e60b3] .mouse-operation-content .operation-item",
+      "geometry": [
+        "display:-webkit-box",
+        "display:-webkit-flex",
+        "display:-ms-flexbox",
+        "display:flex",
+        "margin-bottom:.10417rem",
+        "padding:0 .05208rem"
+      ]
+    },
+    {
+      "selector": ".control-center-simple-view[data-v-7b149345]",
+      "geometry": [
+        "position:absolute",
+        "display:-webkit-box",
+        "display:-webkit-flex",
+        "display:-ms-flexbox",
+        "display:flex",
+        "gap:.04167rem",
+        "height:1.16667rem",
+        "bottom:.22396rem",
+        "left:4.29688rem",
+        "right:.05208rem"
+      ]
+    },
+    {
+      "selector": ".control-center-simple-view .simple-item[data-v-7b149345]",
+      "geometry": [
+        "height:1.16667rem"
+      ]
+    },
+    {
+      "selector": ".control-center-simple-view .simple-item.wrj[data-v-7b149345]",
+      "geometry": [
+        "width:1.72917rem"
+      ]
+    },
+    {
+      "selector": ".control-center-simple-view .simple-item.yc[data-v-7b149345]",
+      "geometry": [
+        "width:1.63021rem"
+      ]
+    },
+    {
+      "selector": ".control-center-simple-view .simple-item.zh[data-v-7b149345]",
+      "geometry": [
+        "width:2.18229rem"
+      ]
+    }
+  ],
+  "ordinaryRenderExecuted": false,
+  "ordinaryScreenshots": [],
+  "blockedReason": "Even professional-only extraction exceeds 500 dependency bindings and has at least nine missing static modules, including MQTT, script library and audio; no ordinary component/business dependency closure was executed.",
+  "missingModules": [
+    "utils-D4tiueul.js",
+    "mp3-engine-DQEw1B6u.js",
+    "AnyangcityUAVflightcenter-BxVnf8Af.js",
+    "library-CgdsXqOv.js",
+    "scriptLibraryDialog-CgX9Z4qN.js",
+    "player-play-CyoFMzQp.js",
+    "charts-DLih_IcT.js",
+    "mqtt-CYqZ8-96.js",
+    "br9-ze6oMye8.js"
+  ],
+  "remainingStaticFileAllowance": 2,
+  "requiresFurtherIsolation": "Separate active presentational subtree from dormant audio/script/rocker dialogs using source-backed contracts, then audit the reduced closure before execution. Do not silently stub visible components or reuse Hybrid screenshots.",
+  "fixedMainlineComparison": {
+    "sourceCommit": "35574cba46d498e0992de05504756bccf7014ade",
+    "sameStructuralNames": [
+      "ControlCenterView",
+      "ControlCenterSimpleView",
+      "control-center",
+      "expand-control",
+      "control-center-simple-view"
+    ],
+    "sameVisibleSections": [
+      "控制台",
+      "无人机操作",
+      "遥测数据",
+      "载荷操作"
+    ],
+    "completeSourceOrPixelEquality": "not_verified"
+  },
+  "deviceContract": "Neither UI default controlType nor enabled props authorize DJI/PZ actions. Agent remains bounded by authoritative capabilities and its distance-based contract."
+}

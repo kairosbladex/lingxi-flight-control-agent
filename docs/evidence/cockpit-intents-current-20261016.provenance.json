@@ -1,0 +1,155 @@
+{
+  "schema_version": "flight-intent-evaluation-provenance/v1",
+  "report": "cockpit-intents-current-20261016.json",
+  "report_sha256": "0bace2db0a8076c2f2515b730f6ec0cf214e187f82615da7b4360b6d649c34b4",
+  "report_bytes": 84521,
+  "run_id": "ca56095f-8ed7-4a53-9222-d9074f3e5a17",
+  "code": {
+    "base_commit": "c807bf2dc8d635ab21bccd98948327c09a62808b",
+    "branch": "feature/natural-language-cockpit",
+    "dirty_worktree": true,
+    "source_sha256": {
+      "tools/bench/cockpit_intents.py": "298a8a51a882da9efb30f50873cba58ed59b2b57edd3ac8d967f0b63013ffe23",
+      "src/lingxi_flight_control/cockpit.py": "949d15bcb6692d02c4f7cecb72097eebd56ff3d3f906323f6343c030745f9eb5",
+      "src/lingxi_flight_control/agent.py": "c83c30c2efd4ec546298dddae779d52d0eb6ae6c3f4d819ddcd197041a3a672b",
+      "src/lingxi_flight_control/full_control.py": "d844dd9da7ede6615fdaf28c89b594f98c71476e7fbe9f81ec50078aabf34360",
+      "src/lingxi_flight_control/models.py": "e10c3de393d93743ed60bb695a52c2b6a1f8357bb0ce302e77532043ea9392ba",
+      "src/lingxi_flight_control/executor.py": "2c9d96df7ffb58a5f7cf280469888fb47465cef63509bc7cc23b3486bb990f7e",
+      "src/lingxi_flight_control/ollama_decider.py": "4835e20296b476d60e9867ff328919049b8a131ccb8dc6148082750cada6351f"
+    },
+    "source_changed_during_run": false
+  },
+  "model_identity_before": {
+    "observed_at": "2026-10-16T09:32:44.450Z",
+    "name": "qwen3.5:9b",
+    "digest": "6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7",
+    "size": 6594474711,
+    "quantization": "Q4_K_M"
+  },
+  "model_identity_after": {
+    "observed_at": "2026-10-16T09:58:23.790Z",
+    "name": "qwen3.5:9b",
+    "digest": "6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7",
+    "size": 6594474711,
+    "quantization": "Q4_K_M"
+  },
+  "identity_limit": "Identical /api/tags digests before and after, not a continuous per-request attestation.",
+  "frozen_inputs": {
+    "fixture_sha256": "355395aa8c3e367afcca06080ae06caa7fa9277d2d68b5ecde47f5d06725a7cd",
+    "inputs_sha256": "ed771a519d99e5af11d881f6189e4f5c22e8e1dfca69f92249433808aa9cdbe2",
+    "labels_sha256": "e27a979d471489dd48535c9f50940967d44cf82f185cdf7aaaae2245284a72c1",
+    "context_sha256": "91670a74d8db54c6756f0e6549609918a950408f56cd6ebb070566e9e8f7b909",
+    "prompt_sha256": "ecdcc2bca38b762dcda44ba49e074c534757a4bf5623417a09eb94bd81035564",
+    "tool_schema_sha256": "395be055f367ee1fa3d6d64b70836896813f0aa1f382fe8e3c182b6c9f18ae21",
+    "original_labels_changed": false
+  },
+  "result_scope": "Synthetic contract match of bounded model proposals before CockpitService policy; no independent business or flight truth.",
+  "summary": {
+    "denominator": 100,
+    "correct": 83,
+    "incorrect": 8,
+    "uncertain": 0,
+    "missing": 0,
+    "timeout": 9,
+    "error": 0,
+    "coverage": 1,
+    "comparable": 91,
+    "contract_match_rate": 0.83,
+    "unsafe_action_proposals": 1,
+    "unsafe_mutating_action_proposals": 1,
+    "unexpected_read_only_action_proposals": 0,
+    "conservative_non_action_mismatches": 6,
+    "latency_ms": {
+      "p50": 7054.054,
+      "p95": 30004.967
+    }
+  },
+  "known_mismatches": {
+    "service_blocked_model_guess": {
+      "id": "missing_07",
+      "input": "往前挪个十来米",
+      "proposal": {
+        "action": "move_forward",
+        "distance_m": 10
+      },
+      "score": "incorrect",
+      "service_policy": "clarification before model call via 来米 input guard",
+      "confirmation_card": false
+    },
+    "context_label_conflict": {
+      "id": "route_06",
+      "default_route_status": "paused",
+      "expected_action": "execute_route",
+      "observed_action": "route_resume",
+      "score_retained": "incorrect",
+      "labels_changed": false
+    },
+    "conservative_no_action_kind_mismatches": [
+      "negation_01",
+      "negation_02",
+      "negation_03",
+      "negation_04",
+      "conditional_02",
+      "inquiry_02"
+    ]
+  },
+  "comparison_limit": "Not controlled A/B: source differs and total budget increased from 900 to 1800 seconds. Historical report and all 100 original labels retained.",
+  "usage": {
+    "model_calls": 104,
+    "reserved_token_upper_estimate": 1036733,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "known_prompt_tokens": 354619,
+    "known_output_tokens": 12731,
+    "token_usage_complete": false,
+    "cost": null,
+    "cost_status": "not_provided_by_local_provider",
+    "mutating_tool_calls": 0,
+    "platform_calls": 0,
+    "confirmations": 0
+  },
+  "browser_followup": {
+    "evidence": "cockpit-ui-current-model-20261016.json",
+    "ui_commit": "b3a29d877a20d7b12f57eaa86eb6a3f4463268bf",
+    "execution_mode": "simulator",
+    "api_origin": "http://127.0.0.1:52405",
+    "natural_language_messages": [
+      "申请控制权",
+      "向前飞",
+      "10米",
+      "拍照"
+    ],
+    "model_requests_exact": null,
+    "model_requests_upper_bound": 12,
+    "model_request_bound_basis": "4 submitted messages, max_model_steps=3, Ollama max_attempts=1; no model call for confirm/cancel/read/reset.",
+    "api_requests": 10,
+    "simulator_confirmations": 2,
+    "platform_requests": 0,
+    "device_requests": 0,
+    "forbidden_requests": 0,
+    "browser_errors": [],
+    "confirmation_screenshot": "cockpit-ui-current-model-confirmation-20261016.png",
+    "confirmation_screenshot_sha256": "1bc77a4a1aee0925c5f12be3bdda7b1055fd52948727f6337dcb99beddd231c2",
+    "independent_final_read": {
+      "trace_id": "10014d9cfcfe487b951d105abc13db85",
+      "longitude": 113.00009769270969,
+      "latitude": 22.999999999970047,
+      "altitude_m": 50,
+      "heading_deg": 90,
+      "control_owned": true,
+      "last_action": "move_forward",
+      "photo_count": 0,
+      "revision": 2,
+      "dispatched": false,
+      "device_effect": "not_verified"
+    },
+    "self_created_server_stopped": true,
+    "limitations": [
+      "Only the narrow clarification, confirmation, refresh, cancel and reset flow was run.",
+      "Actual model request count and token usage were not instrumented in this browser script.",
+      "UI coverage, actual media decoding and all offline fixtures were not rerun because product UI was unchanged."
+    ]
+  },
+  "total_new_model_requests_upper_bound": 116,
+  "device_accuracy": "not_evaluable"
+}

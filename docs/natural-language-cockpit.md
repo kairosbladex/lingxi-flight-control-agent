@@ -286,3 +286,58 @@ TDD先复现再修复同格式多来源被拒、长期有效期未设停止计�
 前端提交`b3a29d877a20d7b12f57eaa86eb6a3f4463268bf`已推送并核验SHA；Java提交`57c96a5ca9f117c0668c8ad6ae2fb7fb8a3d8bcb`仅本地保留，不重复尝试已被拒绝的push。Agent提交以本分支最终Git记录为准。允许的副作用仅本地开发/合成数据/回环测试与已有授权的开发分支推送；共享部署、真实平台/媒体调用、设备动作和业务数据库写入为0。没有个人GitHub同步映射。
 
 原目标仍缺测试环境当前版本的实际对照、真实媒体服务鉴权/CORS/编解码与有效期证据，以及厂商航权/持续链路/隔离设备的执行验收。真实飞行与绝对精度保持`not_evaluable`。关闭媒体来源白名单可停止返回新播放候选，已打开浏览器需停止/刷新；撤回本切片提交可恢复旧展示路径，无新增数据库迁移，不能删除前轮命令journal或把未知命令自动重发。
+
+## 意图澄清与控制链路缺陷任务卡（2026-10-16）
+
+目标为修复真实请求链中的补参状态丢失、明确动作与否定约束混淆、等待口令漏识别，以及已定位的Java DRC主题/心跳缺陷。验收穿过真实Ollama协议解析、Cockpit会话/确认和既有Java消息逻辑，外部模型/发布边界使用合成输入；评测保留原100条输入与标签，分开统计只读提议、危险写提议、模型超时与总预算截断，不将旧报告当作当前闭环结果。
+
+基线为Agent `c807bf2`、UI `b3a29d8`、Java `57c96a5`，开发目录均干净，沿用语义分支和固定配置。输入为现有100条冻结集、实际源码、独立新增回归输入及测试平台公开静态资源；输出为局部修复、测试和证据。模式为本地候选，运行身份为本机开发和合成评测操作者。root预算60分钟/120次开发调用；若执行新模型候选评测，仅使用原Ollama、合成输入、最多160请求/1800秒/200万预留token，费用由本地provider未提供时记录未知。协作单元各自限定预算，互不改写同一代码文件。
+
+允许本地代码、测试产物、临时静态文件与开发分支提交推送；测试环境仅请求不带凭据的首页及明确静态依赖，不执行其脚本或进入会启流的机库页面。不启动Java业务应用，不连接真实MQTT/业务库，不开启控制或修改能力为true，不部署、不改原评测标签。真实设备、共享发布、带业务副作用的界面验收仍需明确隔离范围及授权。本轮继续使用TDD；先以实际失败建立回归，再实现和冻结验证。
+
+### 原评测记录的口径复核
+
+旧80匹配/7不匹配/13超时保留原样；其中4个否定输入的标签要求`no_action`，原prompt却要求“先澄清”，不能将其全部解释为模型执行误判。`missing_07`把“十来米”补猜成10，确有模型错误，但当前服务门禁已拦截该输入。`conditional_01`只有`read_state`，旧`unsafe_action_proposals`把只读提议和写提议混计；新报告保留此历史计数，另增`unsafe_mutating_action_proposals`和`unexpected_read_only_action_proposals`，不静默改旧分母或结论。
+
+原冻结集`route_06`要求“执行已经上传的航线”，却继承`route_status=paused`且无独立override；`execute_route`要求uploaded，`route_resume`要求paused。这是输入与状态契约冲突。样本、期望和旧不匹配结果均保留，不把更换标签算改进；后续版本须分别提供uploaded启动、paused恢复和状态冲突澄清的独立输入。
+
+旧`limits_05`的14.128秒中断发生在900秒总预算结束处，不能继续只归为模型请求超时。新脚本在总预算到期时将已尝试样本记为`uncertain/run_budget_exhausted`；单请求超时仍为`timeout/model_timeout`，剩余未尝试样本仍为missing。另12条约30秒的超时缺少加载、排队和生成分项，不能断言换模型或关闭思考就能解决。
+
+### 当前测试部署的静态版本核验
+
+从本地配置与历史验收记录定位原平台为`https://lxtest.zhuoyilingxi.com:8088/AFMAP/`，与独立旧预览部署`http://192.168.110.17/flight-agent-ui/`区分。2026-10-16仅GET首页及6个明确引用的同源JS/CSS，共4,537,806字节；无Cookie/Authorization、不跟随重定向、不关闭TLS校验、不执行脚本、不登录、不访问业务API、MQTT或设备。根Agent核对了全部文件SHA256，见 [静态版本证据](evidence/cockpit-test-deployment-static-20261016.json)；原始bundle只保留临时目录，没有纳入本仓源码。
+
+当前入口`index-DPadamzi.js`将hangar路由指向`index-CO_tJEWL.js`。进一步核对父组件后，确认`HybridControlCenter/HybridControlCenterSimple`仅在`siteData.uavType===HybridWing`或`uavTypeName`包含“复合翼”时选用；其他类型仍选用`maintenanceRecord-D7yDEbKp.js`中的`ControlCenterView/ControlCenterSimpleView`。固定正式线`35574cba`也使用这套普通组件名。因此，仅在bundle中发现Hybrid代码，不能判断DJI/PZ驾驶舱已换版。19/20/23m/s速度预设、备降和相关3×2布局属于复合翼分支，不能复制成普通无人机的能力或参数边界。实际站点类型、完整发布SHA及像素一致性仍未核验。
+
+视觉参考的运行边界补充：可在临时目录离线执行已下载的控件，使用临时浏览器profile、本地拒绝代理和页面请求白名单，只允许本机静态资源，全部平台API、MQTT/WebSocket及外部连接均拒绝；业务上下文只允许明确标注的合成夹具。此本机隔离渲染不构成线上页面访问、机型能力核验或设备验收，不读取登录凭据。静态GET总预算继续为20文件/50MiB，渲染定位预算20分钟/40开发调用。
+
+后续累计18个静态文件、7,074,101字节，逐文件哈希及分支选择见[完整来源清单](evidence/cockpit-test-components-20261016.provenance.json)。已隔离渲染的[专业](evidence/cockpit-test-hybrid-professional-synthetic-20261016.png)和[简控](evidence/cockpit-test-hybrid-simple-synthetic-20261016.png)两图**只属于复合翼分支**，合成props不表示实际能力；16次本机静态请求、0平台/设备请求、0控制事件，13次浏览器后台连接被拒绝代理阻断。普通分支的[结构和CSS证据](evidence/cockpit-test-ordinary-static-20261016.json)已补齐，但完整依赖闭包超过500个绑定并牵入MQTT、脚本和音频模块，因此本轮没有执行普通分支或提供替代截图。其专业区1200×216、简控区高度约224只是1920宽度下的样式计算值，不能称作像素验收。本轮未据复合翼参考修改指定前端产品。
+
+### 意图修复与本轮验证结果
+
+已修复三类实际问题：模型询问“后退多少米？”时保留后退意图，后续“六米”不再作为独立指令；“向右偏航45度，不要产生位移”中的明确限制允许进入理解流程，并在预览前拒绝与限制冲突的动作；等待口令、条件、解释和示例输入不会产生立即执行卡。限制从原始完整意图重新提取，补参和继续不会抹掉限制。问句识别和限制分句仍是受限规则，不代表覆盖所有自然语言。
+
+TDD先在真实`OllamaDecider → CockpitService → 模拟器`路径复现失败，仅替换模型HTTP边界；初始7项中13个子场景失败。交叉复核又发现解释/示例可绕过限制分句的风险，新增5个失败子场景后修复。最终新增8项意图测试通过；评测计数和总预算超时另新增4项。根Agent执行`bash tools/ci/offline_tests.sh`，**533/533**通过，外部socket守护通过。
+
+冻结100条输入及原标签的新模型运行窗口为2026-10-16 17:33:34至17:51:19（Asia/Taipei）。[原始报告](evidence/cockpit-intents-current-20261016.json)保留全部100条：**83符合原契约、8不匹配、9模型请求超时、0缺失**。其中6条不匹配只在`no_action/clarification`之间，1条是上述`route_06`状态契约冲突，1条是模型把“往前挪个十来米”猜为10米。危险写提议仍记1，不能因服务端拦截而改成模型正确；当前服务的“来米”门禁会在模型前澄清，已有准确输入回归验证无卡、无执行。17类分母、每条结果和哈希都保留在报告内。
+
+本次104个模型请求，p50为7.054秒、p95为30.005秒。已知输入/输出tokens为354619/12731；超时用量缺失，故总tokens和费用为未知。模型`qwen3.5:9b`前后digest均为`6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7`，运行前后源码哈希一致。源码基线为`c807bf2`加报告内固定的在途改动；prompt、schema、配置、输入和标签哈希见报告及[来源补充](evidence/cockpit-intents-current-20261016.provenance.json)。本次总预算从旧900秒改为1800秒，且源码不同，因此不是受控A/B，不据83/100声称准确率或速度提升。模型评测的确认、平台请求和写工具调用均为0。
+
+另启动本机新模拟器端口，运行指定前端现有浏览器脚本，实际调用同一Ollama模型。通过“申请控制权并确认 → 向前飞 → 10米 → 刷新保留卡 → 确认模拟移动 → 拍照卡取消 → 新会话”。[浏览器记录](evidence/cockpit-ui-current-model-20261016.json)为10个API请求、2次模拟确认、0越界请求、0浏览器错误、0设备请求；根Agent目视检查了[10米确认卡](evidence/cockpit-ui-current-model-confirmation-20261016.png)，并独立读回模拟位置由(113,23)变为(113.00009769270969,22.999999999970047)，航向仍90度、相机照片数仍0。新建服务和浏览器均已退出。该检查只覆盖这条合成闭环，不证明Java在线执行或真机位移。
+
+```sh
+bash tools/ci/offline_tests.sh
+PYTHONPATH=src python3 tools/bench/cockpit_intents.py --live --max-samples 100 \
+  --max-model-calls 160 --max-seconds 1800 --max-tokens 2000000 --timeout 30 \
+  --output /tmp/cockpit-intents-new-evidence.json
+# 单独的新本机模拟器；以启动输出的端口替换下面端口变量
+PYTHONPATH=src python3 tools/cockpit_server.py --port 0
+# 指定前端仓库，在模拟器启动后运行
+COCKPIT_API_URL=http://127.0.0.1:<port>/api/flight-control node scripts/cockpit-e2e.mjs
+```
+
+Java在原候选上修复五段`thing/product/<gateway>/drc/up`网关解析和每次心跳的发送时间。两项缺陷先红后绿，完整11模块离线Maven门禁**103/103**通过（inspection100、visualization3），未启动业务Application。提交`7af3964cc89b35c9371a83c4b37ff26539a7bb48`仅保留本地；已知GitLab推送拒绝没有重复尝试。原四段topic、控制策略和能力开关不变。具体命令及测试边界见Java仓库`docs/flight-agent-platform-snapshot.md`。
+
+[DJI官方证据](evidence/dji-control-protocol-20261016.json)已核对图传链路枚举、顶层`control_source`、请求结果和DRC心跳。图传在线不等于持有航权，`control_source`按变化上报，MQTT认证`expire_time`不能当会话租约。当前官方心跳使用顶层`seq`、旧Java仍发送`data.seq`；本次时间修复不等于最新协议兼容已通过。还缺少浏览器控制源UUID与平台操作者之间的可靠绑定、真实固件回包及生命周期证据，所以没有据文档开启控制。
+
+本轮变更限于`cockpit.py/ollama_decider.py`、评测脚本、两组测试和本节证据；指定前端产品代码保持`b3a29d8`。允许的副作用为本地文件、合成测试、模型请求与开发分支提交；真实设备、业务写入、共享部署为0。需要回滚时用独立revert撤回本轮实现，保留旧评测和审计，不重发指令。普通驾驶舱的完整像素/业务对照、权威厂商航权/链路、真实平台部署及设备效果仍未验收，整体目标保持进行中。

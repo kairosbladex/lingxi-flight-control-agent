@@ -60,7 +60,42 @@ _NON_IMMEDIATE = re.compile(
     r'(?<!分)别|不(?:要|用|必|需要)?(?:再|先)?(?:拍|飞|起飞|降落|返航|转|录像|执行|操作|继续)'
     r'|[\d零一二两三四五六七八九十百半]+\s*(?:秒钟?|分钟?|小时|天)\s*(?:以?后|再)'
     r'|[\d零一二两三四五六七八九十百半]+\s*(?:米|度|倍)\s*(?:左右|上下)'
-    r'|\b(?:in|after)\s+\d+\s*(?:seconds?|minutes?|hours?)\b', re.I)
+    r'|\b(?:in|after)\s+\d+\s*(?:seconds?|minutes?|hours?)\b'
+    r'|(?:等(?:待)?|待).{0,60}(?:之后|以后|后|再|才)'
+    r'|(?:收到|听到).{0,60}(?:口令|指令|信号|通知).{0,30}(?:后|再|才)'
+    r'|\b(?:when|once|until)\b', re.I)
+
+# 仅识别完整、明确的限制分句；其余否定/条件仍由原门禁拒绝。
+# 限制从前置否定检测中分离后，必须继续约束模型提议，不能只删除“不要”。
+_NO_TRANSLATION = re.compile(
+    r'(?:(?:机身)?(?:不要|不得|别)(?:产生|发生)?(?:位移|移动)|保持当前位置'
+    r'|(?:do not|don\'t) (?:move|translate)(?: the drone)?)', re.I)
+_NO_YAW = re.compile(
+    r'(?:(?:机头方向|机头朝向|航向)(?:不要改变|不变|保持不变)'
+    r'|保持(?:机头方向|机头朝向|航向)不变'
+    r'|(?:do not|don\'t) change (?:the )?heading)', re.I)
+_CONSTRAINT_DISCUSSION = re.compile(
+    r'怎么|如何|为什么|解释|示例|例子|用法|意思|是否|能否|能不能|功能|介绍|讨论|聊聊'
+    r'|\b(?:how|why|what|explain|example|describe|discuss)\b', re.I)
+_TRANSLATING_ACTIONS = frozenset({
+    'move_forward', 'move_backward', 'move_left', 'move_right', 'move_up', 'move_down',
+    'takeoff', 'land', 'land_alternate', 'return_home', 'route_resume',
+    'continue_from_breakpoint', 'point_flight', 'point_orbit', 'execute_route',
+})
+
+
+def _separate_motion_constraints(text):
+    remaining, forbidden = [], set()
+    for clause in re.split(r'[,，;；。\n]+', text):
+        clause = clause.strip()
+        if _NO_TRANSLATION.fullmatch(clause):
+            forbidden.update(_TRANSLATING_ACTIONS)
+        elif _NO_YAW.fullmatch(clause):
+            forbidden.update(('turn_left', 'turn_right'))
+        elif clause:
+            remaining.append(clause)
+    return '，'.join(remaining), forbidden
+
 _CONTINUE = frozenset({'继续', '下一步', '继续下一步', 'continue', 'next'})
 _MODEL_FAILURE_MESSAGES = {
     'MODEL_TIMEOUT': '模型响应超时，本次未执行动作。',
@@ -528,8 +563,11 @@ class CockpitService:
             state = self._state()
             session.turns += 1
             session.requests[request_id] = (fingerprint, None)
-            if (contains_unsafe_content(text) or any(phrase in text.lower() for phrase in _DENY_PHRASES)
-                    or _NON_IMMEDIATE.search(text)):
+            immediate_text, motion_constraints = _separate_motion_constraints(text)
+            if (not immediate_text or contains_unsafe_content(text)
+                    or any(phrase in immediate_text.lower() for phrase in _DENY_PHRASES)
+                    or (motion_constraints and _CONSTRAINT_DISCUSSION.search(immediate_text))
+                    or _NON_IMMEDIATE.search(immediate_text)):
                 result = self._base(status='clarification', message='本次不会执行动作。请明确是否要控制无人机，以及具体动作和参数。',
                                     request_id=request_id, state=state)
                 session.active_intent, session.clarification = '', False
@@ -611,6 +649,9 @@ class CockpitService:
         common = {'request_id': request_id, 'state': self._state()}
         if result.tool_call and result.checkpoint.confirmation_binding:
             call = result.tool_call
+            _, forbidden = _separate_motion_constraints(grounding_text)
+            if call.name in forbidden:
+                return self._base(status='clarification', message='动作与保持位置或航向的限制冲突，请明确要执行的动作。', **common)
             if not grounded_parameters(call.name, call.arguments, grounding_text):
                 return self._base(status='clarification', message='请明确动作所需的数值和单位；我不会补猜参数。', **common)
             command = uuid4().hex

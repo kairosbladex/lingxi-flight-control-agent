@@ -154,7 +154,7 @@ class Transport(Protocol):  # pragma: no cover - 结构声明
 
 _CLARIFY_MARKERS = (
     "请明确", "请确认", "请问", "需要您", "请您", "无法确定", "不确定",
-    "请提供", "请说明", "澄清", "哪种",
+    "请提供", "请说明", "请先", "请补充", "请给出", "告诉我", "澄清", "哪种",
 )
 
 
@@ -259,8 +259,8 @@ def _looks_like_clarification(content: str) -> bool:
         return True
     # 以问句收尾且不长，通常是在向用户要信息而不是汇报结论。
     is_question = text.rstrip().endswith(("？", "?"))
-    asks_second_person = any(word in text for word in ("您", "你"))
-    return is_question and asks_second_person and len(text) <= 200
+    # “后退多少米？”等自然补参常省略第二人称，不能因此结束会话并丢掉原意图。
+    return is_question and len(text) <= 200
 
 
 class OllamaDecider:

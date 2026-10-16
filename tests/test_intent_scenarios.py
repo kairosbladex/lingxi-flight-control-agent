@@ -160,6 +160,36 @@ class EvaluationAccountingTests(unittest.TestCase):
         self.assertEqual(report["summary"]["conservative_non_action_mismatches"], 1)
         self.assertEqual(report["summary"]["unsafe_action_proposals"], 1)
 
+    def test_read_only_mismatch_and_mutating_proposal_have_separate_counts(self):
+        self.dataset["scenarios"][0].update(expected_kind="clarification", expected_action=None, expected_arguments={})
+        self.dataset["scenarios"][1].update(expected_kind="no_action", expected_action=None, expected_arguments={})
+        self.dataset["scenarios"][3].update(expected_action="read_state", expected_arguments={})
+        report = evaluate_outcomes(self.dataset, {
+            "case-0": {"kind": "action", "action": "read_state", "arguments": {}},
+            "case-1": {"kind": "action", "action": "takeoff", "arguments": {"altitude_m": 30}},
+            "case-2": {"kind": "action", "action": "move_backward", "arguments": {"distance_m": 5}},
+            "case-3": {"kind": "action", "action": "read_state", "arguments": {}},
+        })
+        summary = report["summary"]
+        self.assertEqual(summary["denominator"], 6)
+        self.assertEqual(summary["incorrect"], 3)
+        self.assertEqual(summary["correct"], 1)
+        self.assertEqual(summary["missing"], 2)
+        # The legacy counter retains its historical meaning, including reads.
+        self.assertEqual(summary["unsafe_action_proposals"], 2)
+        self.assertEqual(summary["unsafe_mutating_action_proposals"], 1)
+        self.assertEqual(summary["unexpected_read_only_action_proposals"], 1)
+        self.assertEqual(report["by_category"]["test-contract"], summary)
+        rows = report["results"]
+        self.assertTrue(rows[0]["unsafe_action_proposal"])
+        self.assertFalse(rows[0]["unsafe_mutating_action_proposal"])
+        self.assertTrue(rows[0]["unexpected_read_only_action_proposal"])
+        self.assertTrue(rows[1]["unsafe_mutating_action_proposal"])
+        self.assertFalse(rows[1]["unexpected_read_only_action_proposal"])
+        for row in rows[2:]:
+            self.assertFalse(row["unsafe_mutating_action_proposal"])
+            self.assertFalse(row["unexpected_read_only_action_proposal"])
+
     def test_free_text_cannot_be_scored_as_a_typed_rejection(self):
         self.dataset["scenarios"][0].update(expected_kind="rejected", expected_action=None, expected_arguments={})
         report = evaluate_outcomes(self.dataset, {
@@ -170,6 +200,88 @@ class EvaluationAccountingTests(unittest.TestCase):
 
 
 class LiveHarnessContractTests(unittest.TestCase):
+    def test_total_deadline_interrupts_the_attempt_without_losing_unrun_samples(self):
+        dataset = load_scenarios(DEFAULT_FIXTURE)
+        clock = [100.0]
+        request_timeouts = []
+
+        def model_http(_url, _payload, timeout):
+            request_timeouts.append(timeout)
+            clock[0] += timeout
+            raise TimeoutError("synthetic interrupted HTTP boundary")
+
+        with patch("tools.bench.cockpit_intents.time.monotonic", side_effect=lambda: clock[0]), \
+                patch("tools.bench.cockpit_intents.http_transport", side_effect=model_http), \
+                redirect_stderr(io.StringIO()):
+            outcomes, usage = run_live(dataset, model="contract-model", base_url="http://model.invalid",
+                                       max_samples=100, max_model_calls=160, max_seconds=4,
+                                       max_tokens=100000, timeout=30)
+        self.assertEqual(request_timeouts, [4])
+        self.assertEqual(outcomes["movement_01"]["status"], "uncertain")
+        self.assertEqual(outcomes["movement_01"]["reason"], "run_budget_exhausted")
+        self.assertEqual(outcomes["movement_01"]["latency_ms"], 4000)
+        self.assertIsNone(outcomes["movement_01"]["prompt_tokens"])
+        self.assertIsNone(outcomes["movement_01"]["output_tokens"])
+        self.assertEqual(usage["model_calls"], 1)
+        self.assertEqual(usage["mutating_tool_calls"], 0)
+        report = evaluate_outcomes(dataset, outcomes)
+        self.assertEqual(report["summary"]["denominator"], 100)
+        self.assertEqual(report["summary"]["uncertain"], 1)
+        self.assertEqual(report["summary"]["timeout"], 0)
+        self.assertEqual(report["summary"]["missing"], 99)
+        self.assertEqual({row["reason"] for row in report["results"]}, {"run_budget_exhausted"})
+
+    def test_request_timeout_with_time_remaining_does_not_cancel_later_samples(self):
+        dataset = load_scenarios(DEFAULT_FIXTURE)
+        dataset["scenarios"] = dataset["scenarios"][:2]
+        clock = [100.0]
+        request_timeouts = []
+
+        def model_http(_url, _payload, timeout):
+            request_timeouts.append(timeout)
+            clock[0] += 2
+            if len(request_timeouts) == 1:
+                raise TimeoutError("synthetic request timeout")
+            return {"message": {"role": "assistant", "content": "", "tool_calls": [
+                {"function": {"name": "move_backward", "arguments": {"distance_m": 5}}}
+            ]}, "done_reason": "stop", "prompt_eval_count": 50, "eval_count": 20}
+
+        with patch("tools.bench.cockpit_intents.time.monotonic", side_effect=lambda: clock[0]), \
+                patch("tools.bench.cockpit_intents.http_transport", side_effect=model_http), \
+                redirect_stderr(io.StringIO()):
+            outcomes, usage = run_live(dataset, model="contract-model", base_url="http://model.invalid",
+                                       max_samples=2, max_model_calls=4, max_seconds=20,
+                                       max_tokens=100000, timeout=2)
+        self.assertEqual(request_timeouts, [2, 2])
+        self.assertEqual(outcomes["movement_01"]["status"], "timeout")
+        self.assertEqual(outcomes["movement_01"]["reason"], "model_timeout")
+        self.assertEqual(outcomes["movement_02"]["action"], "move_backward")
+        self.assertEqual(usage["model_calls"], 2)
+        report = evaluate_outcomes(dataset, outcomes)
+        self.assertEqual(report["summary"]["denominator"], 2)
+        self.assertEqual(report["summary"]["correct"], 1)
+        self.assertEqual(report["summary"]["timeout"], 1)
+        self.assertEqual(report["summary"]["missing"], 0)
+
+    def test_shortened_request_failing_early_is_still_a_request_timeout(self):
+        dataset = load_scenarios(DEFAULT_FIXTURE)
+        dataset["scenarios"] = dataset["scenarios"][:1]
+        clock = [100.0]
+
+        def model_http(_url, _payload, _timeout):
+            clock[0] += 1
+            raise TimeoutError("synthetic early timeout from the HTTP boundary")
+
+        with patch("tools.bench.cockpit_intents.time.monotonic", side_effect=lambda: clock[0]), \
+                patch("tools.bench.cockpit_intents.http_transport", side_effect=model_http), \
+                redirect_stderr(io.StringIO()):
+            outcomes, _ = run_live(dataset, model="contract-model", base_url="http://model.invalid",
+                                   max_samples=1, max_model_calls=2, max_seconds=5,
+                                   max_tokens=100000, timeout=30)
+        self.assertEqual(outcomes["movement_01"]["status"], "timeout")
+        self.assertEqual(outcomes["movement_01"]["reason"], "model_timeout")
+        self.assertEqual(outcomes["movement_01"]["latency_ms"], 1000)
+
     def test_selecting_one_late_sample_calls_http_once_and_keeps_all_other_samples(self):
         dataset = load_scenarios(DEFAULT_FIXTURE)
         response = {"message": {"role": "assistant", "content": "", "tool_calls": [
