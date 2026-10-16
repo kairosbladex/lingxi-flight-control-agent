@@ -204,7 +204,7 @@ class CockpitService:
     def __init__(self, binding: RuntimeBinding, executor, decider_factory, *,
                  clock=time.time, store=None, gateway_token=None, max_turns=30,
                  max_model_steps=3, timeout_sec=65, session_ttl_sec=1800,
-                 max_sessions=64, task_id=None):
+                 max_sessions=64, task_id=None, visuals_provider=None):
         binding.validate()
         self.binding = binding
         self.executor = coerce_executor(executor)
@@ -224,6 +224,9 @@ class CockpitService:
         self._max_turns, self._max_steps = int(max_turns), int(max_model_steps)
         self._timeout, self._ttl, self._max_sessions = timeout_sec, session_ttl_sec, int(max_sessions)
         self._task_id = task_id
+        if visuals_provider is not None and not callable(visuals_provider):
+            raise ValueError('visuals provider must be callable')
+        self._visuals_provider = visuals_provider
         self._sessions = {}
         self._lock = threading.RLock()
 
@@ -305,11 +308,15 @@ class CockpitService:
             except SessionError:
                 raise _ApiError('INVALID_SESSION', '缺少有效的独立会话标识。') from None
             receipt_route = route == '/api/flight-control/agent/receipt' and method == 'GET'
-            payload = self._receipt_query(path, body) if receipt_route else json.loads(body or '{}')
+            visuals_route = route == '/api/flight-control/visuals' and method == 'GET'
+            payload = (self._receipt_query(path, body) if receipt_route else
+                       self._visuals_query(path, body) if visuals_route else json.loads(body or '{}'))
             if not isinstance(payload, dict):
                 raise _ApiError('INVALID_REQUEST', '请求体必须是JSON对象。')
             if receipt_route:
                 result = self._command_receipt(session_id, payload)
+            elif visuals_route:
+                result = self._visuals(session_id, payload)
             elif route in {'/api/flight-control/context', '/api/flight-control/state'} and method == 'GET':
                 result = self._context()
             elif route == '/api/flight-control/agent/messages' and method == 'POST':
@@ -340,6 +347,50 @@ class CockpitService:
         except Exception:
             return StandaloneResponse(500, self._base(success=False, status='error',
                 error_code='INTERNAL_ERROR', message='服务处理失败，未确认设备效果。', trace_id=trace))
+
+    @staticmethod
+    def _visuals_query(path, body):
+        if body not in ('', b''):
+            raise _ApiError('INVALID_REQUEST', '画面描述查询必须使用空请求体。')
+        parts = urlsplit(path)
+        query = parse_qs(parts.query, keep_blank_values=True, strict_parsing=True, max_num_fields=1)
+        if (parts.fragment or set(query) != {'context_version'} or len(query['context_version']) != 1
+                or not re.fullmatch(r'(?:0|[1-9][0-9]{0,15})', query['context_version'][0])
+                or int(query['context_version'][0]) >= 2 ** 53):
+            raise _ApiError('INVALID_REQUEST', '画面描述只接受一个有效上下文版本。')
+        return {'context_version': int(query['context_version'][0])}
+
+    def _visuals(self, session_id, payload):
+        self._version(payload)
+        provider = self._visuals_provider
+        if self.execution_mode != 'platform' or provider is None:
+            raise _ApiError('VISUALS_UNAVAILABLE', '当前服务未提供画面描述。', 503)
+        if (getattr(provider, 'binding', None) != self.binding
+                or getattr(provider, 'task_id', None) != self._task_id):
+            raise _ApiError('VISUALS_BINDING_MISMATCH', '画面资源绑定无法核验。', 503)
+        binding = self.binding
+        expected = provider.resource_binding
+        with self._lock:
+            session = self._session(session_id)
+            epoch = session.epoch
+        try:
+            description = provider()
+        except KtdPlatformError as exc:
+            code = str(exc)
+            raise _ApiError(code, '暂时无法读取画面描述，请稍后刷新。',
+                            403 if code == 'VISUALS_FORBIDDEN' else 503) from None
+        self._version(payload)
+        with self._lock:
+            if (self._sessions.get(session_id) is not session or session.epoch != epoch
+                    or self.binding != binding or getattr(provider, 'binding', None) != binding
+                    or getattr(provider, 'task_id', None) != self._task_id
+                    or description.get('resource_binding') != expected):
+                raise _ApiError('STALE_CONTEXT', '画面所属上下文已变化，请重新刷新。', 409, 'stale_context')
+        # Deliberately bypass _base/state/checkpoint: signed playback URLs are
+        # browser-only data, not model context, conversation history or authority.
+        return {'schema_version': 'flight-visuals/v1', 'execution_mode': 'platform',
+                'context_version': payload['context_version'], 'resource_binding': expected,
+                'generated_at': description['generated_at'], 'streams': description['streams']}
 
     @staticmethod
     def _receipt_query(path, body):

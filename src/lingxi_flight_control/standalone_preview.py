@@ -404,6 +404,8 @@ def build_standalone_server(service: StandalonePreviewService, host: str, port: 
             self._cors()
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(encoded)))
+            if self.command == 'GET' and self.path.split('?', 1)[0].rstrip('/') == '/api/flight-control/visuals':
+                self.send_header('Cache-Control', 'no-store')
             self.end_headers()
             if self.command != "HEAD":
                 self.wfile.write(encoded)

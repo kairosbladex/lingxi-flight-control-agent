@@ -314,6 +314,24 @@ class KtdHttpTransport:
         except Exception:
             raise KtdPlatformError('COMMAND_RECEIPT_TRANSPORT_ERROR') from None
 
+    def read_visuals(self, binding: RuntimeBinding, *, site_id: str,
+                     task_id: str | None) -> KtdHttpResponse:
+        """Read stored display descriptions only; never fetch or start a stream."""
+        if not isinstance(binding, RuntimeBinding) or binding.actor_id != self.actor_id:
+            raise KtdPlatformError('TRANSPORT_SCOPE_MISMATCH')
+        if (not all(_identifier(value) for value in (binding.project_id, binding.hangar_id,
+                 binding.drone_id, site_id)) or (task_id is not None and not _identifier(task_id))):
+            raise KtdPlatformError('INVALID_REQUEST_CONTEXT')
+        query = {'siteId': site_id, 'hangarId': binding.hangar_id, 'droneId': binding.drone_id}
+        if task_id is not None:
+            query['taskId'] = task_id
+        request = Request(self._base_url + '/lingxi/agent/platform/visuals?' + urlencode(query),
+            method='GET', headers={'Authorization': 'Bearer ' + self._token, 'projectId': binding.project_id})
+        try:
+            return self._read_response(request, strict_json=True)
+        except Exception:
+            raise KtdPlatformError('VISUALS_TRANSPORT_ERROR') from None
+
     def _read_response(self, request: Request, *, strict_json: bool = False) -> KtdHttpResponse:
         try:
             response = self._opener.open(request, timeout=self._timeout)

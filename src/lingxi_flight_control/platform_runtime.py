@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+import json
 import os
 import time
 
@@ -22,6 +23,8 @@ class PlatformRuntimeConfig:
     server_token: str = field(repr=False)
     gateway_token: str = field(repr=False)
     allow_insecure_http: bool = False
+    media_allowed_origins: tuple[str, ...] = ()
+    media_allow_insecure_http: bool = False
 
     def __post_init__(self):
         self.binding.validate()
@@ -41,6 +44,9 @@ class PlatformRuntimeConfig:
         # 只验证固定服务端地址及凭据格式；构造传输对象不发送网络请求。
         KtdHttpTransport(self.base_url, token=self.server_token, actor_id=self.binding.actor_id,
                          allow_insecure_http=self.allow_insecure_http)
+        from .ktd_visuals import validate_media_origins
+        object.__setattr__(self, 'media_allowed_origins', validate_media_origins(
+            self.media_allowed_origins, allow_insecure_http=self.media_allow_insecure_http))
 
     @classmethod
     def from_environment(cls, environment: Mapping[str, str]) -> PlatformRuntimeConfig:
@@ -56,6 +62,13 @@ class PlatformRuntimeConfig:
         raw_http = environment.get('KTD_ALLOW_INSECURE_HTTP', 'false')
         if raw_http not in {'true', 'false'}:
             raise ValueError('KTD_ALLOW_INSECURE_HTTP 必须为 true 或 false')
+        media_http = environment.get('FLIGHT_AGENT_MEDIA_ALLOW_INSECURE_HTTP', 'false')
+        if media_http not in {'true', 'false'}:
+            raise ValueError('FLIGHT_AGENT_MEDIA_ALLOW_INSECURE_HTTP 必须为 true 或 false')
+        try:
+            media_origins = json.loads(environment.get('FLIGHT_AGENT_MEDIA_ALLOWED_ORIGINS', '[]'))
+        except (ValueError, TypeError):
+            raise ValueError('FLIGHT_AGENT_MEDIA_ALLOWED_ORIGINS 必须是JSON数组') from None
         return cls(
             base_url=required('KTD_BASE_URL'),
             binding=RuntimeBinding(required('KTD_ACTOR_EMPLOYEE_ID'), required('KTD_PROJECT_ID'),
@@ -66,6 +79,8 @@ class PlatformRuntimeConfig:
             server_token=required('KTD_SERVER_TOKEN'),
             gateway_token=required('FLIGHT_AGENT_GATEWAY_TOKEN'),
             allow_insecure_http=raw_http == 'true',
+            media_allowed_origins=media_origins,
+            media_allow_insecure_http=media_http == 'true',
         )
 
 
@@ -75,6 +90,7 @@ def build_platform_cockpit(config: PlatformRuntimeConfig, decider_factory, *,
     from .cockpit import CockpitService
     from .ktd_platform import KtdPlatformExecutor, SqliteCommandJournal
     from .ktd_snapshot import KtdSnapshotProvider
+    from .ktd_visuals import KtdVisualsProvider
 
     if not isinstance(config, PlatformRuntimeConfig) or type(enable_control) is not bool:
         raise ValueError('平台运行配置或控制开关无效')
@@ -92,5 +108,9 @@ def build_platform_cockpit(config: PlatformRuntimeConfig, decider_factory, *,
     executor = KtdPlatformExecutor(config.binding, site_id=config.site_id, task_id=config.task_id,
         transport=transport, snapshot_provider=provider, journal=journal,
         enabled=enable_control, track_commands=True, clock=clock)
+    visuals = KtdVisualsProvider(config.binding, site_id=config.site_id, task_id=config.task_id,
+        transport=transport, allowed_origins=config.media_allowed_origins,
+        allow_insecure_http=config.media_allow_insecure_http, clock=clock)
     return CockpitService(config.binding, executor, decider_factory,
-                          gateway_token=config.gateway_token, task_id=config.task_id, clock=clock)
+                          gateway_token=config.gateway_token, task_id=config.task_id, clock=clock,
+                          visuals_provider=visuals)

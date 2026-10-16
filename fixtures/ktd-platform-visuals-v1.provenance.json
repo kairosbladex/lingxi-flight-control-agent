@@ -1,0 +1,33 @@
+{
+  "fixture_kind": "synthetic-java-platform-visuals-http-converter-response",
+  "recorded_date": "2026-10-16",
+  "source_repository": "ktd_backend",
+  "source_branch": "feature/flight-agent-platform-snapshot",
+  "source_base_commit": "98a8da4bf13f4ba623fb816da1a5cb9b09f8453a",
+  "source_commit": "57c96a5ca9f117c0668c8ad6ae2fb7fb8a3d8bcb",
+  "source_state": "locally-committed-candidate-not-pushed",
+  "generator": "PlatformVisualsTest",
+  "construction": "Real resource authorizer, controller, service, stored descriptor parser and WebConfig HTTP converter. Database facts, user, clock and playback addresses are synthetic. No business Spring application, real database, media server or device request.",
+  "synthetic_clock_epoch_seconds": 1700000000,
+  "source_output": "biz-inspection/target/flight-agent-platform-visuals-v1.json",
+  "source_output_sha256": "f24474985c70543d23298c54d1109da2565772209aafac1b837efd74a9ec64f1",
+  "fixture_sha256": "144a532319ebdfe16b2113eedd6683a35045dcd95c38a73ae9071ef35ca9a72d",
+  "copy_change": "Added one trailing LF; all other bytes unchanged, verified by byte comparison.",
+  "source_sha256": {
+    "biz-inspection/src/main/java/com/fan/framework/inspection/platformsnapshot/PlatformResourceAccess.java": "d143c21fd20a6d28f27ca7a72e368e3f8254fbc67d2f3bdde3830cfa81996133",
+    "biz-inspection/src/main/java/com/fan/framework/inspection/platformsnapshot/PlatformSnapshotService.java": "1a573e2c4460759aeb30ebac1c38a7c8b92c66d61836f3801db6d779203fc304",
+    "biz-inspection/src/main/java/com/fan/framework/inspection/platformvisuals/PlatformVisualsController.java": "39c7a78a4dab119717fcb51dca99c45de4dc2ce9222bdc9480baec43f731e1f0",
+    "biz-inspection/src/main/java/com/fan/framework/inspection/platformvisuals/PlatformVisualsRepository.java": "86054164080abc0b876ea11934bd6838577764b449a05f32352f88f53855bbf1",
+    "biz-inspection/src/main/java/com/fan/framework/inspection/platformvisuals/PlatformVisualsService.java": "b814b636bd1af47471227589b7f693f025ecbe380a16bbd04485c99cdbf3ae21",
+    "biz-inspection/src/main/java/com/fan/framework/inspection/platformvisuals/PlatformVisualsSource.java": "395a3ecdf322584e35b7a726a6a7ae7cb782831e364ae6392192e2bdf41898ec",
+    "biz-inspection/src/main/java/com/fan/framework/inspection/platformvisuals/PlatformVisualsVO.java": "05eadbe8e88fdc3ab94fce5b46d7a6694bd512b3e93516c124c84108bb8fa279",
+    "biz-inspection/src/main/java/com/fan/framework/inspection/platformvisuals/PlaybackDescriptors.java": "f835eb407fbb87509b5fe32d3f9b3b237f426a392d886ac3b049e33dc3be5e16",
+    "biz-inspection/src/test/java/com/fan/framework/inspection/platformvisuals/PlatformVisualsTest.java": "1a9aa4bd4ddbc149a9041eaf0743d9e54c0f019f1f619032badb9f04a5b96de4"
+  },
+  "limitations": [
+    "Stored playback candidates do not prove that a live stream exists or is playable.",
+    "Java cannot infer authoritative URL expiry from its current stored fields.",
+    "MockMvc checks the real HTTP converter and no-store header without loading the full authentication filter chain.",
+    "The production permission policy still denies flight actions. Existing entity cache reads may populate Redis on a miss; no live environment was used."
+  ]
+}
