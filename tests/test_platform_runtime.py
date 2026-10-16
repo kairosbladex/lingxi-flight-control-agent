@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 
 from lingxi_flight_control.platform_runtime import PlatformRuntimeConfig, build_platform_cockpit
 from lingxi_flight_control.ollama_decider import OllamaDecider
+from test_command_receipts import command_receipt_payload
 
 
 class PlatformRuntimeConfigTests(unittest.TestCase):
@@ -116,7 +117,11 @@ class FakeJavaOpener:
             payload = {'code': 200, 'data': self.data}
         else:
             assert method == 'POST' and path == '/api/screen/uav/operation/control'
-            payload = {'code': 200}
+            body = json.loads(request.data)
+            tracking = body['tracking']
+            payload = command_receipt_payload(command_id=tracking['commandId'],
+                idempotency_key=tracking['idempotencyKey'], trace_id=tracking['traceId'],
+                submitted_at=1000, updated_at=1000, parameters={'distance_m': body['param']})
         response = BytesIO(json.dumps(payload).encode())
         response.code = 200
         return response
@@ -180,14 +185,20 @@ class PlatformRuntimeFlowTests(unittest.TestCase):
         self.assertEqual(result.payload['status'], 'preview_required', result.payload)
         self.assertFalse(any(method == 'POST' for method, _, _ in self.opener.calls))
         card = result.payload['card']
+        self.assertTrue(card['receipt_tracking'])
         body = json.dumps({key: card[key] for key in ('confirmation_id', 'confirmation_binding',
                            'command_id', 'idempotency_key', 'context_version')})
         confirmed = service.handle('POST', '/api/flight-control/agent/confirm', body, self.headers)
         self.assertEqual(confirmed.payload['status'], 'submitted', confirmed.payload)
         self.assertEqual(confirmed.payload['device_effect'], 'not_verified')
+        self.assertTrue(confirmed.payload['receipt_tracking'])
         writes = [body for method, _, body in self.opener.calls if method == 'POST']
         self.assertEqual(writes, [{'terminalId': 'drone-1', 'siteId': 'site-1',
-                                  'type': 202, 'mode': 2, 'param': 10}])
+            'type': 202, 'mode': 2, 'param': 10, 'tracking': {
+                'schemaVersion': 'lingxi-command-request/v1',
+                'commandId': card['command_id'], 'idempotencyKey': card['idempotency_key'],
+                'traceId': confirmed.payload['trace_id'], 'snapshotVersion': 'a' * 64,
+                'expiresAt': 1005, 'hangarId': 'hangar-1'}}])
         self.assertEqual(len(self.model_calls), 1)
         self.assertEqual(service.handle('POST', '/api/flight-control/agent/confirm', body,
                                        self.headers).payload, confirmed.payload)

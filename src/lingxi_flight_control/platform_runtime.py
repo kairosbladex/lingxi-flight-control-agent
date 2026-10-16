@@ -91,6 +91,6 @@ def build_platform_cockpit(config: PlatformRuntimeConfig, decider_factory, *,
     journal = SqliteCommandJournal(config.journal_path)
     executor = KtdPlatformExecutor(config.binding, site_id=config.site_id, task_id=config.task_id,
         transport=transport, snapshot_provider=provider, journal=journal,
-        enabled=enable_control, clock=clock)
+        enabled=enable_control, track_commands=True, clock=clock)
     return CockpitService(config.binding, executor, decider_factory,
                           gateway_token=config.gateway_token, task_id=config.task_id, clock=clock)

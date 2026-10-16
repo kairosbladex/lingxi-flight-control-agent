@@ -1,0 +1,22 @@
+{
+  "fixture_kind": "synthetic-java-command-journal-http-converter-response",
+  "recorded_date": "2026-10-16",
+  "source_repository": "ktd_backend",
+  "source_branch": "feature/flight-agent-platform-snapshot",
+  "source_base_commit": "98a8da4bf13f4ba623fb816da1a5cb9b09f8453a",
+  "source_commit": "728b9d34ddaf3995739a98e34bcae55097394a30",
+  "source_state": "locally-committed-candidate-not-pushed",
+  "generator": "FlightCommandIngressTest",
+  "construction": "Real DJHangarOperation target compilation, PreparedFlyToCommand, H2/MyBatis journal, MessageUtils and existing DJI processor, receipt controller and WebConfig HTTP converter. External publisher records only; input messages, resource facts and authorization are synthetic. No business Spring application, external database, live MQTT or device calls.",
+  "synthetic_clock_epoch_seconds": 1700000000,
+  "source_output": "biz-inspection/target/flight-agent-command-receipt-v1.json",
+  "source_output_sha256": "1e1e1d3e2ada2f70fb3e1620abf796e79e21d318afad7f1d1a1e4f5924ca1457",
+  "fixture_sha256": "19f13c591e93466f65414a0294851022bfe159b53e8412380d93ab13c7365eaa",
+  "copy_change": "Added one trailing LF; all original bytes otherwise unchanged, verified by byte comparison.",
+  "limitations": [
+    "This is a synthetic device-reported completion, not real flight or measured displacement.",
+    "The production HTTP authorization policy still denies distance flight; the positive execution path starts from a package-private verified test value.",
+    "H2 MySQL mode does not validate the deployed MySQL server or transaction wiring.",
+    "The loopback smoke separately labels rebound identities, times and synthetic writable permissions; it does not modify this raw fixture."
+  ]
+}

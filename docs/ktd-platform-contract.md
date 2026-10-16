@@ -196,7 +196,7 @@ HTTP回环已验证：3次Agent HTTP、5次快照GET、1次脚本模型决定、
 
 ### 原始报文投影的兼容扩展
 
-同一v1响应允许 `telemetry.source=java-raw-frame`，并携带严格的 `frame` 对象：`schema_version=lingxi-telemetry-frame/v1`、与资源绑定一致的 `profile`、原始报文UTF-8字节的 `payload_sha256`、布尔 `complete`。`sequence` 仍为null；不把随机生成的tid/bid当作序号，不返回原报文、topic或设备SN。旧 `java-udp-cache` 形状及样本保留，不能添加frame字段伪装成原帧。
+同一v1响应允许 `telemetry.source=java-raw-frame`，并携带严格的 `frame` 对象：`schema_version=lingxi-telemetry-frame/v1`、与资源绑定一致的 `profile`、处理器收到的报文文本重新按UTF-8编码所得的 `payload_sha256`、布尔 `complete`。既有 `MessageUtils` 使用默认字符集解码，因此该哈希不等价于已证明的原始MQTT字节哈希。`sequence` 仍为null；不把随机生成的tid/bid当作序号，不返回原报文、topic或设备SN。旧 `java-udp-cache` 形状及样本保留，不能添加frame字段伪装成原帧。
 
 `complete=true` 只说明当前帧来源和资源匹配，并且当前帧的经纬度、yaw、已知飞行状态及机型所需高度均有效：DJI使用绝对高度，PZ使用相对高度。Java还要校验时效和显式离线状态；Python独立检查上述声明与state一致。任一原帧字段缺失保持未知，不借用旧缓存；部分帧仍可供只读展示，但声称同时具有写许可会被拒绝。缺少厂商航权和控制链路证据仍然拒绝所有控制，`UAV_MOVE_DISTANCE`仍为false。
 
@@ -206,4 +206,59 @@ HTTP回环已验证：3次Agent HTTP、5次快照GET、1次脚本模型决定、
 
 原帧跨语言夹具为 `fixtures/ktd-platform-raw-snapshot-v1.json`，来源提交 `8cc7f1452d52c18d659777833053eb1c7cb58eb7` 及源码哈希记录在相邻provenance文件。追加验证为Python完整466项、快照25项、执行器33项；Java 8模块编译及38项测试通过。没有重跑真实模型评测，也没有使用真实设备输入。
 
-官方还明确区分服务受理与飞点进度：`fly_to_point_progress` 通过网关events上报，包含 `fly_to_id` 与 `wayline_progress/wayline_ok/wayline_failed/wayline_cancel`。`result=0` 或剩余距离为0本身不等于完成。当前代码尚未提供这些事件到Agent命令的持久关联；未来可按官方契约开发并用脱敏原始回包验收。真实机场/无人机型号与固件、控制源到业务操作者的映射、失权/重连时序和高度基准仍需确定，不能据一次夺权回复生成长期授权。
+官方还明确区分服务受理与飞点进度：`fly_to_point_progress` 通过网关events上报，包含 `fly_to_id` 与 `wayline_progress/wayline_ok/wayline_failed/wayline_cancel`。`result=0` 或剩余距离为0本身不等于完成。原帧切片尚未提供命令持久关联；下述回执切片补充了候选实现。真实机场/无人机型号与固件、控制源到业务操作者的映射、失权/重连时序和高度基准仍需确定，不能据一次夺权回复生成长期授权。
+
+## 指令回执与显式续接 v1
+
+平台装配使用 `track_commands=True`，但控制总开关仍默认关闭；本切片只允许 DJI 六方向距离动作。未跟踪的直接执行器保留旧接口，不会被当作可查询回执的命令。Java `lingxi.agent.command-tracking.enabled` 默认false，新增表通过人工DDL迁移，不由应用建表。即使打开这两个开关，当前快照的厂商航权/链路与距离能力门禁仍拒绝真实动作。
+
+调用链为用户输入 → 既有 `BoundedAgentLoop` 提议 → 原确认卡与服务端策略检查 → Agent SQLite单次提交屏障 → 既有Java控制POST的tracking分支 → Java持久化实际发送标识 → 既有MQTT发布与回包入口 → 用户手动GET查询。没有第二套Agent运行时，也没有自动轮询、续发、补发或设备重试。
+
+### Java请求和结果
+
+仍使用 `/screen/uav/operation/control`，在原 `terminalId/siteId/taskId/type/mode/param` 之外附加 `tracking`：
+
+```json
+{
+  "schemaVersion": "lingxi-command-request/v1",
+  "commandId": "原确认卡command_id",
+  "idempotencyKey": "原幂等键",
+  "traceId": "原确认trace_id",
+  "snapshotVersion": "已核验快照的64位十六进制版本",
+  "expiresAt": 1700000005,
+  "hangarId": "服务端绑定机库"
+}
+```
+
+操作者取Java登录态，项目取已绑定请求头；模型和浏览器不设置执行身份。`expiresAt` 是确认卡与快照时效中较短的授权窗，不是设备回执期限。Java先准备实际 `bid/tid/fly_to_id` 和报文，再提交命令日志，最后发布同一报文。调用异常、崩溃、重启或未知结果均不会由本适配器自动重新发布。底层沿用MQTT QoS1，协议重投与设备端去重尚未真机验证，不能从一次应用提交推断设备恰好执行一次。未解决命令、过期未解决命令和冲突会继续占用资源范围，不能通过换幂等键消除不确定性。
+
+只读查询为 `/lingxi/agent/commands/receipt?commandId=…&siteId=…&hangarId=…&droneId=…`，有真实任务时再带 `taskId`；服务地址的 `/api` 前缀沿用既有配置。读取仍核验当前登录操作者、项目资源和任务绑定，不根据查询字符串授予权限。HTTP和 `R.code` 均成功才解码 `R.data`：
+
+| 字段组 | v1内容 |
+| --- | --- |
+| 契约 | `schema_version=lingxi-command-receipt/v1` |
+| 指令绑定 | `command_id/trace_id/idempotency_key/action/parameters` |
+| 资源身份 | `actor_employee_id/project_id/site_id/hangar_id/drone_id/task_id` |
+| 状态 | `status/version/submitted_at/updated_at/expires_at` |
+| 设备证据 | 可空 `reported_at/received_at/error_code`、`dispatch_ids={bid,tid,fly_to_id}` |
+| 效果 | 固定 `device_effect=not_verified` |
+
+时间均为Unix秒。状态保留 `dispatching/submitted/accepted/in_progress/completed/failed/cancelled/expired/unknown/conflict`；设备回执期限为120秒。GET只投影到期，不修改Java数据库或版本。到期/未知不能推出未执行；失败/取消不能推出没有部分位移。设备报告完成也不等于独立测量已证明真实位移精度。
+
+服务回复严格关联原 `bid/tid` 与网关；飞点进度严格关联 `data.fly_to_id` 与网关，不强迫独立事件tid等于请求tid。只接受原文本中的字段，不使用会补随机ID/当前时间的 `ServicesReply` 来解析回执。重复键、尾随JSON、非整数返回码和不合法时间被拒绝。`wayline_ok+result=0` 且上报/接收时间均在命令窗内才可表示完成；同一命令的矛盾终态保持冲突。
+
+Python独立校验原发送的身份、资源、动作、参数、时限和实际发送ID指纹。POST与GET的报告都持久化；跨进程事务拒绝版本回退、同版本矛盾和不可变字段变化。终态不能被迟到的受理/进行中覆盖。发送线程晚返回时不会抹掉先到的完成报告。内部报告及关联指纹不暴露给浏览器或模型。
+
+### Agent公开查询与继续
+
+`GET /api/flight-control/agent/receipt?command_id=…&context_version=…` 使用原会话与受信网关头。成功对象严格13字段：`success/schema_version/execution_mode/command_id/context_version/reported_status/report_source/receipt_version/reported_at/received_at/device_effect/continuation_allowed/trace_id`。固定值分别为 `true`、`flight-command-receipt/v1`、`platform`、`ktd-command-journal` 和 `not_verified`。成功查询不混入普通动作的 `status/dispatched/state`；失败沿用现有错误对象。
+
+每次查询开始即暂停继续权限；失败保留旧报告但不能继续。只有原会话、原epoch、原待查命令、最新查询、有效 `completed` 及重新读取的可用状态同时成立，才恢复原意图。换任务、换资源、重置、新意图、进程重启或其他会话都不能恢复这份意图。重建执行器可读取本地持久化发送记录所绑定的回执，但读取不生成继续权限。
+
+用户点击“继续下一步”仍进入原模型提议与新确认卡；每一步都需要用户确认。提交结果和设备报告分别保留，确认超时可查询原命令，不通过再次确认来猜测结果。
+
+### 部署前剩余条件与回退
+
+本切片只形成离线候选。人工需先审核DDL、按正式线流程部署候选、验证同版本MySQL行为，并提供有来源的实际机型/固件、原始回包、设备时钟、业务操作者到厂商航权的绑定和链路状态，再设计隔离真机验收。当前不把测试中的已验证内部值对象当作生产HTTP授权已放行。
+
+回退优先关闭Agent控制开关与Javatracking开关，保留日志和未解决命令；不自动删除审计表、不将未知命令标成功、不重发。未带tracking的旧Java调用保持原业务分支。新增本地版本可通过独立revert提交回退，不改写共享历史。

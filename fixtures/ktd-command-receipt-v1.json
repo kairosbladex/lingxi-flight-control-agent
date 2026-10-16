@@ -1,0 +1,9 @@
+{
+	"code":200,
+	"data":{"schema_version":"lingxi-command-receipt/v1","command_id":"command-1","trace_id":"trace-command-1","idempotency_key":"key-1","actor_employee_id":"employee-1","project_id":"project-1","site_id":"site-1","hangar_id":"hangar-1","drone_id":"drone-1","task_id":"task-1","action":"move_forward","parameters":{"distance_m":10.0},"status":"completed","version":4,"submitted_at":1.7E9,"updated_at":1.700000000004E9,"expires_at":1.70000012E9,"reported_at":1.700000000003E9,"received_at":1.700000000004E9,"error_code":null,"device_effect":"not_verified","dispatch_ids":{"bid":"b7f26e25-9c08-4f5d-8a19-4d961da8b468","tid":"2022c8eb-7944-404a-8ad6-3ed1df734c83","fly_to_id":"0fdb05e3-7fb5-4056-919d-9fe1d67a840d"}},
+	"errDetailMsg":"",
+	"extra":"",
+	"message":"操作成功！",
+	"success":true,
+	"traceId":""
+}

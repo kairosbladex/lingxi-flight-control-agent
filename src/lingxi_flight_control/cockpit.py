@@ -17,6 +17,7 @@ import re
 import threading
 import time
 from uuid import uuid4
+from urllib.parse import parse_qs, urlsplit
 
 from .agent import BoundedAgentLoop, ToolRegistry, contains_unsafe_content
 from .executor import coerce_executor
@@ -25,6 +26,7 @@ from .full_control import (
     _CONTROL_FREE_ACTIONS, parameter_json_schema,
 )
 from .models import DecisionKind, LoopStatus, ModelDecision, ToolDefinition, ToolSchema
+from .ktd_platform import KtdPlatformError
 from .ollama_decider import ModelOutputTruncatedError, ModelTimeoutError, PromptBudgetExceeded
 from .safety import SafetyFastPath
 from .session import MemoryCheckpointStore, SessionError, SessionExpired, SessionNotFound, validate_session_id
@@ -170,6 +172,16 @@ class _ApiError(ValueError):
 
 
 @dataclass
+class _WaitingCommand:
+    command_id: str
+    context_version: int
+    intent: str
+    action: str
+    parameters: dict
+    query_version: int = 0
+
+
+@dataclass
 class _Conversation:
     epoch: int = 0
     turns: int = 0
@@ -180,6 +192,7 @@ class _Conversation:
     last_used: float = 0
     requests: dict = field(default_factory=dict)
     receipts: dict = field(default_factory=dict)
+    waiting: _WaitingCommand | None = None
 
 
 class CockpitService:
@@ -226,6 +239,9 @@ class CockpitService:
         return value
 
     def _base(self, **fields):
+        # Durable device evidence is internal. Only the explicitly projected
+        # receipt endpoint may expose its public report fields.
+        fields.pop('device_report', None)
         return {'execution_mode': self.execution_mode, 'dispatched': False,
                 'device_effect': 'not_verified', **fields}
 
@@ -262,6 +278,7 @@ class CockpitService:
         if session.card:
             self.executor.cancel(**self._confirmation(session.card))
             session.card = None
+        session.waiting = None
         session.epoch += 1
 
     @staticmethod
@@ -287,10 +304,13 @@ class CockpitService:
                 validate_session_id(session_id)
             except SessionError:
                 raise _ApiError('INVALID_SESSION', '缺少有效的独立会话标识。') from None
-            payload = json.loads(body or '{}')
+            receipt_route = route == '/api/flight-control/agent/receipt' and method == 'GET'
+            payload = self._receipt_query(path, body) if receipt_route else json.loads(body or '{}')
             if not isinstance(payload, dict):
                 raise _ApiError('INVALID_REQUEST', '请求体必须是JSON对象。')
-            if route in {'/api/flight-control/context', '/api/flight-control/state'} and method == 'GET':
+            if receipt_route:
+                result = self._command_receipt(session_id, payload)
+            elif route in {'/api/flight-control/context', '/api/flight-control/state'} and method == 'GET':
                 result = self._context()
             elif route == '/api/flight-control/agent/messages' and method == 'POST':
                 result = self._message(session_id, payload)
@@ -320,6 +340,79 @@ class CockpitService:
         except Exception:
             return StandaloneResponse(500, self._base(success=False, status='error',
                 error_code='INTERNAL_ERROR', message='服务处理失败，未确认设备效果。', trace_id=trace))
+
+    @staticmethod
+    def _receipt_query(path, body):
+        if body not in ('', b''):
+            raise _ApiError('INVALID_REQUEST', '回执查询必须使用空请求体。')
+        parts = urlsplit(path)
+        query = parse_qs(parts.query, keep_blank_values=True, strict_parsing=True, max_num_fields=2)
+        if (parts.fragment or set(query) != {'command_id', 'context_version'}
+                or any(len(values) != 1 for values in query.values())):
+            raise _ApiError('INVALID_REQUEST', '回执查询参数缺失、重复或不受支持。')
+        command, version = query['command_id'][0], query['context_version'][0]
+        if not _ID.fullmatch(command) or not re.fullmatch(r'(?:0|[1-9][0-9]{0,15})', version):
+            raise _ApiError('INVALID_REQUEST', '回执查询标识或上下文版本不合法。')
+        return {'command_id': command, 'context_version': int(version)}
+
+    def _command_receipt(self, session_id, payload):
+        self._version(payload)
+        query = getattr(self.executor, 'query_receipt', None)
+        if self.execution_mode != 'platform' or not callable(query):
+            raise _ApiError('RECEIPT_UNSUPPORTED', '当前执行器不支持设备回执查询。', status='rejected')
+        with self._lock:
+            session = self._session(session_id)
+            waiting = session.waiting
+            if waiting and (waiting.command_id != payload['command_id']
+                            or waiting.context_version != payload['context_version']):
+                waiting = None
+            epoch = session.epoch
+            if waiting:
+                waiting.query_version += 1
+                query_version = waiting.query_version
+                # A refresh may fail or expose a conflicting report. Suspend
+                # any previously granted continuation before leaving the lock.
+                session.active_intent, session.clarification = '', False
+        try:
+            receipt = query(payload['command_id'], idempotency_key=payload['command_id'],
+                            context_version=payload['context_version'])
+        except KtdPlatformError as exc:
+            raise _ApiError(str(exc), '暂时无法读取设备回执，请稍后重试。', 503) from None
+        self._version(payload)
+        state = self._state() if waiting and receipt['status'] == 'completed' else None
+        continuation_allowed = False
+        with self._lock:
+            if (waiting is not None and self._sessions.get(session_id) is session
+                    and session.waiting is waiting and session.epoch == epoch
+                    and waiting.query_version == query_version):
+                try:
+                    record = self._store.load(session_id)
+                    history = record.checkpoint.context.get('conversation', [])
+                    # Keep submission and device reporting separate, replacing
+                    # only the prior report for this command on repeated reads.
+                    history = [row for row in history if not (
+                        row.get('command_id') == receipt['command_id']
+                        and row.get('report_source') == 'ktd-command-journal')]
+                    history.append({'role': 'tool', 'command_id': receipt['command_id'],
+                        'action': waiting.action, 'parameters': deepcopy(waiting.parameters),
+                        'status': receipt['status'], 'report_source': 'ktd-command-journal',
+                        'receipt_version': receipt['version'], 'device_effect': 'not_verified'})
+                    record.checkpoint.context['conversation'] = history[-12:]
+                    self._store.save(session_id, record.checkpoint)
+                    continuation_allowed = (receipt['status'] == 'completed'
+                        and state is not None and state.get('available') is True)
+                    if continuation_allowed:
+                        session.active_intent = waiting.intent
+                except Exception:
+                    # A report remains readable if conversation persistence is
+                    # unavailable, but its missing context cannot authorize next.
+                    session.active_intent, session.clarification = '', False
+        return {'schema_version': 'flight-command-receipt/v1', 'execution_mode': 'platform',
+            'command_id': receipt['command_id'], 'context_version': receipt['context_version'],
+            'reported_status': receipt['status'], 'report_source': 'ktd-command-journal',
+            'receipt_version': receipt['version'], 'reported_at': receipt['reported_at'],
+            'received_at': receipt['received_at'], 'continuation_allowed': continuation_allowed,
+            'device_effect': 'not_verified', 'trace_id': receipt['trace_id']}
 
     def _context(self):
         definitions = build_proposal_registry(self.executor).definitions()
@@ -369,9 +462,15 @@ class CockpitService:
                 return previous[1]
             if session.busy:
                 raise _ApiError('IN_PROGRESS', '当前会话仍在理解上一条输入。', 409)
-            self._invalidate(session)
             if session.turns >= self._max_turns or len(session.requests) >= 128:
                 raise _ApiError('TURN_LIMIT', '会话预算已耗尽，请新建会话。', 429)
+            if text.lower() in _CONTINUE and session.waiting and not session.active_intent:
+                result = self._base(status='clarification', message='上一项动作尚未取得可继续的设备报告，请先查询回执。',
+                                    request_id=request_id)
+                session.turns += 1
+                session.requests[request_id] = (fingerprint, result)
+                return result
+            self._invalidate(session)
             # Read dependencies before reserving this id. A failed preparation
             # must not leave an immortal IN_PROGRESS entry.
             history = self._history(session_id)[-10:]
@@ -471,7 +570,8 @@ class CockpitService:
             card = {**self._confirmation(receipt), 'action': call.name, 'parameters': dict(call.arguments),
                     'expires_at': datetime.fromisoformat(receipt['expires_at']).timestamp()
                     if isinstance(receipt['expires_at'], str) else receipt['expires_at'],
-                    'execution_mode': self.execution_mode}
+                    'execution_mode': self.execution_mode,
+                    'receipt_tracking': receipt.get('receipt_tracking', False)}
             session.card = card
             return self._base(status='preview_required', message='请核对动作与参数，确认后仅执行这一项。', card=deepcopy(card), **common)
         if result.status == LoopStatus.CLARIFICATION:
@@ -514,12 +614,18 @@ class CockpitService:
             # A simulator result is never a real dispatch or a device receipt.
             response['dispatched'] = self.execution_mode == 'platform' and receipt['status'] in {'submitted', 'unknown'}
             session.receipts[(fingerprint, cancel)] = response
+            if (not cancel and self.execution_mode == 'platform'
+                    and receipt['status'] in {'submitted', 'unknown'}
+                    and card.get('receipt_tracking') is True and session.active_intent):
+                session.waiting = _WaitingCommand(card['command_id'], card['context_version'],
+                    session.active_intent, card['action'], deepcopy(card['parameters']))
             if cancel or receipt['status'] != 'accepted' or self.execution_mode == 'platform':
                 session.active_intent, session.clarification = '', False
             try:
                 record = self._store.load(session_id)
                 history = record.checkpoint.context.get('conversation', [])
-                history.append({'role': 'tool', 'action': card['action'], 'parameters': card['parameters'],
+                history.append({'role': 'tool', 'command_id': card['command_id'],
+                                'action': card['action'], 'parameters': card['parameters'],
                                 'status': receipt['status'], 'device_effect': 'not_verified'})
                 record.checkpoint.context['conversation'] = history[-12:]
                 self._store.save(session_id, record.checkpoint)
