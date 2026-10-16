@@ -1,0 +1,496 @@
+{
+  "schema_version": "cockpit-vendor-control-root-verification/v1",
+  "recorded_at": "2026-10-16T14:17:26.876Z",
+  "mode": "offline_candidate",
+  "repository": "/Users/wangxiaolin/PycharmProjects/ktd_backend-flight-agent-snapshot",
+  "branch": "feature/flight-agent-platform-snapshot",
+  "baseline_sha": "5f4ce20710606fde7c2730ee6c6a5b0de27cc743",
+  "java_commit": "0eb831bfefd3fcc40d2a9ab91a3d9102ccf71137",
+  "git": {
+    "commit": "0eb831bfefd3fcc40d2a9ab91a3d9102ccf71137",
+    "source_files_match_commit": 20,
+    "working_tree_clean": true,
+    "pushed": false
+  },
+  "scope": "Internal typed flight_authority_grab/drc_mode_enter/drc_mode_exit request/result fact chain, using existing authorization, journal, transactions, captured publication connection and inbound receipt path.",
+  "raw_evidence": {
+    "path": "docs/evidence/vendor-control-request-20261016.json",
+    "repository": "Java candidate",
+    "sha256": "ecf46381fef2d7c55c8657cff8df7a71fa2cfdd9584493e1097afff09fcb7341",
+    "immutable_at": "0eb831bfefd3fcc40d2a9ab91a3d9102ccf71137",
+    "commit_field_in_raw": "null records the pre-commit evidence stage; this root record supplies the final commit"
+  },
+  "console": {
+    "path": "docs/evidence/vendor-control-request-20261016-maven-console.txt",
+    "sha256": "0ba9aee65f8d62bd6828a8fa49c9d42de9257ca51b7292eefece1443d557421f",
+    "scope": "Exact final tool-returned console summary; not an unabridged compiler log"
+  },
+  "root_verification": {
+    "verified_at": "2026-10-16T14:15:38.272Z",
+    "source_count": 20,
+    "suite_count": 22,
+    "totals": {
+      "tests": 208,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "inputs": [
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/dji-control-request-schema-20261016.json",
+        "sha256": "db3d03ced4cef9d9abadc686adb161f6199f82e7c7d55094b62ab1c5f7afbc1a",
+        "matches": true
+      }
+    ],
+    "fixtures": [
+      {
+        "path": "biz-inspection/target/flight-agent-platform-snapshot-v1.json",
+        "sha256": "f9a50d95d872daa577ff00488953ea50c247e0944ca6b322701522cb806269c6",
+        "matches": true
+      },
+      {
+        "path": "biz-inspection/target/flight-agent-command-receipt-v1.json",
+        "sha256": "0dd2e0696f6eb9b1967960e8230e0c02351dfea8bfc82211c05b5db4049aee9e",
+        "matches": true
+      },
+      {
+        "path": "biz-inspection/target/flight-agent-platform-raw-snapshot-v1.json",
+        "sha256": "10a46754279c56bb277702453c917c30fb8f659e0a78c7d6707f2e63c440b4ad",
+        "matches": true
+      },
+      {
+        "path": "biz-inspection/target/flight-agent-platform-visuals-v1.json",
+        "sha256": "f24474985c70543d23298c54d1109da2565772209aafac1b837efd74a9ec64f1",
+        "matches": true
+      }
+    ],
+    "evidence_sha256": "ecf46381fef2d7c55c8657cff8df7a71fa2cfdd9584493e1097afff09fcb7341",
+    "console_sha256": "0ba9aee65f8d62bd6828a8fa49c9d42de9257ca51b7292eefece1443d557421f",
+    "source_files": [
+      {
+        "path": "biz-inspection/src/main/java/com/fan/framework/inspection/flightcommand/DeviceCommandReceipt.java",
+        "sha256_before": "a766ef560422c7a95c410800e02269925e9a1a98e110174b6584fd89e93610cf",
+        "sha256_after": "a766ef560422c7a95c410800e02269925e9a1a98e110174b6584fd89e93610cf"
+      },
+      {
+        "path": "biz-inspection/src/main/java/com/fan/framework/inspection/flightcommand/DrcBrokerProvider.java",
+        "sha256_before": "139d0aa84b32a1f8ec778147bc02c3fb431728037188d4a12b9922401e197194",
+        "sha256_after": "139d0aa84b32a1f8ec778147bc02c3fb431728037188d4a12b9922401e197194"
+      },
+      {
+        "path": "biz-inspection/src/main/java/com/fan/framework/inspection/flightcommand/FlightCommandJournal.java",
+        "sha256_before": "2fa47db6db99e21905ac90082feae3d9159644448b69d8897dab5f9d698c240a",
+        "sha256_after": "2fa47db6db99e21905ac90082feae3d9159644448b69d8897dab5f9d698c240a"
+      },
+      {
+        "path": "biz-inspection/src/main/java/com/fan/framework/inspection/flightcommand/FlightCommandService.java",
+        "sha256_before": "5f8eb4b00774ccd4eec6668852aad3818d4fecd5e7c70b59181eb8b374140bff",
+        "sha256_after": "5f8eb4b00774ccd4eec6668852aad3818d4fecd5e7c70b59181eb8b374140bff"
+      },
+      {
+        "path": "biz-inspection/src/main/java/com/fan/framework/inspection/flightcommand/FlightCommandTransport.java",
+        "sha256_before": "323c32a2189b9ed7f1abfe45fb3a811af478ae703cd04889801f8380bf2a4ebd",
+        "sha256_after": "323c32a2189b9ed7f1abfe45fb3a811af478ae703cd04889801f8380bf2a4ebd"
+      },
+      {
+        "path": "biz-inspection/src/main/java/com/fan/framework/inspection/flightcommand/MqttFlightCommandTransport.java",
+        "sha256_before": "3ef94b313436f3f377d268cbcad5e14bfcbc08d56bfe4ac3d6bb2dffcb509045",
+        "sha256_after": "3ef94b313436f3f377d268cbcad5e14bfcbc08d56bfe4ac3d6bb2dffcb509045"
+      },
+      {
+        "path": "biz-inspection/src/main/java/com/fan/framework/inspection/flightcommand/VendorControlAttemptReceiptVO.java",
+        "sha256_before": "2f5d646b7d53f6cd39bbbf4a8cbee2a2d3cef55d466e1be6debb07a434e57420",
+        "sha256_after": "2f5d646b7d53f6cd39bbbf4a8cbee2a2d3cef55d466e1be6debb07a434e57420"
+      },
+      {
+        "path": "biz-inspection/src/main/java/com/fan/framework/inspection/flightcommand/VendorControlAttemptRequest.java",
+        "sha256_before": "e152fe28accf15610ad3ea5c7f7afed8e90074701f356336c297a10fecf44f7f",
+        "sha256_after": "e152fe28accf15610ad3ea5c7f7afed8e90074701f356336c297a10fecf44f7f"
+      },
+      {
+        "path": "biz-inspection/src/main/java/com/fan/framework/inspection/flightcommand/VendorControlAttemptService.java",
+        "sha256_before": "4ca3a69475af478a81633ee2bd06111819fd5f29e074c1bd786d5d35f3ada72f",
+        "sha256_after": "4ca3a69475af478a81633ee2bd06111819fd5f29e074c1bd786d5d35f3ada72f"
+      },
+      {
+        "path": "biz-inspection/src/main/java/com/fan/framework/inspection/flightcommand/entity/FlightCommandRecord.java",
+        "sha256_before": "88b16e42219a3b0448500844c3b41bd1ee58ff34a8bdd70e158de9032e6b72d7",
+        "sha256_after": "88b16e42219a3b0448500844c3b41bd1ee58ff34a8bdd70e158de9032e6b72d7"
+      },
+      {
+        "path": "biz-inspection/src/main/resources/mapper/flightcommand/FlightCommandMapper.xml",
+        "sha256_before": "42108cb70d6df0f6fc0465c289f5f1adf7543e4de00cd291113ba616981e2757",
+        "sha256_after": "42108cb70d6df0f6fc0465c289f5f1adf7543e4de00cd291113ba616981e2757"
+      },
+      {
+        "path": "biz-inspection/src/test/java/com/fan/framework/inspection/flightcommand/CommandTestDatabase.java",
+        "sha256_before": "a767c34dc306ce7b87d51e963cd57218b05140ab0df95a3ce896afd1c2291974",
+        "sha256_after": "a767c34dc306ce7b87d51e963cd57218b05140ab0df95a3ce896afd1c2291974"
+      },
+      {
+        "path": "biz-inspection/src/test/java/com/fan/framework/inspection/flightcommand/FlightCommandConnectionMigrationTest.java",
+        "sha256_before": "b0f645abf0d54ba9ef3041738f6e7077b0083b642146797dc70a92d9c8b2ed6a",
+        "sha256_after": "b0f645abf0d54ba9ef3041738f6e7077b0083b642146797dc70a92d9c8b2ed6a"
+      },
+      {
+        "path": "biz-inspection/src/test/java/com/fan/framework/inspection/flightcommand/VendorControlAttemptTest.java",
+        "sha256_before": "dd224e0500f18e6dbf9494db28f3ce77db2630df3d9d521b66fb7577e1bb8758",
+        "sha256_after": "dd224e0500f18e6dbf9494db28f3ce77db2630df3d9d521b66fb7577e1bb8758"
+      },
+      {
+        "path": "biz-inspection/src/test/java/com/fan/framework/inspection/flightcommand/VendorControlJournalTest.java",
+        "sha256_before": "14b73bffb78f2a9efff84971cc13309c409f236ac78555f997ded59338455bb0",
+        "sha256_after": "14b73bffb78f2a9efff84971cc13309c409f236ac78555f997ded59338455bb0"
+      },
+      {
+        "path": "biz-inspection/src/test/java/com/fan/framework/inspection/flightcommand/VendorControlReceiptTest.java",
+        "sha256_before": "eceb1679f484c0af60417fcc2fc19c11bfecef0587f4c8171bdc8da64724bc7b",
+        "sha256_after": "eceb1679f484c0af60417fcc2fc19c11bfecef0587f4c8171bdc8da64724bc7b"
+      },
+      {
+        "path": "doc/sql/2026/20261016-add-flight-command-vendor-request.sql",
+        "sha256_before": "5cad05e155f169e7f18f290f9f835c1fede2ea95005e922b457b8c103f9f3020",
+        "sha256_after": "5cad05e155f169e7f18f290f9f835c1fede2ea95005e922b457b8c103f9f3020"
+      },
+      {
+        "path": "platform-mqtt/src/main/java/com/platform/mqtt/AbstractMqttMessageManager.java",
+        "sha256_before": "fab5249711c777b8a4869901a641e36cf6c1967d0eae271f4efaa1a31e058519",
+        "sha256_after": "fab5249711c777b8a4869901a641e36cf6c1967d0eae271f4efaa1a31e058519"
+      },
+      {
+        "path": "sys-core/src/main/java/com/fan/framework/operation/dJ/command/PreparedVendorControlCommand.java",
+        "sha256_before": "e408228c27ea533a6fea0e9c95fa9d62c69ddfc9739690b6c000605d08e0fd3d",
+        "sha256_after": "e408228c27ea533a6fea0e9c95fa9d62c69ddfc9739690b6c000605d08e0fd3d"
+      },
+      {
+        "path": "sys-core/src/main/java/com/walker/mm/MessageManager.java",
+        "sha256_before": "c8d4c7f06661535eb1194af4d15577cb12a8b04d345fcd20d10cb11afa153373",
+        "sha256_after": "c8d4c7f06661535eb1194af4d15577cb12a8b04d345fcd20d10cb11afa153373"
+      }
+    ],
+    "suites": [
+      {
+        "module": "biz-inspection",
+        "suite": "DeviceCommandReceiptTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.158,
+        "report_updated": "2026-10-16T14:04:49.967Z",
+        "report_path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.flightcommand.DeviceCommandReceiptTest.xml",
+        "report_sha256": "8d4944fdb4f6da11e96ad32a9938802b69aac1dcb4980df4d9e7a27afa7c8cd1"
+      },
+      {
+        "module": "biz-inspection",
+        "suite": "DrcProtocolRegressionTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 5.489,
+        "report_updated": "2026-10-16T14:05:24.259Z",
+        "report_path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.platformsnapshot.DrcProtocolRegressionTest.xml",
+        "report_sha256": "c85f87edf1176193d8876f8530e869017c31d279ce3994b1d4db2ef078ec6d5d"
+      },
+      {
+        "module": "biz-inspection",
+        "suite": "FlightCommandConnectionBindingTest",
+        "tests": 13,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.988,
+        "report_updated": "2026-10-16T14:05:02.221Z",
+        "report_path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.flightcommand.FlightCommandConnectionBindingTest.xml",
+        "report_sha256": "76f245c967232a294c6dd4cfe5030afbfb85003921f236b440ed31a3196935aa"
+      },
+      {
+        "module": "biz-inspection",
+        "suite": "FlightCommandConnectionMigrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.057,
+        "report_updated": "2026-10-16T14:05:03.942Z",
+        "report_path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.flightcommand.FlightCommandConnectionMigrationTest.xml",
+        "report_sha256": "a408aa880dc99593bb0ae94fcff590e5515d694b94b33abab1a47395f502513b"
+      },
+      {
+        "module": "biz-inspection",
+        "suite": "FlightCommandFlowTest",
+        "tests": 15,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 2.251,
+        "report_updated": "2026-10-16T14:05:15.343Z",
+        "report_path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.flightcommand.FlightCommandFlowTest.xml",
+        "report_sha256": "324dedf609ba8abfeb7346248f9994033b9490c8b86a1f5672665fc58fb24bac"
+      },
+      {
+        "module": "biz-inspection",
+        "suite": "FlightCommandIngressTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.556,
+        "report_updated": "2026-10-16T14:05:12.447Z",
+        "report_path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.flightcommand.FlightCommandIngressTest.xml",
+        "report_sha256": "3e3867ecb1f8e91be90cebe761c4e4270205076018ff52058cd9df77ac787922"
+      },
+      {
+        "module": "biz-inspection",
+        "suite": "FlightCommandMapperTest",
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.928,
+        "report_updated": "2026-10-16T14:05:10.230Z",
+        "report_path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.flightcommand.FlightCommandMapperTest.xml",
+        "report_sha256": "a6943ff295a3c145374c5dde03dc73e3f64e1776ecd2e47e746db89ace6e4dc3"
+      },
+      {
+        "module": "biz-inspection",
+        "suite": "FlightCommandPreparationTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.157,
+        "report_updated": "2026-10-16T14:04:50.804Z",
+        "report_path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.flightcommand.FlightCommandPreparationTest.xml",
+        "report_sha256": "c16cfe588a7f80f09fea09353696bf1d8092057fda3297a18c1f9411a18e5e8b"
+      },
+      {
+        "module": "biz-inspection",
+        "suite": "FlightCommandReceiveSourceTest",
+        "tests": 14,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 2.212,
+        "report_updated": "2026-10-16T14:05:07.650Z",
+        "report_path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.flightcommand.FlightCommandReceiveSourceTest.xml",
+        "report_sha256": "27ffa76da53b5da85f90170f229e3df96e703beb212f232e3a602a6b061af0a1"
+      },
+      {
+        "module": "biz-inspection",
+        "suite": "MqttBoundPublicationTest",
+        "tests": 17,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.229,
+        "report_updated": "2026-10-16T14:04:57.332Z",
+        "report_path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.flightcommand.MqttBoundPublicationTest.xml",
+        "report_sha256": "985e10d39100546f149be7e48b4ad68cb337ebd8718a6d756291413626487f16"
+      },
+      {
+        "module": "biz-inspection",
+        "suite": "MqttReceiveSourceTest",
+        "tests": 9,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.241,
+        "report_updated": "2026-10-16T14:04:52.684Z",
+        "report_path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.flightcommand.MqttReceiveSourceTest.xml",
+        "report_sha256": "60035c5e72adef4cef53baea34127e9146b3e5abd49796c208b924bd89c5be8a"
+      },
+      {
+        "module": "biz-inspection",
+        "suite": "NullSerializationTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.31,
+        "report_updated": "2026-10-16T14:05:25.220Z",
+        "report_path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.platformsnapshot.NullSerializationTest.xml",
+        "report_sha256": "ea98e3dab7f1d1a9a59ed448b976b7ba79a1a97e1bc5ab2644f9dd107b06469e"
+      },
+      {
+        "module": "biz-inspection",
+        "suite": "PlatformSnapshotRepositoryTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.104,
+        "report_updated": "2026-10-16T14:05:28.458Z",
+        "report_path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.platformsnapshot.PlatformSnapshotRepositoryTest.xml",
+        "report_sha256": "f0bacb05dfca58e60d262cf5114ab7bd4818bfded26cd4e50b7a26d04f3c7b36"
+      },
+      {
+        "module": "biz-inspection",
+        "suite": "PlatformSnapshotTest",
+        "tests": 21,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.273,
+        "report_updated": "2026-10-16T14:05:18.126Z",
+        "report_path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.platformsnapshot.PlatformSnapshotTest.xml",
+        "report_sha256": "beb0589bd2f67b9c0691ec65ae69f82215988ad6db6ecc6041788a328b1dfaef"
+      },
+      {
+        "module": "biz-inspection",
+        "suite": "PlatformVisualsTest",
+        "tests": 21,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.201,
+        "report_updated": "2026-10-16T14:05:17.194Z",
+        "report_path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.platformvisuals.PlatformVisualsTest.xml",
+        "report_sha256": "10a9a4be410b2a920f97238495d2ce5847c9878857d52e0b079cc2852961d23f"
+      },
+      {
+        "module": "biz-inspection",
+        "suite": "TelemetryIngressTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.221,
+        "report_updated": "2026-10-16T14:05:26.911Z",
+        "report_path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.platformsnapshot.TelemetryIngressTest.xml",
+        "report_sha256": "74bb87923ed3f882efa33b120d778af38393f7b9176e8c97f64f258ecfa1f038"
+      },
+      {
+        "module": "biz-visualization",
+        "suite": "TrackedFlightControlTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.173,
+        "report_updated": "2026-10-16T14:05:37.459Z",
+        "report_path": "biz-visualization/target/surefire-reports/TEST-com.fan.framework.visualization.controller.TrackedFlightControlTest.xml",
+        "report_sha256": "52f9487cdda740d9e137aff3268e59a4f40bbae564ba761caa464462bdaa1ea2"
+      },
+      {
+        "module": "biz-inspection",
+        "suite": "UavTelemetryFrameTest",
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.139,
+        "report_updated": "2026-10-16T14:05:26.036Z",
+        "report_path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.platformsnapshot.UavTelemetryFrameTest.xml",
+        "report_sha256": "02d275e890b844a04a8240a490995482e37dcff5a1493d05ef6db29949cc6910"
+      },
+      {
+        "module": "biz-inspection",
+        "suite": "UavTelemetrySnapshotTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.162,
+        "report_updated": "2026-10-16T14:05:27.708Z",
+        "report_path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.platformsnapshot.UavTelemetrySnapshotTest.xml",
+        "report_sha256": "6cd633b9154a2e0494d0f13b7ffd31feb51b1ef96b1c778cf021cb78f192988b"
+      },
+      {
+        "module": "biz-inspection",
+        "suite": "VendorControlAttemptTest",
+        "tests": 30,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 3.098,
+        "report_updated": "2026-10-16T14:04:56.428Z",
+        "report_path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.flightcommand.VendorControlAttemptTest.xml",
+        "report_sha256": "d8d82a58cf46384d365c2c1acc1304d8486c6e51202d74381b72b6937a67c53a"
+      },
+      {
+        "module": "biz-inspection",
+        "suite": "VendorControlJournalTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.596,
+        "report_updated": "2026-10-16T14:04:59.578Z",
+        "report_path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.flightcommand.VendorControlJournalTest.xml",
+        "report_sha256": "7a3bf3382172ba85287e3e4b29cbc673ed088ca219c03fa3dc48b0c051dd46fe"
+      },
+      {
+        "module": "biz-inspection",
+        "suite": "VendorControlReceiptTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.16,
+        "report_updated": "2026-10-16T14:05:04.775Z",
+        "report_path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.flightcommand.VendorControlReceiptTest.xml",
+        "report_sha256": "91a951886153ce478a178c5a288cfd3ccbdcb818781b5f0138d76bb7f6e5c2fc"
+      }
+    ],
+    "checks": [
+      "All 20 current source hashes equal both archived before/after hashes and the final local commit bytes",
+      "All 22 XML hashes and suite-root counts match; report modification times match archived timestamps and lie inside the frozen run window",
+      "Four generated fixture hashes and archived DJI schema input hash match",
+      "Reviewed requireCurrent time checks before and after source/owner reads, plus authorization callbacks after scope lock, beforeCommit and captured-client publication",
+      "git diff --cached --check passed; exact 23 task files committed; working tree clean"
+    ]
+  },
+  "validation": {
+    "reactor_modules": 11,
+    "tests": 208,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "inspection": 205,
+    "visualization": 3,
+    "new_tests": 43,
+    "existing_regressions": 165,
+    "finished_at": "2026-10-16T22:05:37+08:00",
+    "runtime": "JDK 8 / Maven 3.10.0 / isolated H2 / recording substitute only at external Paho boundary",
+    "reused_run": true,
+    "reason": "Source bytes remained frozen; root verified existing reports instead of repeating an unchanged Maven run."
+  },
+  "boundaries": {
+    "public_http_entry": false,
+    "agent_tool_entry": false,
+    "default_drc_broker_provider": false,
+    "request_kind": "vendor_service_result",
+    "success_status": "request_succeeded",
+    "vendor_authority": "unknown",
+    "drc_link": "unknown",
+    "device_effect": "not_verified",
+    "uav_move_distance": false,
+    "tracking_default_enabled": false,
+    "old_59_action_contract": "unchanged",
+    "default_denials": [
+      "VENDOR_AUTHORITY_UNAVAILABLE",
+      "CONTROL_LINK_FRESHNESS_UNAVAILABLE"
+    ]
+  },
+  "known_limits": [
+    "Platform owner version includes heartbeat updateTime, so a normal heartbeat may invalidate a prepared attempt.",
+    "Invalidation after commit leaves an unknown unpublished attempt occupying its resource scope; no recovery API or automatic clearing/resend exists.",
+    "Final authorization guard and external publish cannot be atomic; no sustained authority or exactly-once claim.",
+    "Credentials remain in prepared process memory until publish; serialized journal envelope is redacted and non-replayable. No live credentials were read.",
+    "Only H2 verified. MySQL DDL/transactions, production wiring, real Broker, firmware responses, sustained control source/DRC identity and device effects remain unverified.",
+    "Earlier failing XML files were overwritten by later test runs; red-stage observations are session-recorded, final green independently checked via 22 XML reports.",
+    "Agent/UI unchanged by this Java-only slice; their latest separate evidence remains 564 and 117/87 respectively."
+  ],
+  "effects": {
+    "real_model_calls": 0,
+    "business_database_writes": 0,
+    "real_broker_connections": 0,
+    "device_actions": 0,
+    "deployments_or_shared_restarts": 0,
+    "java_push_attempts": 0,
+    "java_local_commits": 1
+  },
+  "rollback": "Revert the local semantic commit independently. Preserve nullable columns and historical/unknown journal records; do not backfill identity, clear unknown outcomes or resend."
+}

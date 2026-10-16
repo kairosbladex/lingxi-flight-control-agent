@@ -269,6 +269,16 @@ Java本地候选 `5f4ce20710606fde7c2730ee6c6a5b0de27cc743` 在原命令行中�
 
 完整离线证据为[165项门禁与来源记录](evidence/cockpit-mqtt-connection-binding-20261016.json)，0失败/错误/跳过。传输关联不等于员工到DRC和厂商 `control_source` 的权威绑定；相关拒绝原因、能力false与开关默认关闭继续保持。
 
+### 内部厂商请求事实链
+
+Java本地 `0eb831bfefd3fcc40d2a9ab91a3d9102ccf71137` 追加内部 `VendorControlAttemptService`，只接受 `flight_authority_grab/drc_mode_enter/drc_mode_exit`。复用真实资源鉴权、原journal/scope锁、事务、prepared ID、捕获连接发布及原入站旁路，没有新的HTTP或Agent入口。独立VO采用 `schema_version=lingxi-vendor-control-result/v1`、`kind=vendor_service_result`，成功为 `request_succeeded`；`vendor_authority/drc_link=unknown`、`device_effect=not_verified`。不将其投影成movement完成或长期控制许可，旧回执v1不变。
+
+enter凭据来自可选服务端 `DrcBrokerProvider`，无默认实现；缺失或到期拒绝。首次prepared固定凭据和独立设备client_id，仅内存到实际发布；序列化排除原始payload，journal保存脱敏且不可重放的信封。客户端ID不作为员工、Java订阅者或control_source身份证明。重试不重新取凭据、换连接或补发。
+
+授权guard在获得资源锁后、beforeCommit、捕获客户端实际发布前重读账号/员工、资源、gateway/SN、控制型号和平台owner版本，并在读取前后检查授权与认证期限。正常owner心跳更新也可能使旧尝试失效；提交后失效保留unknown并占scope，无恢复API。最后guard与外部发布不原子，不能证明持续授权或恰好执行一次。合法结果必须匹配实际method、bid/tid、网关、原发送连接、当前入站来源和命令时间窗；非零int为失败，矛盾结果conflict。request_succeeded/failed释放vendor请求scope，unknown/expired/conflict不释放。
+
+新增人工增量 `20261016-add-flight-command-vendor-request.sql`：nullable request_kind/request_method/request_result，fly_to_id改nullable。vendor不伪造fly_to_id，movement仍要求真实ID；历史kind/method空仅兼容movement，不回填。仅隔离H2验证，未对MySQL执行。11模块208/208及root核验见[独立证据](evidence/cockpit-vendor-control-20261016.json)，不代表公开取权链、真实Broker、持续航权、部署或设备效果已验收。距离能力false、两项控制拒绝原因及tracking默认关闭保持。
+
 ### 部署前剩余条件与回退
 
 2026-10-16补充[官方请求schema核验](evidence/dji-control-request-schema-20261016.json)：夺权 `flight_authority_grab` 的Data为null，不能携带actor或浏览器控制源；进入DRC的 `mqtt_broker.client_id` 用于设备连接中转MQTT，不是Java订阅连接的身份。飞机 `control_source` 是只读变化推送，已核文档没有给出浏览器UUID如何输入及绑定员工的版本契约。关联夺权/进入回复仅证明该次请求结果，不能直接设置持续航权。现有 `UavControlPowerTask.clean` 与 `UavControlPowerProcessor` 确实按平台心跳维护owner、超过300秒清理；保留这个平台策略，同时与MQTT认证期限、DRC心跳及厂商航权分开。可先实现本地控制尝试的typed请求/结果溯源，不必等待真机样本；权威actor许可仍需独立映射及失效契约，不能据上述ID相似性放行。

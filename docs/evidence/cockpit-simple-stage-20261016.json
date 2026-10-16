@@ -1,0 +1,351 @@
+{
+  "schema_version": "cockpit-simple-stage-root-verification/v1",
+  "recorded_at": "2026-10-16T14:06:02.450Z",
+  "ui_repository": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui",
+  "ui_baseline": "be3a0b03b439803e9a55df058fcda8c9b330beba",
+  "ui_commit": "e8096317ed885ce255c77667f238e6743d0ce8c7",
+  "ui_branch": "feature/natural-language-cockpit",
+  "push": "succeeded; ls-remote exact SHA matched; working tree clean",
+  "scope": "Fixed original ordinary-cockpit simple stage geometry, passive interactions and same-session confirmation; not full test-environment visual/business or real-device acceptance.",
+  "source_contract": "docs/evidence/cockpit-simple-stage-20261016/source-contract.json",
+  "source_repository": "/Users/wangxiaolin/PycharmProjects/onegismap_a-b4-20260910",
+  "source_commit": "35574cba46d498e0992de05504756bccf7014ade",
+  "source_read_method": "git show only, preserving original conflicted working tree",
+  "independently_verified_reference_sha256": {
+    "src/views/hangar/index.vue": "eaf4bd4837f6116b15da1d04b141e85e4dfd817e996ba21f251b8e727b3ddc05",
+    "src/views/hangar/components/videos.vue": "424604f016b0defa08c7df433d803773f2a5bba4f4513c30a882ef0f0423cb21",
+    "src/styles/index.scss": "ff305ea8b77fe22c803d41f27de24b2471c5990c5b8543e4b9f380805ac04862",
+    "src/layout/sysTask.vue": "6a14901520fe74cbaf7cb9adae1e3caf69edf0ead8ec5f0eb89d7c079cb2029d",
+    "postcss.config.cjs": "397e1d0f04dc64fbeb5bc5df7e50c8c452d8b10a6af0b9779c7026b6ca18db48",
+    "src/main.ts": "29518e94c6a33e9acedd8c7086fea406d753728419f4af6a7d9038a0ff528f6f"
+  },
+  "source_sha256_before_root_tests": {
+    "README.md": "3288d5f194d3cc29988b1a3a1c0ede4380996ba2c004a9843fd191c2d4648c87",
+    "src/CockpitWorkspace.vue": "f484297cbf851044b78a93df9b796fb934854cc2d235410c7aa71e77e2f57676",
+    "src/cockpitWorkspace.css": "3db5deaa64caed147ef48d46e2f0046bfb56b1606c3ee03d88f0e63ac4881ee5",
+    "scripts/cockpit-e2e.mjs": "2a8b0cda972a9c7927a69191181d3b5920a67004b63797a8ba1d78bfcd04ee74",
+    "package.json": "8e8579ad3250051fe3137f60416fa45cf8d97fe3b76d83c99a73719c590fd413",
+    "package-lock.json": "14116b4f8bc0885bcacf5008bcea9c2a5b3c9fb95e1e44e5907abc3ac8fe6227"
+  },
+  "source_sha256_after_root_tests": {
+    "README.md": "3288d5f194d3cc29988b1a3a1c0ede4380996ba2c004a9843fd191c2d4648c87",
+    "src/CockpitWorkspace.vue": "f484297cbf851044b78a93df9b796fb934854cc2d235410c7aa71e77e2f57676",
+    "src/cockpitWorkspace.css": "3db5deaa64caed147ef48d46e2f0046bfb56b1606c3ee03d88f0e63ac4881ee5",
+    "scripts/cockpit-e2e.mjs": "2a8b0cda972a9c7927a69191181d3b5920a67004b63797a8ba1d78bfcd04ee74",
+    "package.json": "8e8579ad3250051fe3137f60416fa45cf8d97fe3b76d83c99a73719c590fd413",
+    "package-lock.json": "14116b4f8bc0885bcacf5008bcea9c2a5b3c9fb95e1e44e5907abc3ac8fe6227"
+  },
+  "unchanged_during_root_tests_and_match_ui_commit": true,
+  "root_tests": {
+    "unit": {
+      "command": "npm test",
+      "exit_code": 0,
+      "passed": 117,
+      "failed": 0,
+      "summary": ".\n# Subtest: 外观：设计稿上的样式数值未被改动\nok 116 - 外观：设计稿上的样式数值未被改动\n  ---\n  duration_ms: 0.069667\n  type: 'test'\n  ...\n# Subtest: 外观：两张素材与设计稿逐字节一致\nok 117 - 外观：两张素材与设计稿逐字节一致\n  ---\n  duration_ms: 1.2545\n  type: 'test'\n  ...\n1..117\n# tests 117\n# suites 0\n# pass 117\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 231.660042\n"
+    },
+    "build": {
+      "command": "npm run build",
+      "exit_code": 0,
+      "result": "Vue/TypeScript/Vite succeeded, existing large dependency chunk warning remains"
+    }
+  },
+  "browser": {
+    "raw_json": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/evidence.json",
+    "sha256": "75bf06f1ddbed31910f8e7d8811b3dd85122e899753111fe1c01ebaba05fef59",
+    "scenarios": 87,
+    "fixture_api_requests": 161,
+    "fixture_confirmations": 21,
+    "forbidden_requests": 0,
+    "physical_device_requests": 0,
+    "browser_errors": [],
+    "root_review": "Read original JSON and geometry/interaction checks; independently inspected final 1920 simple stage, 1280 stage and authority confirmation PNGs. Source and raw/red hashes independently verified."
+  },
+  "geometry": {
+    "desktop_1920x1080": {
+      "map": [
+        0,
+        143,
+        810,
+        894
+      ],
+      "video": [
+        825,
+        143,
+        1085,
+        666
+      ],
+      "coordinate_band": [
+        0,
+        95,
+        1920,
+        48
+      ],
+      "authority": [
+        100,
+        25,
+        576,
+        40
+      ]
+    },
+    "desktop_1280x900": {
+      "map": [
+        0,
+        95.3333333333,
+        540,
+        776
+      ],
+      "video": [
+        550,
+        95.3333333333,
+        723.3333333333,
+        624
+      ],
+      "header_background_height_observed": 60.65625
+    },
+    "tolerance_css_px": 1
+  },
+  "behavior": [
+    "Same Cesium canvas, same session and existing confirmation retained across professional/simple and viewport changes",
+    "Simple map/main video coexist without automatic descriptor reads or playback",
+    "Unique existing authority button instances use the same suggestion/cancel flow, no extra confirmations",
+    "Unknown coordinate fields remain unavailable and zero values are preserved",
+    "414px retains the assistant flow; does not claim simultaneous mobile map/video parity"
+  ],
+  "archive": {
+    "files": [
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/provenance.json",
+        "bytes": 4502,
+        "sha256": "df73cd94b91c822aa99807c62c3c8389b19ce1a766930c7e737195c1e28756b9"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/00-header-geometry-observed.png",
+        "bytes": 1168096,
+        "sha256": "91fd154c9a71f7c24c5da9063f3360ed78846939e33699d027acba4ff6663bf4"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/00-professional-stage-observed.png",
+        "bytes": 535007,
+        "sha256": "a4e3d999b32f3d3303a289255e16902d5ccbf89f1f57c42c6771ff6896fa4021"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/01-ready.png",
+        "bytes": 88475,
+        "sha256": "d77802f75364a47906ae4477f9801e1f6d39c1321d43cd072f38e7b71ff0b99d"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/02-confirmation.png",
+        "bytes": 93197,
+        "sha256": "7082c50ffa82faa7a6d44de831384d4d4bb0d6c6b54d0d40fd14ab4247ab515e"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/03-model-timeout.png",
+        "bytes": 82803,
+        "sha256": "ba4b269250378258b97ecdea9b913dfb16501cb9017b00e7cc42e9d30b7dbe5c"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/04-desktop-professional.png",
+        "bytes": 1539150,
+        "sha256": "2c987ff3928afdedfcb7b6423b2016faaec4ea7eafe4abc9b12be147038008bc"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/04b-professional-video-mini-map.png",
+        "bytes": 630663,
+        "sha256": "e92b090ced9027d4765a74dd29b07e46ef42f827e86f894b7943e1b43e3b9ef2"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/05-desktop-simple.png",
+        "bytes": 1127882,
+        "sha256": "b477acd5ce852f9ba82e934948081335ba4c8bcf12481515e602ef708d4efe45"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/05-simple-stage-observed.png",
+        "bytes": 1127882,
+        "sha256": "b477acd5ce852f9ba82e934948081335ba4c8bcf12481515e602ef708d4efe45"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/05b-simple-distance-settings.png",
+        "bytes": 1141414,
+        "sha256": "181ac837574217facb07ab11d4daf44285fa30fb42c17c8c69f3f2b313b9cfe5"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/05c-simple-1280-observed.png",
+        "bytes": 556140,
+        "sha256": "cd84da9b8a65dba029a9bd7dc1424cc7b0d1d344d896e7b8932a1b4c435cb0ce"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/05c-simple-1280.png",
+        "bytes": 556140,
+        "sha256": "cd84da9b8a65dba029a9bd7dc1424cc7b0d1d344d896e7b8932a1b4c435cb0ce"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/05d-simple-1280-settings.png",
+        "bytes": 563825,
+        "sha256": "8fe5e877b7a689583b4dd86f73279b16c59816d5acd644ddff9195bd7b01686e"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/05e-simple-mobile-assistant.png",
+        "bytes": 89580,
+        "sha256": "d8b9f3d581b7d64683ec4cf81873f722dd5d22d0d60160c3ac5cc547c2a75f01"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/06-desktop-confirmation.png",
+        "bytes": 912460,
+        "sha256": "44dfff331afaf9a985babd1af4cba5b01141a0a1ddfb8e8778bb8c842b787178"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/06b-simple-existing-confirmation.png",
+        "bytes": 620728,
+        "sha256": "e27751649b1132e9f2edc7c238e1a6ed9a51d222c455c2b78c69237654d8b80f"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/06c-simple-confirmation-1280.png",
+        "bytes": 392629,
+        "sha256": "9734c61e42e39ddc45dbc22e23a06fd501496460aca3684af1c1bb4f37eb783f"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/06d-simple-zero-coordinates.png",
+        "bytes": 617132,
+        "sha256": "12c8fdeeb15d0db0637edde5bc884b30f43e421bdb599feeb3b578756f63b04a"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/06e-simple-authority-confirmation.png",
+        "bytes": 613790,
+        "sha256": "2c34031b808544c4df28a3f29a56ae30d6735410f4bd5eb668e78bc97e4720b7"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/07-telemetry-read-failure.png",
+        "bytes": 923564,
+        "sha256": "172511c75cb0b0d389cfb29d25b2e38d7dec01d916a294f59d2fbfdc91154954"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/08-device-receipt-completed.png",
+        "bytes": 922815,
+        "sha256": "0e79e073bc8db5e7d4783dc34dff17022d1404e2553a267116b3a9a6aa154961"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/08-device-receipt-mobile.png",
+        "bytes": 92780,
+        "sha256": "ab2845ba655d6e474c36e10f5eb1e0ea8cb382d40e89b76df4453703c8e7cc59"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/09-confirm-timeout-receipt.png",
+        "bytes": 922538,
+        "sha256": "38a303f59a0063e6eb3d96d4275b4d75556a1ab3bb60fb3065686e274a94c8d1"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/10-dual-height-instruments.png",
+        "bytes": 914708,
+        "sha256": "207a7a3d394567a77d6590d19a2e4511f9ae37c1c29bd8d9596324c0fdb9377c"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/11-dual-height-simulator.png",
+        "bytes": 915153,
+        "sha256": "4a50f854a86e877f8f29458e7ed48a500fa689b0a83a7c1ef9a7985af276988b"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/12-offline-map-workspace.png",
+        "bytes": 935486,
+        "sha256": "fdfe7bfe787d45748bc1ce9d94e4cd063800e36058c2918b16c2e05cce5a80ef"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/13-video-sources-1280.png",
+        "bytes": 482061,
+        "sha256": "9d91683cd0edb41bc7ee83e54c6a0170e9dd40e3f02133f76b05a12e68e8c508"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/13-video-sources-desktop.png",
+        "bytes": 568834,
+        "sha256": "13b0bb79b7f9a52f1a3563796a07bfb003567e270bf4ca0080a26c8eb0f63979"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/13-video-sources-mobile.png",
+        "bytes": 67838,
+        "sha256": "a1d729745b707dd89dfc959aed1760784a62b214f6ac147bd0082d36fb0982b0"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/evidence.json",
+        "bytes": 27861,
+        "sha256": "75bf06f1ddbed31910f8e7d8811b3dd85122e899753111fe1c01ebaba05fef59"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/header-geometry-observed.json",
+        "bytes": 487,
+        "sha256": "b26649c466b0d51580d2758d690d6f7da6e8b9b8d5814ebaf61a364990a4a21c"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/simple-1280-observed.json",
+        "bytes": 633,
+        "sha256": "08b712de94cfbde7489f7428d355bc67f0b71c57e0fb9f52331467cb88afa7ea"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/simple-stage-observed.json",
+        "bytes": 891,
+        "sha256": "9a8cfa96a479a5ffe8d4f4e2e4660a8572b09654c77af333920f96056f73687f"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/stage-geometry-observed.json",
+        "bytes": 401,
+        "sha256": "52876b3019d3138c4b2170161dcccdcfc9328ad7cc828474e8922e012aba3b59"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-fJ1nf8/05c-simple-1280-observed.png",
+        "bytes": 567644,
+        "sha256": "e7f6c510dcf022c641bbbe273cc17dcb2ca8c62396532571aecca3397981e3c9"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-fJ1nf8/simple-1280-observed.json",
+        "bytes": 627,
+        "sha256": "37396ca0ab5658b6f6463d25ab533094fceff2ba84934cde799fbee350101923"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-iH6EO2/05-simple-stage-observed.png",
+        "bytes": 1325835,
+        "sha256": "7bbdb124ba39ffa40b9f604330391cc5d8d38e6f56e6826bda06a7152dd0e922"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-iH6EO2/simple-stage-observed.json",
+        "bytes": 566,
+        "sha256": "8e5c4faae3ba394512295923dcb6d3b2a8dd3ab79c5fd06cf06cf088ab47f783"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-oBeGYx/05-simple-stage-observed.png",
+        "bytes": 1122859,
+        "sha256": "ca3e90dece29db3433ea6f0652f499a6ab7ce0f54dba5ee04ce29ab324f0890b"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/run-oBeGYx/simple-stage-observed.json",
+        "bytes": 798,
+        "sha256": "5eb2bfb07aed37ebc22e3eefe87a9af05b612634ad13501256df85f7fc83beab"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-stage-20261016/source-contract.json",
+        "bytes": 4843,
+        "sha256": "e0792a220ac1b924afb80f2d9dea66d3a43d0374d4ed4664ebeb929e2e434423"
+      }
+    ],
+    "counts": {
+      "png": 32,
+      "json": 10
+    },
+    "total_bytes": 22260717
+  },
+  "intermediate_archive": "/tmp/cockpit-simple-stage-intermediate-LhJtDV; recoverable mapping in original provenance, no artifacts deleted",
+  "limits": [
+    "Fixed-source geometry, not full original runtime screenshot comparison",
+    "Original hangar/drone details, carousel, weather and complete instruments remain incomplete",
+    "Assistant placement, mode label and authority button wording are explicit adaptations",
+    "No actual stream decoding, deployed Java receipt integration, model accuracy or device effect verified"
+  ],
+  "effects": {
+    "real_model_calls": 0,
+    "business_api_calls": 0,
+    "business_database_calls": 0,
+    "real_mqtt_connections": 0,
+    "device_actions": 0,
+    "shared_deployments_or_restarts": 0,
+    "development_branch_push": 1
+  },
+  "rollback": "Independent revert of the UI commit, preserving evidence and original session/permission boundaries."
+}
