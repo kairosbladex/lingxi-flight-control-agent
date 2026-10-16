@@ -159,6 +159,10 @@ Python提供器在构造 `KtdSnapshot` 前验证租约、采样/接收时间、�
 
 ## 本地源码续轮与实际接入方式
 
+后续消息来源切片在Java原接收路径保留独立连接代次、manager/client ID、callback Unix毫秒收时及retained/duplicate/实际QoS，并将原MessageData贯通到命令回执旁路。旧无来源入口保持旧业务处理，但不能生成跟踪回执；retained拒绝，duplicate仍由原eventHash幂等。旁路在资源锁后及事务 `beforeCommit` 复核当前连接，失效时回滚该回执写入；遇到已有业务外层事务则略过新旁路，保证旧业务独立。此元数据仅在Java进程内部，不新增浏览器/Agent响应字段，不改变旧日历时间字段，也不改变原帧遥测的既有时间契约。
+
+上述来源判断尚未完成实际发布连接→已鉴权员工→DRC会话→厂商控制源的持久绑定，提交前检查也不能证明提交后网络持续在线。不能将“当前MQTT连接”替代厂商航权或动作许可；Java真实控制否决和默认开关继续保持关闭。具体实现、TDD阶段、源码哈希与门禁结果统一记录在自然语言飞控交付文档的最新消息来源切片。
+
 用户确认以本地源码继续后，核对到主项目 `/Users/wangxiaolin/IdeaProjects/ktd_backend`，其缓存 `origin/prod=e8e3157`。b3副本保存了更新12个提交的正式线缓存 `98a8da4bf13f4ba623fb816da1a5cb9b09f8453a`（2026-10-09）。新Java工作树为 `/Users/wangxiaolin/PycharmProjects/ktd_backend-flight-agent-snapshot`，分支 `feature/flight-agent-platform-snapshot` 从该缓存正式线创建，未搬入test历史。该版本明确为本地缓存，不声称远端最新。原Java主目录、b3及旧前端脏工作区保持原样。
 
 Java响应为 `R.ok(data)`，`schema_version=lingxi-platform-snapshot/v1`。DTO只接受资源标识；服务从登录态获取员工身份。资源校验通过后才读取控制权和遥测。快照/遥测/控制权版本均由可追溯字段计算SHA256；`generated_at` 不参与快照版本。owner必须唯一且匹配当前设备；有效租约为数据库 `updateTime+300秒`，读取不续租。遥测接收时间来自 `putWRJ` 维护的 `LAST_PUSH_TIME`，不使用可能由业务字段更新刷新的缓存时间。`UdpDatas.peekUavSnapshot` 只复制标量，不调用具有清理副作用的旧 `getUAV`。

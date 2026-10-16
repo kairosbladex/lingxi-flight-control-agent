@@ -1,0 +1,393 @@
+{
+  "schema_version": "cockpit-mqtt-receive-source-verification/v1",
+  "recorded_at": "2026-10-16T12:09:38.658Z",
+  "run_id": "java-mqtt-source-20261016-d34df8b",
+  "scope": "Offline candidate: callback identity and arrival facts -> existing queue -> DJI receipt sidecar -> actual local H2 journal transaction.",
+  "task_card": "/Users/wangxiaolin/PycharmProjects/ktd_backend-flight-agent-snapshot/docs/flight-agent-platform-snapshot.md",
+  "repositories": {
+    "java": {
+      "path": "/Users/wangxiaolin/PycharmProjects/ktd_backend-flight-agent-snapshot",
+      "branch": "feature/flight-agent-platform-snapshot",
+      "baseline_commit": "7af3964cc89b35c9371a83c4b37ff26539a7bb48",
+      "implementation_commit": "d34df8b70e93766dd9d1358cd79ec84c8fa40dab",
+      "local_commit_only": true,
+      "push_retried": false,
+      "cached_prod": "98a8da4bf13f4ba623fb816da1a5cb9b09f8453a",
+      "latest_remote_prod_verified": false
+    },
+    "agent": {
+      "baseline_commit": "25cca34f312c26ab6da5deace0bd48fedf7ddbcd",
+      "branch": "feature/natural-language-cockpit",
+      "product_code_changed": false
+    },
+    "ui": {
+      "commit": "ff2b91b6d54524044c5ce97f6af3641b52dfd1c0",
+      "product_code_changed": false
+    }
+  },
+  "operator": "local-development-synthetic-test-actor",
+  "runtime": {
+    "java": "Zulu 1.8.0_332",
+    "maven": "3.10.0",
+    "os": "macOS arm64",
+    "configuration": "Existing tools/ci/snapshot-offline-settings.xml; offline dependency cache; test logback. No application runtime configuration values read."
+  },
+  "source_sha256": {
+    "sys-core/src/main/java/com/walker/mm/MessageReceiveSource.java": "5dff0103528f498b644208d4ac272d8d28dd6d16670e0930cefdaef826aa25e7",
+    "sys-core/src/main/java/com/walker/mm/MessageData.java": "d71c252143e9e23124b180c63118bca2494d5cb79b0c89f3caff49859d962a9a",
+    "sys-core/src/main/java/com/walker/mm/MessageManager.java": "cfe5f20ba24d6062dea5f782547ecd19af048a6597fc08cee544639f48672677",
+    "sys-core/src/main/java/com/walker/mm/impl/DefaultMessageData.java": "0d9da5507e1f1d1e2eeffe2e3e021b8b2bbd7e35b9c39ac25bdc4d0b7b48bb89",
+    "platform-mqtt/src/main/java/com/platform/mqtt/util/MessageUtils.java": "07bd0033e5a964c410040cf5da64b00eedbdb4efb400d707f2d086b1e32449f5",
+    "platform-mqtt/src/main/java/com/platform/mqtt/AbstractMqttMessageManager.java": "bbf1fb5139506d8acf8da1c09a9831e0dd94c3b4198b307c2d6b7cdd4cebfce8",
+    "biz-inspection/src/main/java/com/fan/framework/inspection/flightcommand/FlightCommandIngress.java": "95c84bac3d47920d1ed943e3cb4e2cf6cd9999b8cca0bc52541d526a49db532f",
+    "biz-inspection/src/main/java/com/platform/mqtt/dj/DJHangarBaseProcessor.java": "f81f35080106146421d8d874398adf1412f1f37eefd3ef5f9f15cca182ab39df",
+    "biz-inspection/src/test/java/com/fan/framework/inspection/flightcommand/FlightCommandIngressTest.java": "57800c129b709b1eecf1634182c7e83c2d2db71b7307bfa25828ab6b1c6b7f23",
+    "biz-inspection/src/test/java/com/fan/framework/inspection/flightcommand/MqttIngressFixture.java": "6c1060863b09dd66c678502677f68e78fff5d8f900f48e9661f9979f31e5fbf3",
+    "biz-inspection/src/test/java/com/fan/framework/inspection/flightcommand/MqttReceiveSourceTest.java": "b9ef952cd13b62dc41649028db1015062d82b64e35688077c3a7d433cbf6f22e",
+    "biz-inspection/src/test/java/com/fan/framework/inspection/flightcommand/FlightCommandReceiveSourceTest.java": "0e7a65167ee5b7d2024d1031728c8f23f2d6e8ac90c14d7ff3529ef89db2f62f",
+    "biz-inspection/src/main/java/com/fan/framework/inspection/flightcommand/FlightCommandJournal.java": "37d21e74fd596ab78632bb2c65266ed47a91f69400a6d57ab84cc3bf73b5217b"
+  },
+  "source_unchanged_during_final_run": true,
+  "final_run": {
+    "command": "mvn -o -s tools/ci/snapshot-offline-settings.xml -pl biz-visualization -am -Dtest=PlatformSnapshotTest,UavTelemetrySnapshotTest,UavTelemetryFrameTest,TelemetryIngressTest,PlatformSnapshotRepositoryTest,NullSerializationTest,FlightCommandMapperTest,FlightCommandFlowTest,FlightCommandPreparationTest,DeviceCommandReceiptTest,FlightCommandIngressTest,TrackedFlightControlTest,PlatformVisualsTest,DrcProtocolRegressionTest,MqttReceiveSourceTest,FlightCommandReceiveSourceTest -DreuseForks=false -Dsurefire.failIfNoSpecifiedTests=false -Dlogback.configurationFile=/Users/wangxiaolin/PycharmProjects/ktd_backend-flight-agent-snapshot/tools/ci/snapshot-test-logback.xml test",
+    "requested_at": "2026-10-16T12:04:17.393Z",
+    "finished_at": "2026-10-16T20:05:28+08:00",
+    "reactor_modules": 11,
+    "result": "BUILD SUCCESS",
+    "elapsed_seconds_approximately": 70,
+    "suite_count": 16,
+    "test_methods": 127,
+    "passed": 127,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "module_test_methods": {
+      "biz-inspection": 124,
+      "biz-visualization": 3
+    },
+    "denominator": "Engineering test methods, not model accuracy or real device success rate."
+  },
+  "red_green": [
+    {
+      "finished_at": "2026-10-16T19:38:19+08:00",
+      "test_methods": 7,
+      "failures": 1,
+      "errors": 0,
+      "reproduction": "legacyMessagesWithoutConnectionSourceCannotMutateTrackedJournal: expected submitted, actual accepted."
+    },
+    {
+      "finished_at": "2026-10-16T19:43:51+08:00",
+      "stage": "test fixture compilation repair",
+      "result": "unreported checked StartupException in synthetic fixture open; fixed by explicit catch -> AssertionError.",
+      "behavior_evidence": false
+    },
+    {
+      "finished_at": "2026-10-16T19:45:20+08:00",
+      "test_methods": 14,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "finished_at": "2026-10-16T19:48:04+08:00",
+      "test_methods": 9,
+      "failures": 1,
+      "errors": 0,
+      "reproduction": "reconnectDuringConnectionValidationCannotApproveOldToken: reconnect occurs at the external client isConnected read; old implementation approves the retired token."
+    },
+    {
+      "finished_at": "2026-10-16T19:50:12+08:00",
+      "test_methods": 27,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "finished_at": "2026-10-16T19:53:00+08:00",
+      "test_methods": 124,
+      "failures": 0,
+      "errors": 0,
+      "scope": "Intermediate full regression before transaction hardening; retained as historical stage."
+    },
+    {
+      "finished_at": "2026-10-16T20:00:14+08:00",
+      "test_methods": 13,
+      "failures": 2,
+      "errors": 0,
+      "reproduction": "Reconnect after real journal lookup or after a real SQL INSERT still records accepted."
+    },
+    {
+      "finished_at": "2026-10-16T20:01:20+08:00",
+      "test_methods": 14,
+      "failures": 3,
+      "errors": 0,
+      "reproduction": "The two transaction cases plus source invalidation inside an existing legacy business transaction."
+    },
+    {
+      "finished_at": "2026-10-16T20:02:45+08:00",
+      "test_methods": 30,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "finished_at": "2026-10-16T20:05:28+08:00",
+      "test_methods": 127,
+      "failures": 0,
+      "errors": 0,
+      "scope": "Final complete selected 11-module regression, after all source changes."
+    }
+  ],
+  "junit_suites": [
+    {
+      "module": "biz-inspection",
+      "path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.flightcommand.DeviceCommandReceiptTest.xml",
+      "name": "com.fan.framework.inspection.flightcommand.DeviceCommandReceiptTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.146,
+      "mtime": "2026-10-16T12:04:55.030Z",
+      "sha256": "a31bcfd6ea4f212c0027e4f33d3a127ea31fb48143dd54ee6aa001df66e14282"
+    },
+    {
+      "module": "biz-inspection",
+      "path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.flightcommand.FlightCommandFlowTest.xml",
+      "name": "com.fan.framework.inspection.flightcommand.FlightCommandFlowTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 1.429,
+      "mtime": "2026-10-16T12:05:06.248Z",
+      "sha256": "7e7bb4861ed2f76abbb6bc6df1f6dac05834e0ae766bf1ae440ef59b27111464"
+    },
+    {
+      "module": "biz-inspection",
+      "path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.flightcommand.FlightCommandIngressTest.xml",
+      "name": "com.fan.framework.inspection.flightcommand.FlightCommandIngressTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 1.341,
+      "mtime": "2026-10-16T12:05:04.226Z",
+      "sha256": "5207d9ebea1a568a7f2d9f7fed8deb6bc01aa75aaf923910cd39971db46feb7a"
+    },
+    {
+      "module": "biz-inspection",
+      "path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.flightcommand.FlightCommandMapperTest.xml",
+      "name": "com.fan.framework.inspection.flightcommand.FlightCommandMapperTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 1.453,
+      "mtime": "2026-10-16T12:05:02.224Z",
+      "sha256": "deebae9e7142a955517530161df499ee01b56120ec894ffbc38af51bb528fc57"
+    },
+    {
+      "module": "biz-inspection",
+      "path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.flightcommand.FlightCommandPreparationTest.xml",
+      "name": "com.fan.framework.inspection.flightcommand.FlightCommandPreparationTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.145,
+      "mtime": "2026-10-16T12:04:55.815Z",
+      "sha256": "dc66fdaee6688514d70c4c39d025433ec20f8fa4494d0f7f783b5d8ff24b6dd1"
+    },
+    {
+      "module": "biz-inspection",
+      "path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.flightcommand.FlightCommandReceiveSourceTest.xml",
+      "name": "com.fan.framework.inspection.flightcommand.FlightCommandReceiveSourceTest",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 1.718,
+      "mtime": "2026-10-16T12:05:00.101Z",
+      "sha256": "d439217421ca805ebe2e6ce23e6a503efea82a2fe842439d6037374a2d28893a"
+    },
+    {
+      "module": "biz-inspection",
+      "path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.flightcommand.MqttReceiveSourceTest.xml",
+      "name": "com.fan.framework.inspection.flightcommand.MqttReceiveSourceTest",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 1.256,
+      "mtime": "2026-10-16T12:04:57.738Z",
+      "sha256": "553c5d4ae6cc02f73cc29a731dfe28e97af298ed60d4d0d379ac7810e68faf24"
+    },
+    {
+      "module": "biz-inspection",
+      "path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.platformsnapshot.DrcProtocolRegressionTest.xml",
+      "name": "com.fan.framework.inspection.platformsnapshot.DrcProtocolRegressionTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 5.471,
+      "mtime": "2026-10-16T12:05:15.105Z",
+      "sha256": "2ef403c58662a7a2fd0ab6bc661e9e1808a874940a556ce29088a53733ff1c85"
+    },
+    {
+      "module": "biz-inspection",
+      "path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.platformsnapshot.NullSerializationTest.xml",
+      "name": "com.fan.framework.inspection.platformsnapshot.NullSerializationTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.292,
+      "mtime": "2026-10-16T12:05:16.061Z",
+      "sha256": "9050878851868bcd66a85ff8487629caf95ee8b4a5d748a4b751cc4630fe3f57"
+    },
+    {
+      "module": "biz-inspection",
+      "path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.platformsnapshot.PlatformSnapshotRepositoryTest.xml",
+      "name": "com.fan.framework.inspection.platformsnapshot.PlatformSnapshotRepositoryTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.1,
+      "mtime": "2026-10-16T12:05:19.320Z",
+      "sha256": "2c146b0ad4654aaf1ecc1ffa770cdfeb8f9c4d97d02b9359c7f3d17bff350e53"
+    },
+    {
+      "module": "biz-inspection",
+      "path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.platformsnapshot.PlatformSnapshotTest.xml",
+      "name": "com.fan.framework.inspection.platformsnapshot.PlatformSnapshotTest",
+      "tests": 21,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.255,
+      "mtime": "2026-10-16T12:05:08.947Z",
+      "sha256": "6bc9a32b8e4f5a2f8beae037490b4c731445799bd19958f5cb25e0ff3ef2e550"
+    },
+    {
+      "module": "biz-inspection",
+      "path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.platformsnapshot.TelemetryIngressTest.xml",
+      "name": "com.fan.framework.inspection.platformsnapshot.TelemetryIngressTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.217,
+      "mtime": "2026-10-16T12:05:17.779Z",
+      "sha256": "3a8d6a9ac360d8587c8fe7ce80001ef96a88db9f20094f8ea84d7ffec01e426c"
+    },
+    {
+      "module": "biz-inspection",
+      "path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.platformsnapshot.UavTelemetryFrameTest.xml",
+      "name": "com.fan.framework.inspection.platformsnapshot.UavTelemetryFrameTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.14,
+      "mtime": "2026-10-16T12:05:16.878Z",
+      "sha256": "319c711f525a91554f1bf750c67359e15566deb9a237ce5406627346c7a6d782"
+    },
+    {
+      "module": "biz-inspection",
+      "path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.platformsnapshot.UavTelemetrySnapshotTest.xml",
+      "name": "com.fan.framework.inspection.platformsnapshot.UavTelemetrySnapshotTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.145,
+      "mtime": "2026-10-16T12:05:18.577Z",
+      "sha256": "9904d4f28d49e32c1f2f1db146b252e90d4ef0e3e0e581e3b1f92027e7b6e1f2"
+    },
+    {
+      "module": "biz-inspection",
+      "path": "biz-inspection/target/surefire-reports/TEST-com.fan.framework.inspection.platformvisuals.PlatformVisualsTest.xml",
+      "name": "com.fan.framework.inspection.platformvisuals.PlatformVisualsTest",
+      "tests": 21,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 1.108,
+      "mtime": "2026-10-16T12:05:08.007Z",
+      "sha256": "4d01be8cf418b0c43e8dade70f62d071943a9c93c7cf4b7662f7e345daa232f3"
+    },
+    {
+      "module": "biz-visualization",
+      "path": "biz-visualization/target/surefire-reports/TEST-com.fan.framework.visualization.controller.TrackedFlightControlTest.xml",
+      "name": "com.fan.framework.visualization.controller.TrackedFlightControlTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 1.092,
+      "mtime": "2026-10-16T12:05:28.348Z",
+      "sha256": "7c8c61b257113f5b5fc77e30d86fbcedeae631474e235c5bb6752feeeb387b02"
+    }
+  ],
+  "generated_synthetic_fixture_sha256": {
+    "biz-inspection/target/flight-agent-command-receipt-v1.json": "62c8b6ce6292498af948c873753b172c955d51bc077f9e4e368726c43efeef47",
+    "biz-inspection/target/flight-agent-platform-snapshot-v1.json": "f9a50d95d872daa577ff00488953ea50c247e0944ca6b322701522cb806269c6",
+    "biz-inspection/target/flight-agent-platform-raw-snapshot-v1.json": "10a46754279c56bb277702453c917c30fb8f659e0a78c7d6707f2e63c440b4ad",
+    "biz-inspection/target/flight-agent-platform-visuals-v1.json": "f24474985c70543d23298c54d1109da2565772209aafac1b837efd74a9ec64f1"
+  },
+  "fixture_notes": [
+    "Existing Java cache/raw-frame/media fixture hashes remain equal to their prior documented Java outputs.",
+    "The command receipt's bid/tid/fly_to_id are generated afresh by the real preparation path; its whole-file hash is not claimed stable across runs.",
+    "No frozen Agent fixture, label or provenance file was replaced. Existing Python/UI results were not rerun for this Java-only change."
+  ],
+  "behavior": [
+    "Each created Paho client gets its own captured manager/client/opaque generation callback; source time and retained/duplicate/actual QoS are frozen at callback entry.",
+    "The existing static/dynamic routing, conversion and queue carry that same source. Direct legacy callbacks and factories keep unknown source and do not borrow the latest connection.",
+    "Disconnect, shutdown, replacement, late callbacks and stale scheduled subscriptions cannot relabel an old delivery as a new generation. Validation rechecks generation after the external connection-state read.",
+    "The DJI sidecar receives the original MessageData plus its owning manager. Retained and missing/stale source are refused; duplicate's first valid delivery is accepted and subsequent eventHash replay is idempotent.",
+    "Receipt parsing uses callback epoch milliseconds, not calendar getTimeStamp or later consumer time. Reported time after arrival is refused even if it precedes later processing time.",
+    "The journal checks source after resource locking and in Spring beforeCommit. Invalidated source rolls back the SQL event and command-version update.",
+    "An already-active legacy transaction skips the new sidecar, keeping its business work independent. Source/store failures do not suppress the existing business branch or its own exceptions.",
+    "Old public method signatures, old calendar timestamp, legacy business QoS, decoding behavior and actual production MqttClient.close(true) behavior are retained."
+  ],
+  "new_test_methods": {
+    "existing_ingress_regression": 1,
+    "manager_and_handoff": 9,
+    "receipt_and_sql_transaction": 14,
+    "total": 24
+  },
+  "test_boundaries": [
+    "Only the external IMqttClient factory is replaced by an in-process proxy; no real Paho client/network connection is created by these new tests.",
+    "Actual callback installation, manager routing, MessageUtils and dataQueue run; queued data is drained into the original processing task or processor.",
+    "The perpetual consumer/reconnection management threads are not started; synthetic lifecycle interleavings do not prove a live Broker or firmware lifecycle.",
+    "Actual H2 uses the production DDL, mapper and transaction manager. Only old business storage/publication branches are replaced when asserting continued delivery."
+  ],
+  "review": {
+    "root_reviewed_source_and_all_new_tests": true,
+    "peer": "/root/java_ingress_contract",
+    "peer_found_transaction_window": true,
+    "root_reproduced_window_as_failing_real_H2_tests": true,
+    "final_junit_counts_and_mtimes_verified": true
+  },
+  "limits": [
+    "No authenticated employee -> actual publishing connection -> DRC session -> reported vendor control_source binding has yet been completed.",
+    "Connection provenance remains an in-process message object; the complete source tuple is not yet durably bound to outgoing command rows.",
+    "The final source check is beforeCommit. It does not establish continued network connectivity during the database driver commit or afterwards, and never authorizes a next flight action.",
+    "Source validation and command-ID correlation alone do not prove firmware execution, displacement precision or complete vendor session authenticity.",
+    "Existing raw telemetry timestamp/byte-decoding limitations remain. No real MQTT reply samples were collected.",
+    "VENDOR_AUTHORITY_UNAVAILABLE, CONTROL_LINK_FRESHNESS_UNAVAILABLE, UAV_MOVE_DISTANCE=false and disabled-by-default tracking remain in force.",
+    "Full online UI parity, shared deployment, actual device effects and independent accuracy acceptance remain incomplete."
+  ],
+  "effects": {
+    "real_model_requests": 0,
+    "business_database_calls": 0,
+    "business_api_calls": 0,
+    "mqtt_connections": 0,
+    "device_actions": 0,
+    "business_application_starts": 0,
+    "deployments": 0,
+    "production_ddl_or_pom_or_runtime_config_changes": 0,
+    "local_test_database": "Isolated synthetic H2 only, including one test-only legacy observation table."
+  },
+  "rollback": "Revert the single local Java implementation commit. Preserve historical command/event records; do not resend flight commands."
+}
