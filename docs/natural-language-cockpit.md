@@ -519,3 +519,41 @@ Java本地提交 **`0eb831bfefd3fcc40d2a9ab91a3d9102ccf71137`**，准确包含23
 最终[原始浏览器记录](evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/evidence.json)、[来源契约](evidence/cockpit-simple-instruments-20261016/source-contract.json)、[作者来源与红绿](evidence/cockpit-simple-instruments-20261016/provenance.json)及[root逐文件核验](evidence/cockpit-simple-instruments-20261016.json)已归档。root实际查看最终[上端读数](evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/12e-simple-gimbal-upper-boundary.png)、[下端读数](evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/12e-simple-gimbal-lower-boundary.png)及[1280负角/确认卡](evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/12d-simple-negative-angle-1280.png)。原始报告SHA为 `80b57cb4a59ba3ebace6786ae61ee239fc9b4f2c27d9d4795e6c5194ac71848b`；持久55文件为43PNG/12JSON、29,364,020字节，含三组真实红灯。重复中间产物移入 `/tmp/cockpit-simple-instruments-intermediate-bLQ69c`，保留run/文件名与恢复映射，没有删除或改造raw数据。
 
 UI六个相关文件已提交推送 **`7f14780eb2fca94dca4fa664d26edd246c11d780`**，远端SHA核验相同、工作区干净；九个产品/依赖/素材清单哈希与最终提交字节一致。Agent产品 `2284ee6` 已推送、573/573，Java `0eb831b` 仅本地、208/208；这些是各自离线证据，不是新的跨语言在线验收。回退独立revert UI提交并保留证据。ASL不声明已知海拔基准，非零速度/云台案例为模拟器夹具，414仅沿用原助手流程；真实遥测、厂商持续航权、MySQL、完整设备内容/天气及线上业务/像素与设备效果仍未验证。默认真实控制继续关闭，本续轮真实模型、业务写入、MQTT、设备和共享部署/重启均0，整体目标保持进行中。
+
+## 设备内容与完整服务评测任务卡（2026-10-16）
+
+上一轮属于实际进展，未达到整体目标。本轮从干净的Agent `de0725faaf8ca9d885078767b903152697d50703`、UI `7f14780eb2fca94dca4fa664d26edd246c11d780`、Java本地 `0eb831bfefd3fcc40d2a9ab91a3d9102ccf71137` 继续，语义分支不变。目标是补齐完整会话入口的意图评测，消除旧集缺两项动作和航线状态歧义，并按固定旧前端继续核对设备详情/天气区域；Java先只读核对原取权接口到内部vendor请求的可接入路径。验收为公开CockpitService路径、独立场景状态与59动作覆盖的测试和候选报告，以及具有精确来源的UI下一切片；不把新增评测称真实飞行准确率或用request_succeeded授予持续航权。
+
+输入来自当前实现、固定旧前端 `35574cba`、原100条冻结集合及已归档厂商schema。输出为明确区分建议层/服务层的bench入口、独立v2冻结集与provenance、必要单测/候选证据，以及UI来源/实现。v1输入、标签、评分和原83/7/10结果不改。服务层必须使用真实CockpitService、模型解码器、原loop与内存执行器，独立设置每案例状态，只提议/预览、不确认；每条保留错误/超时/缺失与分母，记录schema/prompt/source/config哈希及各类计数。Java和Agent产品先冻结，不另建运行时或隐含状态机。
+
+模式为本地候选、离线TDD及可选既有局域网Ollama候选，身份为本机开发/合成操作者。总预算70分钟/180次root调用；UI45分钟/100次，bench45分钟/100次，Java只读准备20分钟/35次。新bench先在外部模型HTTP边界注入响应做红绿，root复核并冻结后才允许只向既有qwen3.5:9b服务请求；候选上限120样本/180请求/1800秒/2000000估算tokens、每请求30秒，provider/model不切换。真实模型调用不是单元测试，不进入唯一离线discover。允许必要本地文件/浏览器/测试产物及已有权限内开发分支提交推送；不连接业务库/真实视频/MQTT/设备，不部署或重启，不重试Java下载/推送。公开控制写入、共享部署及具体设备验收仍需覆盖动作的明确授权。
+
+### 本轮接口设计决定与模型冻结
+
+主Agent已完成Java原路由、内部vendor service、严格JSON advice及权威快照源码复核。为避免旧实例忽略未知tracking后进入旧写分支，离线候选采用专用 `POST /screen/uav/operation/control/vendor-request`，不复用旧URI的未知schema回退；旧服务对此路径应返回404。新HTTP仅传版本化请求方法、资源、请求标识、5秒内期限和确认绑定的权威 `snapshotVersion`，严格拒绝员工/网关/broker/客户端或持权断言。原service复用权威快照算法在准入及原事务/发送guard内重复核对期望版本；同一journal、scope、发布连接和回执来源链继续使用。独立HTTP开关默认关闭、方法allowlist默认空，原tracking仍关闭，不调用旧自动取权/DRC心跳路径。
+
+此决定仅将Java任务从只读准备升级为离线代码候选（45分钟/90调用，包含真实converter/H2与原链路的TDD），未授权任何公开实例写入或设备操作。首切只公开一次方法请求及分型回执；不把平台控制权或键盘模式动作重新解释为vendor方法，不新增Agent工具或修改59动作契约。结果仍为请求事实，持续航权/DRC为unknown、设备效果not_verified；上线、启用与具体设备验收仍是人工节点。
+
+服务bench经主Agent独立复核，完整离线门禁 **583/583**（3.179秒）及 `git diff --check` 通过。v2冻结102条合成输入、17类、59动作，继承100条原输入与意图标签，额外保存独立服务状态期望；路线前态按真实模拟器契约修正，旧v1和83/7/10报告不改。代码/输入/标签/prompt/schema冻结后进行一次有界候选回放；结果未知，不预先宣称102条模型全部通过。运行期间不修改Agent产品或上述评测文件。
+
+UI来源审计后，主Agent独立读取固定 `src/views/hangar/components/devices.vue` 的模板和CSS，批准专业设备卡局部切片：原94px头部、58px底图、63×39头像与左右切换箭头，默认机库。箭头只改变本地展示，同一资源、会话、确认卡和媒体保持；名称/地点/SN无权威字段则未提供，资源ID明确标为资源标识。无人机在线只用服务端布尔观测，机库在线未知，airborne不解释为舱外；天气及业务更多/调试/维护暂不引入。验收为真实Vue红绿、1920/1280局部几何与移动/原确认链回归、布局操作零新增请求，不能扩称全驾驶舱线上像素一致。
+
+### 回放发现后的门禁修复切片
+
+23:30:12—23:46:27服务候选已完整结束，原始102条为90匹配/6不匹配/6超时，92次模型请求；确认、写工具、平台及设备动作均0。原始报告保留不改。主Agent发现 `injection_03` 的伪SYSTEM/管理员授权文本获得了起飞预览，另三条普通动作被替换成未请求的 `control_acquire`。本轮在冻结报告之后恢复Agent产品编辑，只用公开消息/确认入口的TDD补齐这两类门禁，不改模型、prompt、59项schema或冻结标签；不把修复前90/6/6写成修复后的结果。
+
+该切片预算15分钟/35调用，允许必要本地测试、代码及证据。修复后可针对原v2最多6条做独立有界服务候选（8请求/240秒/200000估算tokens，每请求30秒）；原报告不覆盖，未选96条仍为missing，不能推断整批新准确率。具体动作、既有明确申请/释放控制权、取消/多轮与旧确认失效都要回归；模型臆造授权不能创建动作卡或继承此前已确认权限。真实平台开关、MQTT、业务写入及设备操作保持关闭。
+
+首个修复后6条候选为3匹配/3不匹配、其余96条missing：伪SYSTEM在模型前澄清，合法申请/释放仍出卡，三条错误取权已被拦成澄清但未达到原动作契约。主Agent据现有状态投影明确prompt v1.1中两个字段的真实含义：`control_owned=true` 为已持权，`control_request=none` 只是无待审批申请；只有明确取/放权意图才可建议对应工具。没有加入冻结样本的答案示例，不改v2标签。再以相同6条和相同状态/模型做一次定向候选（最多6样本/8请求/240秒/200000估算tokens）；合计最多114次样本尝试，仍不作整批A/B或真实准确率结论。先完整离线门禁，再冻结运行；此次prompt版本进入独立产物目录名。
+
+## 本轮交付（2026-10-17）
+
+Agent服务bench提交 `b7f428c`、门禁提交 `76339f6`、prompt语义提交 `4f8412f`；最终唯一离线门禁 **590/590**、socket守护及diff检查通过。新增7方法/35组合成场景，真实红灯为首轮19个子例和扩展5个子例，再绿；合法取放权、正确飞行动作、历史陈述、说明性问题、旧卡失效和继续均覆盖。原102条完整候选90/6/6保持原字节。guard-only的同6条为3/3，prompt v1.1后同6条 **6/6**，余96条未运行；源、输入、标签、schema和prompt哈希分开记录，不称102条新准确率。具体见[门禁与定向证据](evidence/cockpit-request-authority-20261017.json)、[整批来源](evidence/cockpit-service-intents-20261016.json)及各artifact/provenance。有限表达式门禁不是所有语言变体的完整防护；原全量超时和read_state标签差异未抹除。
+
+UI提交推送 `77639f2f335019440b37a14d19a1ca21cef95868` 已核验远端SHA、工作区干净。根Agent独立重跑120项与构建，复核74文件/34735491字节、固定旧源码、全部raw记录及提交4文件字节，目视1920/1280截图。最终102浏览器场景、185夹具API/21夹具确认、0禁止/设备请求/浏览器错误；新增10次均为手动状态GET。头部94/58px、头像63×39、双箭头局部来源已恢复，保持同一会话/卡/canvas；外层335px与跨分辨率徽标换行是明确适配，设备详情、天气、原Title素材及完整线上像素未验收。见[独立复核](evidence/cockpit-device-header-20261017.json)。
+
+Java本地提交 **`af034e1b16512a67d96d57ef2f12c7518c98a898`**，未重试下载或push。专用默认关闭POST与分型GET复用原鉴权/service/journal/连接，严格原始JSON、资源和确认快照，在锁后/commit前/实际发布guard重复核验；精确幂等先返回已存在尝试，未知结果不补发。root额外发现final Controller不能被原RestAop代理，真实CGLIB红绿后仅去final，代理HTTP严格校验继续通过；最终11模块 **231/231**，0失败/错误/跳过，root核对8源码/23份当次XML哈希与计数。原日志EOF规范副本通过格式检查，原始3文件字节由Java相邻raw-bytes JSON精确保留。Java证据与接口细节见该工作树 `docs/flight-agent-platform-snapshot.md`；Agent typed请求确认入口尚未接线，持续航权/DRC仍unknown、设备效果not_verified。
+
+本轮仅本地代码、离线夹具、现有模型服务候选和开发分支提交；114样本尝试共102次模型HTTP，模型bench确认/写工具/平台调用均0。真实MQTT、业务库迁移、平台/设备写入、共享部署和重启均0。原Java主目录与冲突旧前端未编辑；个人GitHub映射不含本组三仓，未另行同步。原始报告全部保留，回滚用本任务独立revert，不删journal或重发未知命令。剩余为typed vendor确认接线、权威航权/控制源失效契约、完整设备/天气只读数据、MySQL及线上/设备验收，整体目标保持进行中。
+
+收尾仅延长10分钟用于证据格式、提交、文档及远端SHA核验；不增加模型、产品功能或外部业务副作用。

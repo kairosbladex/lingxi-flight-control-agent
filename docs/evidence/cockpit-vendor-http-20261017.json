@@ -1,0 +1,31 @@
+{
+  "schema_version": "cockpit-vendor-http-root-verification/v1",
+  "java_repository": "/Users/wangxiaolin/PycharmProjects/ktd_backend-flight-agent-snapshot",
+  "baseline": "0eb831bfefd3fcc40d2a9ab91a3d9102ccf71137",
+  "commit": "af034e1b16512a67d96d57ef2f12c7518c98a898",
+  "branch": "feature/flight-agent-platform-snapshot",
+  "push": "not attempted; earlier GitLab rejection preserved",
+  "source_evidence": "docs/evidence/vendor-control-http-20261016.json",
+  "source_evidence_sha256": "ed6d4c29e6dde9449b8d91067f1d2c25001479bf6b47f9f1f44caabb59bf3255",
+  "root_checks": {
+    "committed_source_hashes": 8,
+    "current_run_xml_hashes_counts_and_times": 23,
+    "tests": 231, "failures": 0, "errors": 0, "skipped": 0,
+    "maven_modules": 11,
+    "finished_at": "2026-10-17T00:02:07+08:00",
+    "raw_artifact_roundtrips": 3,
+    "diff_and_staged_diff_check": "passed",
+    "independent_maven_rerun": false,
+    "validation": "Root reviewed source and actual XML hashes/counts/times; worker ran the required Maven gate."
+  },
+  "fix_reviewed": "Real RestAop requires a CGLIB proxy. Three actual proxy red tests exposed final Controller; removing final fixed proxy POST/GET, raw validation and no-store.",
+  "contract": {
+    "post": "/screen/uav/operation/control/vendor-request",
+    "get": "/lingxi/agent/commands/vendor-receipt",
+    "http_enabled_default": false, "allowed_methods_default": [], "tracking_enabled_default": false,
+    "receipt": "Request fact only; vendor_authority/drc_link unknown, device_effect not_verified"
+  },
+  "not_verified": ["Agent typed confirmation wiring", "sustained vendor authority", "employee/DRC/control_source lifecycle", "MySQL", "real MQTT/firmware", "deployed HTTP application", "device effects"],
+  "business_writes": 0, "real_device_actions": 0, "deployment": false,
+  "rollback": "Revert only this commit; preserve command journal and never resend unknown attempts."
+}

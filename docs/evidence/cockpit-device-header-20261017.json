@@ -1,0 +1,59 @@
+{
+  "schema_version": "cockpit-device-header-root-verification/v1",
+  "date": "2026-10-17",
+  "scope": "Local UI header and interaction, not complete online cockpit acceptance",
+  "ui_repository": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui",
+  "baseline": "7f14780eb2fca94dca4fa664d26edd246c11d780",
+  "branch": "feature/natural-language-cockpit",
+  "commit": "77639f2f335019440b37a14d19a1ca21cef95868",
+  "remote_branch_sha_verified": "77639f2f335019440b37a14d19a1ca21cef95868",
+  "changed_files": ["src/CockpitWorkspace.vue", "src/cockpitWorkspace.css", "scripts/cockpit-e2e.mjs", "README.md"],
+  "independent_root_checks": {
+    "unit_command": "npm test",
+    "unit_passed": 120,
+    "unit_failed": 0,
+    "build_command": "npm run build",
+    "build_passed": true,
+    "existing_large_chunk_advisory_remains": true,
+    "diff_check": "passed",
+    "frozen_file_hashes_and_lengths_verified": 74,
+    "frozen_total_bytes": 34735491,
+    "fixed_original_devices_blob_hash_verified": true,
+    "browser_rerun_by_root": false,
+    "raw_browser_json_independently_inspected": true,
+    "screenshots_viewed": ["green/run-oYlQL7/04f-device-header-1920-observed.png", "green/run-oYlQL7/04g-device-header-1280.png"]
+  },
+  "browser_evidence": {
+    "path": "cockpit-device-header-20261016/green/run-oYlQL7/evidence.json",
+    "sha256": "af9bc78dcc0d5a311da320d4dbfce3c10a94112ba536f56be81908db56bc758b",
+    "source": "offline-http-fixture",
+    "scenarios": 102,
+    "device_scenarios": 6,
+    "api_requests": 185,
+    "confirmation_requests": 21,
+    "forbidden_requests": 0,
+    "physical_device_requests": 0,
+    "browser_errors": 0,
+    "added_manual_state_reads": 10,
+    "added_control_or_media_requests": 0
+  },
+  "provenance": {
+    "path": "cockpit-device-header-20261016/provenance.json",
+    "sha256": "9e4c5a20e4589241ea7dfb93cf6bf03309e75d7d0742ccdbd53cbc49b3f8f171"
+  },
+  "verified_behavior": [
+    "Default hangar, both arrows switch only the local card.",
+    "Local original dimensions: header94, backdrop58, avatar63x39, arrows top60/edge5/size20 at1920.",
+    "Same session, pending confirmation and Cesium canvas remain across switches.",
+    "Only authoritative boolean UAV online is displayed; missing, unavailable and read failures remain unknown.",
+    "Hangar online, names, location and serial number remain unknown; resource IDs are explicitly labeled."
+  ],
+  "limits": [
+    "Outer sidebar width remains335px. Local viewport scaling changes badge wrapping between1920 and1280.",
+    "No claim of complete internal layout, full source-title artwork or online pixel equivalence.",
+    "Complete device details, weather, actual Java/media/device behavior remain unverified."
+  ],
+  "deployment": false,
+  "merge_request_created": false,
+  "rollback": "Revert only commit77639f2; preserve evidence, sessions and command journal."
+}

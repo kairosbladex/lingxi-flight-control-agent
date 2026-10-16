@@ -4,10 +4,10 @@
 
 | 范围 | 当前代码或证据 | 验收边界 |
 | --- | --- | --- |
-| Agent意图、澄清与确认 | `feature/natural-language-cockpit@2284ee6a1f00c6385c2c860f420caacbe901ebc9`；离线573/573，已推送核验 | 明确运动顺序、连续补参、数量范围/上限/约数及英文单位边界已验证；非完整语言理解或真实飞行准确率 |
-| 指定前端 | `lingxi-flight-agent-ui@7f14780eb2fca94dca4fa664d26edd246c11d780`；120项、96个离线浏览器场景；已推送核验 | 专业全窗地图、简控双舞台/坐标条/控制权入口及三联仪表已验证；设备完整内容、天气与完整线上像素/业务仍未验收 |
-| 当前模型候选回放 | Agent `98178f8`；原100条合成输入：83符合、7不匹配、10超时 | 仅建议层；104请求，0确认/写工具；不验证服务策略或真实飞行准确率 |
-| Java候选 | `feature/flight-agent-platform-snapshot@0eb831bfefd3fcc40d2a9ab91a3d9102ccf71137`，仅本地提交 | 2026-10-16 22:05:37，11模块208/208离线；内部厂商请求事实链，非公开取权、持续航权、MySQL、Broker或设备验收 |
+| Agent意图、澄清与确认 | `feature/natural-language-cockpit@4f8412fd0ccd4b513ed5ca5a27a2028622691198`；离线590/590 | 补齐伪造审批/角色文本及未请求取放权门禁，prompt v1.1明确控制权字段语义；非完整语言理解或真实飞行准确率 |
+| 指定前端 | `lingxi-flight-agent-ui@77639f2f335019440b37a14d19a1ca21cef95868`；120项、102个离线浏览器场景；已推送核验 | 追加来源明确的机库/无人机头部与本地切换；设备完整内容、天气及完整线上像素/业务仍未验收 |
+| 服务级模型候选 | 修复前102条：90匹配/6不匹配/6超时；prompt v1.1相同6条定向全部匹配，其余96条missing | 同一真实服务/模拟器预览，0确认/写入；59动作仅指标签覆盖，不是59项模型全对，不作整批A/B或飞行准确率结论 |
+| Java候选 | `feature/flight-agent-platform-snapshot@af034e1b16512a67d96d57ef2f12c7518c98a898`，仅本地提交 | 2026-10-17 00:02:07，11模块231/231；默认关闭HTTP请求/分型查询与真实RestAop代理已验证；无Agent入口、持续航权、MySQL、Broker或设备验收 |
 | Java正式线 | 缓存 `prod=98a8da4bf13f4ba623fb816da1a5cb9b09f8453a` | GitLab下载/推送已拒绝，未重试；不称最新远端prod |
 | 原Java工作树 | `/Users/wangxiaolin/IdeaProjects/ktd_backend`，`feature/geo-video-sync-recompute@858f6deec67d93734242a52845215a4d78736d6d` | 本轮重新核对干净且未改 |
 

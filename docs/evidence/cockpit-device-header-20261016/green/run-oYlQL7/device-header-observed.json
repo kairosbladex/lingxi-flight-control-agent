@@ -1,0 +1,56 @@
+{
+  "sourceCommit": "35574cba46d498e0992de05504756bccf7014ade",
+  "source": "src/views/hangar/components/devices.vue:297-363",
+  "reference": {
+    "defaultDevice": "机库",
+    "plateHeight": 94,
+    "backdropHeight": 58,
+    "portrait": [
+      63,
+      39
+    ],
+    "arrow": {
+      "top": 60,
+      "edge": 5,
+      "size": 20
+    }
+  },
+  "actual": {
+    "kind": "机库",
+    "header": {
+      "x": 0,
+      "y": 31.984375,
+      "width": 335,
+      "height": 93.984375
+    },
+    "backdrop": {
+      "x": 0,
+      "y": 36,
+      "width": 335,
+      "height": 57.984375
+    },
+    "avatar": {
+      "x": 39.984375,
+      "y": 9.984375,
+      "width": 62.984375,
+      "height": 38.984375
+    },
+    "previous": {
+      "x": 4.984375,
+      "y": 59.984375,
+      "width": 19.984375,
+      "height": 19.984375
+    },
+    "next": {
+      "x": 310.03125,
+      "y": 59.984375,
+      "width": 19.984375,
+      "height": 19.984375
+    },
+    "description": "名称：未提供\n地点：未提供",
+    "online": "未知",
+    "resourceId": "fixture-hangar",
+    "legacyTabs": 0
+  },
+  "screenshot": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/04f-device-header-1920-observed.png"
+}
