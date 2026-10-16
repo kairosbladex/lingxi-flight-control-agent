@@ -205,3 +205,189 @@ class CockpitMotionGroundingTests(unittest.TestCase):
                 self.message('向前飞10米')
                 reply = self.message('改为一米半')
                 self.assertEqual(reply['status'], expected)
+
+    def test_explicit_order_cannot_start_with_a_later_motion(self):
+        for text, action, parameters in (
+            ('先向前飞10米，再向左飞5米', 'move_left', {'distance_m': 5}),
+            ('先右转90度，然后向前飞三米', 'move_forward', {'distance_m': 3}),
+            ('先上升两米接着向右平移一百厘米', 'move_right', {'distance_m': 1}),
+            ('Move forward 10 metres, then move left 5 metres', 'move_left', {'distance_m': 5}),
+            ('先向前飞10米，\n再向左飞5米', 'move_left', {'distance_m': 5}),
+            ('First, move forward 10 metres; then move left 5 metres.', 'move_left', {'distance_m': 5}),
+        ):
+            with self.subTest(text=text):
+                self.setUp()
+                before = self.simulator.state.to_dict()
+                self.replies = [model_action(action, **parameters)]
+                reply = self.message(text)
+                self.assertEqual(reply['status'], 'clarification')
+                self.assertNotIn('card', reply)
+                self.assertEqual(self.simulator.state.to_dict(), before)
+
+    def test_continue_cannot_repeat_an_already_completed_ordered_step(self):
+        self.replies = [model_action('move_forward', distance_m=10),
+                        model_action('move_forward', distance_m=10),
+                        model_action('move_left', distance_m=5)]
+        first = self.message('先向前飞10米，再向左飞5米')['card']
+        self.assertEqual(self.confirm(first)['status'], 'accepted')
+        after_first = self.simulator.state.to_dict()
+        repeated = self.message('继续')
+        self.assertEqual(repeated['status'], 'clarification')
+        self.assertNotIn('card', repeated)
+        second = self.message('继续')['card']
+        self.assertEqual((second['action'], second['parameters']), ('move_left', {'distance_m': 5}))
+        self.assertEqual(self.simulator.state.to_dict(), after_first)
+
+    def test_explicit_identical_ordered_steps_require_two_confirmations_then_finish(self):
+        self.replies = [model_action('move_forward', distance_m=2),
+                        model_action('move_forward', distance_m=2)]
+        first = self.message('先向前飞2米，再向前飞2米')['card']
+        self.assertEqual(self.confirm(first)['status'], 'accepted')
+        self.assertEqual(self.confirm(first)['status'], 'accepted')  # 幂等重读不推进第二步。
+        second = self.message('继续')['card']
+        self.assertNotEqual(first['command_id'], second['command_id'])
+        self.assertEqual(self.confirm(second)['status'], 'accepted')
+        after_second = self.simulator.state.to_dict()
+        finished = self.message('继续')
+        self.assertEqual(finished['status'], 'final')
+        self.assertNotIn('card', finished)
+        self.assertEqual(len(self.calls), 2)
+        self.assertEqual(self.simulator.state.to_dict(), after_second)
+
+    def test_unconfirmed_first_step_cannot_be_skipped_by_continue(self):
+        self.replies = [model_action('move_forward', distance_m=10),
+                        model_action('move_left', distance_m=5)]
+        first = self.message('先向前飞10米，再向左飞5米')['card']
+        before = self.simulator.state.to_dict()
+        later = self.message('继续')
+        self.assertEqual(later['status'], 'clarification')
+        self.assertNotIn('card', later)
+        self.assertEqual(self.simulator.state.to_dict(), before)
+        self.assertEqual(self.confirm(first)['status'], 'rejected')
+
+    def test_new_ordered_intent_starts_its_own_progress(self):
+        self.replies = [model_action('move_forward', distance_m=2),
+                        model_action('move_forward', distance_m=2)]
+        first = self.message('先向前飞2米，再向左飞3米')['card']
+        self.assertEqual(self.confirm(first)['status'], 'accepted')
+        restarted = self.message('先向前飞2米，再向右飞4米')['card']
+        self.assertEqual((restarted['action'], restarted['parameters']), ('move_forward', {'distance_m': 2}))
+
+    def test_ordered_progress_does_not_leak_between_sessions(self):
+        self.replies = [model_action('move_forward', distance_m=2),
+                        model_action('move_forward', distance_m=2)]
+        first = self.message('先向前飞2米，再向左飞3米')['card']
+        self.assertEqual(self.confirm(first)['status'], 'accepted')
+        other = self.service.handle('POST', '/api/flight-control/agent/messages', json.dumps({
+            'text': '先向前飞2米，再向左飞3米', 'request_id': 'other-order', 'context_version': 1}),
+            {'X-Agent-Session': 'other-motion-tab'})
+        self.assertEqual(other.status_code, 200)
+        self.assertEqual(other.payload['card']['action'], 'move_forward')
+
+    def test_mixed_or_unknown_ordered_steps_keep_the_existing_model_path(self):
+        for text, first_action, first_args, second_action, second_args in (
+            ('先向前飞10米再拍照', 'move_forward', {'distance_m': 10}, 'camera_photo', {}),
+            ('先向前飞10米，再朝机尾方向挪6米', 'move_forward', {'distance_m': 10},
+             'move_backward', {'distance_m': 6}),
+        ):
+            with self.subTest(text=text):
+                self.setUp()
+                self.replies = [model_action(first_action, **first_args),
+                                model_action(second_action, **second_args)]
+                self.confirm(self.message(text)['card'])
+                card = self.message('继续')['card']
+                self.assertEqual((card['action'], card['parameters']), (second_action, second_args))
+
+    def test_yaw_angle_followup_keeps_the_explicit_turn_instead_of_lateral_direction(self):
+        for text, action in (('向左转', 'turn_left'), ('向右转', 'turn_right'),
+                             ('向左偏航', 'turn_left'), ('向右偏航', 'turn_right')):
+            with self.subTest(text=text):
+                self.setUp()
+                self.replies = [{'message': {'content': '转多少度？'}, 'done_reason': 'stop'},
+                                model_action(action, angle_deg=45)]
+                self.assertEqual(self.message(text)['status'], 'clarification')
+                reply = self.message('45度')
+                self.assertEqual(reply['status'], 'preview_required')
+                card = reply['card']
+                self.assertEqual((card['action'], card['parameters']), (action, {'angle_deg': 45}))
+
+    def test_three_explicit_steps_advance_only_after_each_confirmation(self):
+        self.replies = [model_action('move_forward', distance_m=1),
+                        model_action('turn_right', angle_deg=45),
+                        model_action('move_backward', distance_m=2)]
+        intent = '先向前飞1米，然后右转45度，再向后飞2米'
+        for index, expected in enumerate(('move_forward', 'turn_right', 'move_backward')):
+            card = self.message(intent if index == 0 else '继续')['card']
+            self.assertEqual(card['action'], expected)
+            self.assertEqual(self.confirm(card)['status'], 'accepted')
+        self.assertEqual(self.message('继续')['status'], 'final')
+        self.assertEqual(len(self.calls), 3)
+
+    def test_new_single_motion_after_order_clarification_cannot_borrow_old_steps(self):
+        self.replies = [model_action('move_forward', distance_m=2),
+                        model_action('move_forward', distance_m=2),
+                        model_action('move_left', distance_m=3),
+                        model_action('move_right', distance_m=4)]
+        self.confirm(self.message('先向前飞2米，再向左飞3米')['card'])
+        self.assertEqual(self.message('继续')['status'], 'clarification')
+        wrong = self.message('向右飞4米')
+        self.assertEqual(wrong['status'], 'clarification')
+        self.assertNotIn('card', wrong)
+        corrected = self.message('向右飞4米')['card']
+        self.assertEqual((corrected['action'], corrected['parameters']), ('move_right', {'distance_m': 4}))
+
+    def test_multiline_order_retains_progress_while_answering_a_parameter_question(self):
+        self.replies = [model_action('move_forward', distance_m=2),
+                        model_action('move_forward', distance_m=2),
+                        model_action('move_forward', distance_m=2),
+                        model_action('move_left', distance_m=3)]
+        self.confirm(self.message('先向前飞2米，\n再向左飞3米')['card'])
+        self.assertEqual(self.message('继续')['status'], 'clarification')
+        repeated = self.message('3米')
+        self.assertEqual(repeated['status'], 'clarification')
+        self.assertNotIn('card', repeated)
+        next_card = self.message('继续')['card']
+        self.assertEqual((next_card['action'], next_card['parameters']), ('move_left', {'distance_m': 3}))
+
+    def test_multiline_angle_answer_preserves_direction_for_wrong_and_correct_proposals(self):
+        for answer in ('45\n度', '45\r\n度'):
+            for action, expected in (('turn_right', 'clarification'), ('turn_left', 'preview_required')):
+                with self.subTest(answer=answer, action=action):
+                    self.setUp()
+                    self.replies = [{'message': {'content': '向左转多少度？'}, 'done_reason': 'stop'},
+                                    model_action(action, angle_deg=45)]
+                    self.assertEqual(self.message('向左转')['status'], 'clarification')
+                    reply = self.message(answer)
+                    self.assertEqual(reply['status'], expected)
+                    if expected == 'clarification':
+                        self.assertNotIn('card', reply)
+
+    def test_repeated_angle_answers_keep_the_original_motion_source(self):
+        for first_answer, second_answer in (('45\n度', '90度'), ('45\r\n度', '90\r\n度')):
+            for action, expected in (('turn_right', 'clarification'), ('turn_left', 'preview_required')):
+                with self.subTest(first=first_answer, second=second_answer, action=action):
+                    self.setUp()
+                    self.replies = [{'message': {'content': '向左转多少度？'}, 'done_reason': 'stop'},
+                        model_action('turn_right', angle_deg=45), model_action(action, angle_deg=90)]
+                    self.assertEqual(self.message('向左转')['status'], 'clarification')
+                    self.assertEqual(self.message(first_answer)['status'], 'clarification')
+                    reply = self.message(second_answer)
+                    self.assertEqual(reply['status'], expected)
+                    if expected == 'clarification':
+                        self.assertNotIn('card', reply)
+
+    def test_new_explicit_direction_without_angle_replaces_the_old_clarification(self):
+        for action, expected in (('turn_left', 'clarification'), ('turn_right', 'preview_required')):
+            with self.subTest(action=action):
+                self.setUp()
+                self.replies = [{'message': {'content': '向左转多少度？'}, 'done_reason': 'stop'},
+                    model_action('turn_right', angle_deg=45),
+                    {'message': {'content': '向右转多少度？'}, 'done_reason': 'stop'},
+                    model_action(action, angle_deg=90)]
+                self.assertEqual(self.message('向左转')['status'], 'clarification')
+                self.assertEqual(self.message('45\n度')['status'], 'clarification')
+                self.assertEqual(self.message('向右转')['status'], 'clarification')
+                reply = self.message('90度')
+                self.assertEqual(reply['status'], expected)
+                if expected == 'clarification':
+                    self.assertNotIn('card', reply)

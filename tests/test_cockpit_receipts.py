@@ -11,6 +11,7 @@ from lingxi_flight_control import DecisionKind, MemoryFlightControlSimulator, Mo
 from lingxi_flight_control.cockpit import CockpitService
 from lingxi_flight_control.ktd_platform import KtdHttpTransport, KtdPlatformExecutor, KtdSnapshot, SqliteCommandJournal
 from lingxi_flight_control.session import MemoryCheckpointStore
+from lingxi_flight_control.ollama_decider import OllamaDecider
 from test_command_receipts import command_receipt_payload
 
 
@@ -217,6 +218,65 @@ class CockpitTrackedReceiptTests(unittest.TestCase):
         self.assertEqual(completions[0]['action'], 'move_forward')
         self.assertEqual(completions[0]['parameters'], {'distance_m': 10})
         self.assertEqual(model_input['state']['longitude'], 113)
+
+    def model_service(self, replies, calls):
+        def model_http(_url, payload, _timeout):
+            calls.append(payload)
+            action, distance = replies.pop(0)
+            return {'message': {'tool_calls': [{'function': {
+                'name': action, 'arguments': {'distance_m': distance}}}]}, 'done_reason': 'stop'}
+        return CockpitService(self.binding, self.executor,
+            lambda: OllamaDecider(model='synthetic-ordered-receipt', transport=model_http, max_attempts=1),
+            gateway_token='synthetic-gateway', clock=lambda: self.now, store=self.store)
+
+    def test_reported_completion_advances_order_once_and_repeated_model_step_is_blocked(self):
+        calls = []
+        self.service = self.model_service([('move_forward', 10), ('move_forward', 10), ('move_right', 5)], calls)
+        card = self.message().payload['card']
+        self.assertEqual(self.confirm(card).payload['status'], 'submitted')
+        self.assertEqual(self.message('继续').payload['status'], 'clarification')
+        self.assertEqual(len(calls), 1)
+        self.report(card)
+        self.assertTrue(self.query(card).payload['continuation_allowed'])
+        self.assertTrue(self.query(card).payload['continuation_allowed'])
+        wrong = self.message('继续').payload
+        self.assertEqual(wrong['status'], 'clarification')
+        self.assertNotIn('card', wrong)
+        correct = self.message('继续').payload['card']
+        self.assertEqual((correct['action'], correct['parameters']), ('move_right', {'distance_m': 5}))
+        self.assertEqual(len(self.posts()), 1)
+        self.assertEqual(len(calls), 3)
+
+    def test_repeated_completed_receipt_does_not_consume_an_identical_second_step(self):
+        calls = []
+        self.service = self.model_service([('move_forward', 2), ('move_forward', 2)], calls)
+        first = self.message('先向前飞2米，再向前飞2米').payload['card']
+        self.assertEqual(self.confirm(first).payload['status'], 'submitted')
+        self.report(first)
+        self.assertTrue(self.query(first).payload['continuation_allowed'])
+        self.assertTrue(self.query(first).payload['continuation_allowed'])
+        second = self.message('继续').payload['card']
+        self.assertNotEqual(first['command_id'], second['command_id'])
+        self.assertEqual((second['action'], second['parameters']), ('move_forward', {'distance_m': 2}))
+        self.assertEqual(len(self.posts()), 1)
+        self.assertEqual(len(calls), 2)
+
+    def test_platform_multiline_order_keeps_progress_after_clarification_and_parameter_answer(self):
+        calls = []
+        self.service = self.model_service([('move_forward', 2), ('move_forward', 2),
+            ('move_forward', 2), ('move_right', 3)], calls)
+        first = self.message('先向前飞2米，\n再向右飞3米').payload['card']
+        self.assertEqual(self.confirm(first).payload['status'], 'submitted')
+        self.report(first)
+        self.assertTrue(self.query(first).payload['continuation_allowed'])
+        self.assertTrue(self.query(first).payload['continuation_allowed'])
+        self.assertEqual(self.message('继续').payload['status'], 'clarification')
+        wrong = self.message('3米').payload
+        self.assertEqual(wrong['status'], 'clarification')
+        self.assertNotIn('card', wrong)
+        next_card = self.message('继续').payload['card']
+        self.assertEqual((next_card['action'], next_card['parameters']), ('move_right', {'distance_m': 3}))
+        self.assertEqual(len(self.posts()), 1)
 
     def test_other_session_and_restart_can_read_but_cannot_resume_the_original_intent(self):
         card, _ = self.submit()

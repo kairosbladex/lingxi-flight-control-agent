@@ -171,8 +171,9 @@ _MOTION_PREFIXES = {
     'turn_left': r'(?:向|往|朝)?左(?:转|偏航|旋转)|(?:偏航|旋转)(?:向)?左|\b(?:turn|yaw|rotate)\s+(?:to\s+the\s+)?left(?:\s+by)?',
     'turn_right': r'(?:向|往|朝)?右(?:转|偏航|旋转)|(?:偏航|旋转)(?:向)?右|\b(?:turn|yaw|rotate)\s+(?:to\s+the\s+)?right(?:\s+by)?',
 }
-_MOTION_MENTIONS = re.compile('|'.join('(?P<' + name + '>' + pattern + ')'
-                                     for name, pattern in _MOTION_PREFIXES.items()), re.I)
+# “向左转/向左偏航”先匹配转向，不能提前截成平移词“向左”。
+_MOTION_MENTIONS = re.compile('|'.join('(?P<' + name + '>' + _MOTION_PREFIXES[name] + ')'
+    for name in sorted(_MOTION_PREFIXES, key=lambda name: not name.startswith('turn_'))), re.I)
 _MOTION_PREFIXES = {name: re.compile(r'(?:' + pattern + r')\s*$', re.I)
                     for name, pattern in _MOTION_PREFIXES.items()}
 _PARAMETER_REPLY = re.compile(
@@ -238,13 +239,14 @@ def _single_motion_source(text):
     return None if excluded else source
 
 
-def _motion_agrees(action, parameters, text, parameter_reply=None):
+def _motion_agrees(action, parameters, text, parameter_reply=None, parameter_source=None):
     """只核对紧邻数值的明确运动词；未知表达继续交给原模型/参数门禁。"""
     if action not in _MOTION_PREFIXES:
         return True
     key = 'angle_deg' if action.startswith('turn_') else 'distance_m'
     units = _ANGLE_UNITS if action.startswith('turn_') else _DISTANCE_UNITS
     value = parameters.get(key, math.nan)
+    original_text = text
     text, quantities = _quantity_evidence(text)
     matching = []
     for number, unit, offset in quantities:
@@ -253,8 +255,11 @@ def _motion_agrees(action, parameters, text, parameter_reply=None):
             if math.isclose(number, value, abs_tol=1e-8):
                 matching.append((source, excluded))
     if parameter_reply:
-        previous_text = text.rsplit('\n', 1)[0]
-        source = _single_motion_source(previous_text)
+        suffix = '\n' + parameter_reply
+        if not original_text.endswith(suffix):
+            return False
+        previous_text = original_text[:-len(suffix)]
+        source = parameter_source or _single_motion_source(previous_text)
         if source:
             _, latest = _quantity_evidence(parameter_reply)
             if (action != source or latest[0][1] not in units
@@ -264,6 +269,39 @@ def _motion_agrees(action, parameters, text, parameter_reply=None):
     # 数值若只来自相反方向、其他主体或历史陈述，则不能作为本次动作依据。
     return not matching or any(not excluded and (source is None or source == action)
                                for source, excluded in matching)
+
+
+def _explicit_motion_step(text):
+    part = text.strip(' ,，;；。.!！')
+    normalized, quantities = _quantity_evidence(part)
+    if len(quantities) != 1:
+        return None
+    value, unit, offset = quantities[0]
+    source, excluded = _motion_source(normalized, offset)
+    if source is None or excluded:
+        return None
+    prefix = _MOTION_PREFIXES[source].search(normalized[:offset])
+    lead = normalized[:prefix.start()].strip(' ,，')
+    if not re.fullmatch(r'(?:(?:先|首先|请|帮我|让|无人机|机身|机头|原地|first|please|drone)\s*)*', lead, re.I):
+        return None
+    quantity = _QUANTITY.match(normalized, offset)
+    end = quantity.end() + (1 if normalized[quantity.end():].startswith('半') else 0)
+    if normalized[end:].strip(' ,，;；。.!！'):
+        return None
+    turning = source.startswith('turn_')
+    if unit not in (_ANGLE_UNITS if turning else _DISTANCE_UNITS):
+        return None
+    return source, {'angle_deg' if turning else 'distance_m': value}
+
+
+def _ordered_motion_steps(text):
+    """只识别完全明确的顺序运动链；混合动作和未知措辞仍由原模型处理。"""
+    immediate, _ = _separate_motion_constraints(text)
+    parts = re.split(r'\s*(?:然后|接着|再|\bthen\b)\s*', immediate, flags=re.I)
+    if len(parts) < 2:
+        return None
+    steps = [_explicit_motion_step(part) for part in parts]
+    return None if any(step is None for step in steps) else steps
 
 
 def grounded_parameters(action, parameters, text):
@@ -318,6 +356,9 @@ class _Conversation:
     requests: dict = field(default_factory=dict)
     receipts: dict = field(default_factory=dict)
     waiting: _WaitingCommand | None = None
+    completed_steps: dict = field(default_factory=dict)
+    ordered_steps: list | None = None
+    motion_source: str | None = None
 
 
 class CockpitService:
@@ -455,6 +496,9 @@ class CockpitService:
                     session = self._session(session_id)
                     self._invalidate(session)
                     session.active_intent, session.clarification = '', False
+                    session.completed_steps.clear()
+                    session.ordered_steps = None
+                    session.motion_source = None
                     session.turns = 0
                     self._store.delete(session_id)
                 result = self._base(status='cancelled', message='已结束本次会话，旧确认卡已失效。', state=self._state())
@@ -578,6 +622,8 @@ class CockpitService:
                     continuation_allowed = (receipt['status'] == 'completed'
                         and state is not None and state.get('available') is True)
                     if continuation_allowed:
+                        session.completed_steps.setdefault(receipt['command_id'],
+                            (waiting.action, deepcopy(waiting.parameters)))
                         session.active_intent = waiting.intent
                 except Exception:
                     # A report remains readable if conversation persistence is
@@ -661,6 +707,9 @@ class CockpitService:
                 result = self._base(status='clarification', message='本次不会执行动作。请明确是否要控制无人机，以及具体动作和参数。',
                                     request_id=request_id, state=state)
                 session.active_intent, session.clarification = '', False
+                session.completed_steps.clear()
+                session.ordered_steps = None
+                session.motion_source = None
                 session.requests[request_id] = (fingerprint, result)
                 return result
             parameter_reply = text if session.clarification and _motion_parameter_reply(text) else None
@@ -671,11 +720,34 @@ class CockpitService:
                     return result
                 grounding_text = session.active_intent
             elif session.clarification:
-                grounding_text = session.active_intent + '\n' + text
+                replacement = _ordered_motion_steps(text)
+                single = _explicit_motion_step(text)
+                replacement_source = _single_motion_source(text) or (single[0] if single else None)
+                if replacement is not None or replacement_source is not None:
+                    # 新动作方向即使缺参，也不能借旧句数值、方向和进度。
+                    grounding_text = text
+                    session.completed_steps.clear()
+                    session.ordered_steps = replacement
+                    session.motion_source = replacement_source
+                else:
+                    grounding_text = session.active_intent + '\n' + text
                 session.active_intent = grounding_text
             else:
                 grounding_text = text
                 session.active_intent = text
+                session.completed_steps.clear()
+                session.ordered_steps = _ordered_motion_steps(text)
+                session.motion_source = _single_motion_source(text)
+            ordered = session.ordered_steps
+            if ordered is not None and list(session.completed_steps.values()) == ordered:
+                result = self._base(status='final',
+                    message='这组明确顺序没有待确认的下一项，请说明新的动作。', request_id=request_id, state=state)
+                session.active_intent, session.clarification = '', False
+                session.completed_steps.clear()
+                session.ordered_steps = None
+                session.motion_source = None
+                session.requests[request_id] = (fingerprint, result)
+                return result
             model_input = json.dumps({'current_request': text, 'original_intent': session.active_intent,
                 'conversation': history, 'state': state}, ensure_ascii=False)
             epoch = session.epoch
@@ -745,10 +817,17 @@ class CockpitService:
             _, forbidden = _separate_motion_constraints(grounding_text)
             if call.name in forbidden:
                 return self._base(status='clarification', message='动作与保持位置或航向的限制冲突，请明确要执行的动作。', **common)
-            if not _motion_agrees(call.name, call.arguments, grounding_text, parameter_reply):
+            if not _motion_agrees(call.name, call.arguments, grounding_text, parameter_reply, session.motion_source):
                 return self._base(status='clarification', message='动作建议与明确的方向或对应数值不一致，请重新说明本次动作。', **common)
             if not grounded_parameters(call.name, call.arguments, grounding_text):
                 return self._base(status='clarification', message='请明确动作所需的数值和单位；我不会补猜参数。', **common)
+            ordered = session.ordered_steps
+            completed = list(session.completed_steps.values())
+            if ordered is not None and (completed != ordered[:len(completed)]
+                    or len(completed) >= len(ordered)
+                    or (call.name, call.arguments) != ordered[len(completed)]):
+                return self._base(status='clarification',
+                    message='动作建议与明确顺序中的下一项不一致，请重新说明要执行的下一项。', **common)
             command = uuid4().hex
             request = FlightControlActionRequest(command, command, call.name, dict(call.arguments), self.binding.context_version)
             receipt = self.executor.preview(request).to_dict()
@@ -808,6 +887,9 @@ class CockpitService:
                     session.active_intent, card['action'], deepcopy(card['parameters']))
             if cancel or receipt['status'] != 'accepted' or self.execution_mode == 'platform':
                 session.active_intent, session.clarification = '', False
+            elif session.active_intent:
+                session.completed_steps.setdefault(card['command_id'],
+                    (card['action'], deepcopy(card['parameters'])))
             try:
                 record = self._store.load(session_id)
                 history = record.checkpoint.context.get('conversation', [])

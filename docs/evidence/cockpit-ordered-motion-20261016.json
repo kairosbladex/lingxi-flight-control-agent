@@ -1,0 +1,195 @@
+{
+  "schema_version": "cockpit-ordered-motion-evidence/v1",
+  "recorded_at": "2026-10-16T13:56:45.531Z",
+  "baseline": {
+    "repository": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent",
+    "branch": "feature/natural-language-cockpit",
+    "commit": "bcac26e0a118224deddde8c13000e2d3e32c3878",
+    "runtime": "Python 3.13.2",
+    "operator": "local synthetic test process"
+  },
+  "task": "Explicitly ordered relative movement/yaw proposals must match the next uncompleted step in the existing CockpitService session and require separate confirmation.",
+  "source": "Synthetic contract cases derived from explicit first/then phrases and existing one-action-per-confirmation semantics; no independent human flight truth.",
+  "red_runs": [
+    {
+      "tool_chunk_id": "da2c21",
+      "command": "PYTHONPATH=src python3 -m unittest discover -s tests -p test_cockpit_motion_grounding.py",
+      "tests": 21,
+      "failures": 7,
+      "errors": 0,
+      "observed": [
+        "Later step was preview_required for four Chinese/English order cases",
+        "Repeated completed first step was preview_required",
+        "Unconfirmed first step was skipped",
+        "Completed identical-step sequence called the exhausted synthetic model and returned error"
+      ],
+      "result": "failure"
+    },
+    {
+      "tool_chunk_id": "0fb950",
+      "command": "PYTHONPATH=src python3 -m unittest discover -s tests -p test_cockpit_motion_grounding.py",
+      "tests": 22,
+      "failures": 0,
+      "errors": 4,
+      "observed": [
+        "向左转/向右转/向左偏航/向右偏航 followed by 45度 produced no card (test KeyError). The final test now asserts preview_required explicitly."
+      ],
+      "result": "failure"
+    },
+    {
+      "tool_chunk_id": "88cf7e",
+      "command": "PYTHONPATH=src python3 -m unittest discover -s tests -p test_cockpit_motion_grounding.py",
+      "tests": 23,
+      "failures": 2,
+      "errors": 0,
+      "observed": [
+        "Chinese newline and English First, ... ; then ... bypassed the initial bounded order recognizer"
+      ],
+      "result": "failure"
+    },
+    {
+      "scope": "Independent verifier's new-intent/multiline/whole-answer regressions",
+      "run": {
+        "observed_at": "2026-10-16T13:43:24.071Z",
+        "results": [
+          {
+            "status": "fulfilled",
+            "value": {
+              "chunk_id": "e444d2",
+              "wall_time_seconds": 0.121460583,
+              "exit_code": 1,
+              "original_token_count": 851,
+              "output": "...........FFF.F...........\n======================================================================\nFAIL: test_multiline_angle_answer_preserves_direction_for_wrong_and_correct_proposals (test_cockpit_motion_grounding.CockpitMotionGroundingTests.test_multiline_angle_answer_preserves_direction_for_wrong_and_correct_proposals) (answer='45\\n度', action='turn_right')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/tests/test_cockpit_motion_grounding.py\", line 361, in test_multiline_angle_answer_preserves_direction_for_wrong_and_correct_proposals\n    self.assertEqual(reply['status'], expected)\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'preview_required' != 'clarification'\n- preview_required\n+ clarification\n\n\n======================================================================\nFAIL: test_multiline_angle_answer_preserves_direction_for_wrong_and_correct_proposals (test_cockpit_motion_grounding.CockpitMotionGroundingTests.test_multiline_angle_answer_preserves_direction_for_wrong_and_correct_proposals) (answer='45\\r\\n度', action='turn_right')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/tests/test_cockpit_motion_grounding.py\", line 361, in test_multiline_angle_answer_preserves_direction_for_wrong_and_correct_proposals\n    self.assertEqual(reply['status'], expected)\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'preview_required' != 'clarification'\n- preview_required\n+ clarification\n\n\n======================================================================\nFAIL: test_multiline_order_retains_progress_while_answering_a_parameter_question (test_cockpit_motion_grounding.CockpitMotionGroundingTests.test_multiline_order_retains_progress_while_answering_a_parameter_question)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/tests/test_cockpit_motion_grounding.py\", line 347, in test_multiline_order_retains_progress_while_answering_a_parameter_question\n    self.assertEqual(repeated['status'], 'clarification')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'preview_required' != 'clarification'\n- preview_required\n+ clarification\n\n\n======================================================================\nFAIL: test_new_single_motion_after_order_clarification_cannot_borrow_old_steps (test_cockpit_motion_grounding.CockpitMotionGroundingTests.test_new_single_motion_after_order_clarification_cannot_borrow_old_steps)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/tests/test_cockpit_motion_grounding.py\", line 334, in test_new_single_motion_after_order_clarification_cannot_borrow_old_steps\n    self.assertEqual(wrong['status'], 'clarification')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'preview_required' != 'clarification'\n- preview_required\n+ clarification\n\n\n----------------------------------------------------------------------\nRan 26 tests in 0.130s\n\nFAILED (failures=4)\n"
+            }
+          },
+          {
+            "status": "fulfilled",
+            "value": {
+              "chunk_id": "752867",
+              "wall_time_seconds": 0.12136,
+              "exit_code": 1,
+              "original_token_count": 236,
+              "output": ".........F.......\n======================================================================\nFAIL: test_platform_multiline_order_keeps_progress_after_clarification_and_parameter_answer (test_cockpit_receipts.CockpitTrackedReceiptTests.test_platform_multiline_order_keeps_progress_after_clarification_and_parameter_answer)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/tests/test_cockpit_receipts.py\", line 275, in test_platform_multiline_order_keeps_progress_after_clarification_and_parameter_answer\n    self.assertEqual(wrong['status'], 'clarification')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'preview_required' != 'clarification'\n- preview_required\n+ clarification\n\n\n----------------------------------------------------------------------\nRan 17 tests in 0.129s\n\nFAILED (failures=1)\n"
+            }
+          }
+        ]
+      },
+      "result": "motion 26 tests: 4 assertion failures; receipt 17 tests: 1 assertion failure; all actual preview_required vs clarification, then fixed"
+    },
+    {
+      "scope": "Successive multiline angle answers",
+      "run": {
+        "observed_at": "2026-10-16T13:49:23.799Z",
+        "chunk_id": "00f186",
+        "wall_time_seconds": 0.161532417,
+        "exit_code": 1,
+        "original_token_count": 433,
+        "output": ".....................FF.....\n======================================================================\nFAIL: test_repeated_angle_answers_keep_the_original_motion_source (test_cockpit_motion_grounding.CockpitMotionGroundingTests.test_repeated_angle_answers_keep_the_original_motion_source) (first='45\\n度', second='90度', action='turn_right')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/tests/test_cockpit_motion_grounding.py\", line 375, in test_repeated_angle_answers_keep_the_original_motion_source\n    self.assertEqual(reply['status'], expected)\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'preview_required' != 'clarification'\n- preview_required\n+ clarification\n\n\n======================================================================\nFAIL: test_repeated_angle_answers_keep_the_original_motion_source (test_cockpit_motion_grounding.CockpitMotionGroundingTests.test_repeated_angle_answers_keep_the_original_motion_source) (first='45\\r\\n度', second='90\\r\\n度', action='turn_right')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/tests/test_cockpit_motion_grounding.py\", line 375, in test_repeated_angle_answers_keep_the_original_motion_source\n    self.assertEqual(reply['status'], expected)\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'preview_required' != 'clarification'\n- preview_required\n+ clarification\n\n\n----------------------------------------------------------------------\nRan 27 tests in 0.143s\n\nFAILED (failures=2)\n"
+      },
+      "result": "27 tests: 2 assertion failures, then fixed"
+    },
+    {
+      "scope": "New explicit turn direction without an angle",
+      "run": {
+        "observed_at": "2026-10-16T13:52:38.234Z",
+        "chunk_id": "3580e5",
+        "wall_time_seconds": 0.124499875,
+        "exit_code": 1,
+        "original_token_count": 434,
+        "output": ".............FF..............\n======================================================================\nFAIL: test_new_explicit_direction_without_angle_replaces_the_old_clarification (test_cockpit_motion_grounding.CockpitMotionGroundingTests.test_new_explicit_direction_without_angle_replaces_the_old_clarification) (action='turn_left')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/tests/test_cockpit_motion_grounding.py\", line 391, in test_new_explicit_direction_without_angle_replaces_the_old_clarification\n    self.assertEqual(reply['status'], expected)\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'preview_required' != 'clarification'\n- preview_required\n+ clarification\n\n\n======================================================================\nFAIL: test_new_explicit_direction_without_angle_replaces_the_old_clarification (test_cockpit_motion_grounding.CockpitMotionGroundingTests.test_new_explicit_direction_without_angle_replaces_the_old_clarification) (action='turn_right')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/tests/test_cockpit_motion_grounding.py\", line 391, in test_new_explicit_direction_without_angle_replaces_the_old_clarification\n    self.assertEqual(reply['status'], expected)\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'clarification' != 'preview_required'\n- clarification\n+ preview_required\n\n\n----------------------------------------------------------------------\nRan 28 tests in 0.150s\n\nFAILED (failures=2)\n"
+      },
+      "result": "28 tests: 2 assertion failures (wrong old direction accepted / correct new direction blocked), then fixed"
+    }
+  ],
+  "implementation": [
+    "Restricted complete explicit movement/yaw order recognition before preview; mixed or unknown steps keep the existing model path",
+    "Existing conversation holds command-keyed completion facts; simulator accepted or same-session eligible completed report advances at most once",
+    "Identical steps retain separate command IDs and confirmations; no next proposal/model call after all recognized steps",
+    "New intent or reset clears prior progress, unconfirmed steps do not advance",
+    "Turn mentions precede shorter lateral prefixes for angle follow-up grounding",
+    "Capture ordered steps and single-motion direction in the same conversation; parameter follow-ups preserve these original facts instead of reparsing accumulated multiline text",
+    "Explicit new direction, including a new action missing its numeric parameter, replaces old intent, numbers and progress",
+    "Strip the complete raw parameter-reply suffix so LF/CRLF inside answers cannot discard the original motion source"
+  ],
+  "validation": {
+    "focused_motion_tests": 28,
+    "focused_receipt_tests": 17,
+    "new_test_methods": 17,
+    "full_tests": 564,
+    "full_run": {
+      "command": "bash tools/ci/offline_tests.sh",
+      "started_at": "2026-10-16T13:56:06.987Z",
+      "observed_at": "2026-10-16T13:56:09.983Z",
+      "chunk_id": "4f478c",
+      "wall_time_seconds": 2.8282545,
+      "exit_code": 0,
+      "original_token_count": 184,
+      "output": "+ PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_*.py'\n....................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 564 tests in 2.799s\n\nOK\n"
+    },
+    "source_before": {
+      "at": "2026-10-16T13:56:06.987Z",
+      "source_sha256": {
+        "src/lingxi_flight_control/cockpit.py": "29d84ac944b43361c146f0f6d55405f6faa3aaf58eac355deb8af3aabc0f7d26",
+        "tests/test_cockpit_motion_grounding.py": "fd51612a9ca18fb1b922f960920e6c1139bb58dabbc7967e6f70c378e43b9ea0",
+        "tests/test_cockpit_receipts.py": "29d26380234ac4b702c32f00018877ff27754d410a5823ba88b01348d55695c0"
+      }
+    },
+    "source_after": {
+      "at": "2026-10-16T13:56:10.059Z",
+      "source_sha256": {
+        "src/lingxi_flight_control/cockpit.py": "29d84ac944b43361c146f0f6d55405f6faa3aaf58eac355deb8af3aabc0f7d26",
+        "tests/test_cockpit_motion_grounding.py": "fd51612a9ca18fb1b922f960920e6c1139bb58dabbc7967e6f70c378e43b9ea0",
+        "tests/test_cockpit_receipts.py": "29d26380234ac4b702c32f00018877ff27754d410a5823ba88b01348d55695c0"
+      }
+    },
+    "unchanged_during_final_run": true,
+    "diff_check": "passed"
+  },
+  "coverage": [
+    "Wrong first proposal in Chinese and English including newline/punctuation",
+    "Repeated completed step after continue",
+    "Two identical requested movements and idempotent confirm",
+    "Unconfirmed card cannot advance",
+    "New intent and cross-session isolation",
+    "Three-step movement/yaw sequence",
+    "Mixed camera and unknown motion phrasing compatibility",
+    "Yaw-angle follow-up",
+    "Actual platform executor with SQLite journal plus synthetic Java HTTP: repeated completed queries count once and model repeat blocked",
+    "New standalone motion after sequence clarification cannot borrow old steps",
+    "Multiline order with later parameter answer retains completion facts",
+    "LF/CRLF first and successive angle answers preserve direction, with positive controls",
+    "An explicit new direction with a still-missing angle resets the old direction and numbers"
+  ],
+  "boundaries": {
+    "model_http": "Synthetic boundary replies decoded by actual OllamaDecider",
+    "owned_chain": "CockpitService.handle -> original BoundedAgentLoop/registry -> policy -> simulator or actual KtdPlatformExecutor/SQLite -> synthetic Java opener",
+    "real_model_calls": 0,
+    "real_java_requests": 0,
+    "real_mqtt_connections": 0,
+    "device_actions": 0,
+    "business_writes": 0,
+    "deployments": 0,
+    "orchestration_framework_added": false,
+    "action_contract_count": 59,
+    "accuracy_status": "not_evaluable"
+  },
+  "limits": [
+    "Recognizer deliberately covers complete explicit movement/yaw chains, not arbitrary mixed/unknown action ordering or full language semantics",
+    "Completion is a simulator result or eligible platform report, not independent device effect",
+    "Conversation progress is ephemeral like existing intent: restart/other session cannot resume",
+    "Frozen model proposal reports remain unchanged and do not measure this new service guard"
+  ],
+  "review_status": "Root reviewed source changes, reproduced independent findings as red tests, verified final source freeze and 564/564 full offline gate. No live-model, deployment or real-device claim.",
+  "independent_behavior_recheck": {
+    "agent": "intent_current_evaluation",
+    "synthetic_groups": 23,
+    "synthetic_model_transport_calls": 62,
+    "synthetic_java_posts": 5,
+    "socket_connection_attempts": 0,
+    "real_model_calls": 0,
+    "device_actions": 0,
+    "product_sha256": "29d84ac944b43361c146f0f6d55405f6faa3aaf58eac355deb8af3aabc0f7d26",
+    "result": "All previously identified concrete counterexamples and positive controls passed on the final frozen product.",
+    "root_verification": "Root reproduced the reported defects as failing public-interface tests before fixing them, then reran the final 564-test offline gate and independently checked all three source hashes; supplementary verifier's scope is only those 23 groups."
+  }
+}
