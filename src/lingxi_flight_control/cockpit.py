@@ -159,26 +159,116 @@ def _number(text):
 
 _QUANTITY = re.compile(r'([负-]?(?:\d+(?:\.\d+)?|[零〇一二两三四五六七八九十百千点]+|半))\s*'
                        r'(厘米|公分|千米|公里|米每秒|米/秒|度每秒|度/秒|meters?|metres?|cm|km|m/s|m|米|degrees?|°|度|倍|x|℃)?', re.I)
+_DISTANCE_UNITS = frozenset({'米', 'm', 'meter', 'meters', 'metre', 'metres'})
+_ANGLE_UNITS = frozenset({'度', '°', 'degree', 'degrees'})
+_MOTION_PREFIXES = {
+    'move_forward': r'(?:向|往|朝)前(?:方)?(?:飞行?|平移|移动|挪动?)?|前进|\b(?:move|fly|translate|go)\s+forwards?(?:\s+(?:by|for))?',
+    'move_backward': r'(?:向|往|朝)后(?:方)?(?:退|飞行?|平移|移动|挪动?)?|后退|倒退|\b(?:move|fly|translate|go)\s+backwards?(?:\s+(?:by|for))?',
+    'move_left': r'(?:向|往|朝)左(?:侧)?(?:飞行?|平移|移动|挪动?)?|左(?:平移|移)|\b(?:move|fly|translate|go)\s+left(?:\s+(?:by|for))?',
+    'move_right': r'(?:向|往|朝)右(?:侧)?(?:飞行?|平移|移动|挪动?)?|右(?:平移|移)|\b(?:move|fly|translate|go)\s+right(?:\s+(?:by|for))?',
+    'move_up': r'(?:向|往|朝)上(?:方)?(?:飞行?|平移|移动|挪动?)?|上升|升高|\b(?:(?:move|fly|go)\s+up|ascend|climb)(?:\s+(?:by|for))?',
+    'move_down': r'(?:向|往|朝)下(?:方)?(?:飞行?|平移|移动|挪动?)?|下降|降低|\b(?:(?:move|fly|go)\s+down|descend)(?:\s+(?:by|for))?',
+    'turn_left': r'(?:向|往|朝)?左(?:转|偏航|旋转)|(?:偏航|旋转)(?:向)?左|\b(?:turn|yaw|rotate)\s+(?:to\s+the\s+)?left(?:\s+by)?',
+    'turn_right': r'(?:向|往|朝)?右(?:转|偏航|旋转)|(?:偏航|旋转)(?:向)?右|\b(?:turn|yaw|rotate)\s+(?:to\s+the\s+)?right(?:\s+by)?',
+}
+_MOTION_MENTIONS = re.compile('|'.join('(?P<' + name + '>' + pattern + ')'
+                                     for name, pattern in _MOTION_PREFIXES.items()), re.I)
+_MOTION_PREFIXES = {name: re.compile(r'(?:' + pattern + r')\s*$', re.I)
+                    for name, pattern in _MOTION_PREFIXES.items()}
+_PARAMETER_REPLY = re.compile(
+    r'(?:(?:改为|改成|换成|调整为|设为|用|就|距离(?:改为|是)?|角度(?:改为|是)?'
+    r'|make it|change it to)\s*)?' + _QUANTITY.pattern + r'(?:半)?[。.!！]?', re.I)
 
 
-def grounded_parameters(action, parameters, text):
-    """A conservative evidence check, not an intent parser or replacement LLM."""
+def _quantity_evidence(text):
+    text = re.sub(r'(?<![a-z])(?:meters?|metres?|m)\s*(?:per\s+second|/\s*s(?:econds?)?)\b',
+                  'm/s', text, flags=re.I)
+    text = re.sub(r'(?<![a-z])(?:degrees?|deg|°)\s*(?:per\s+second|/\s*s(?:econds?)?)\b',
+                  '度/秒', text, flags=re.I)
     text = re.sub(r'每秒([\d.零〇一二两三四五六七八九十百千点半]+)(米|度)', r'\1\2每秒', text)
     text = text.replace('零下', '负')
-    quantities = []
+    quantities, consumed_until = [], 0
     for match in _QUANTITY.finditer(text):
+        if match.start() < consumed_until:
+            continue
         try:
             value = _number(match.group(1))
         except (ValueError, KeyError):
             continue
         unit = (match.group(2) or '').lower()
-        if unit in {'米', 'm'} and text[match.end():].startswith('半'):
+        if unit in _DISTANCE_UNITS | _ANGLE_UNITS | {'厘米', '公分', 'cm', '千米', '公里', 'km'} and text[match.end():].startswith('半'):
             value += 0.5 if value >= 0 else -0.5
+            consumed_until = match.end() + 1
         if unit in {'厘米', '公分', 'cm'}:
             value, unit = value / 100, '米'
         if unit in {'千米', '公里', 'km'}:
             value, unit = value * 1000, '米'
-        quantities.append((value, unit))
+        quantities.append((value, unit, match.start()))
+    return text, quantities
+
+
+def _motion_source(text, offset):
+    clause = re.split(r'[,，;；。!?！？\n]', text[:offset])[-1]
+    source = next((name for name, prefix in _MOTION_PREFIXES.items() if prefix.search(clause)), None)
+    subjects = list(re.finditer(r'云台|镜头|相机|机头|机身|无人机|\bgimbal\b|\bcamera\b|\bdrone\b', clause, re.I))
+    other_subject = bool(subjects and subjects[-1].group().lower() in {'云台', '镜头', '相机', 'gimbal', 'camera'})
+    previous = list(re.finditer(r'上一条|上次|刚才|之前|原来|\bprevious\b|\blast command\b|\bearlier\b', clause, re.I))
+    current = list(re.finditer(r'这次|现在|当前指令|\bnow\b|\bthis time\b', clause, re.I))
+    historical = bool(previous and (not current or previous[-1].start() > current[-1].start()))
+    return source, other_subject or historical
+
+
+def _motion_parameter_reply(text):
+    if not _PARAMETER_REPLY.fullmatch(text.strip()):
+        return False
+    _, quantities = _quantity_evidence(text)
+    return len(quantities) == 1 and quantities[0][1] in _DISTANCE_UNITS | _ANGLE_UNITS
+
+
+def _single_motion_source(text):
+    immediate, _ = _separate_motion_constraints(text)
+    clauses = [part for part in re.split(r'[,，;；。!?！？\n]', immediate)
+               if part.strip() and not _motion_parameter_reply(part)]
+    if len(clauses) != 1 or re.search(r'然后|接着|再|\b(?:then|and)\b', clauses[0][1:], re.I):
+        return None
+    mentions = list(_MOTION_MENTIONS.finditer(clauses[0]))
+    if len(mentions) != 1:
+        return None
+    source, excluded = _motion_source(clauses[0], mentions[0].end())
+    return None if excluded else source
+
+
+def _motion_agrees(action, parameters, text, parameter_reply=None):
+    """只核对紧邻数值的明确运动词；未知表达继续交给原模型/参数门禁。"""
+    if action not in _MOTION_PREFIXES:
+        return True
+    key = 'angle_deg' if action.startswith('turn_') else 'distance_m'
+    units = _ANGLE_UNITS if action.startswith('turn_') else _DISTANCE_UNITS
+    value = parameters.get(key, math.nan)
+    text, quantities = _quantity_evidence(text)
+    matching = []
+    for number, unit, offset in quantities:
+        source, excluded = _motion_source(text, offset)
+        if unit in units:
+            if math.isclose(number, value, abs_tol=1e-8):
+                matching.append((source, excluded))
+    if parameter_reply:
+        previous_text = text.rsplit('\n', 1)[0]
+        source = _single_motion_source(previous_text)
+        if source:
+            _, latest = _quantity_evidence(parameter_reply)
+            if (action != source or latest[0][1] not in units
+                    or not math.isclose(latest[0][0], value, abs_tol=1e-8)):
+                return False
+    # 不认识的分句继续走模型路径；不能让前一个已识别动作排除后一个未知表达。
+    # 数值若只来自相反方向、其他主体或历史陈述，则不能作为本次动作依据。
+    return not matching or any(not excluded and (source is None or source == action)
+                               for source, excluded in matching)
+
+
+def grounded_parameters(action, parameters, text):
+    """A conservative evidence check, not an intent parser or replacement LLM."""
+    text, quantities = _quantity_evidence(text)
     for key, value in parameters.items():
         if isinstance(value, bool):
             words = ('打开', '开启', '启用', '开灯', 'on', 'enable') if value else ('关闭', '关掉', '禁用', 'off', 'disable')
@@ -187,15 +277,15 @@ def grounded_parameters(action, parameters, text):
         elif isinstance(value, (int, float)):
             units = None
             if key in {'distance_m', 'altitude_m', 'radius_m'}:
-                units = {'米', 'm', 'meter', 'meters', 'metre', 'metres'}
+                units = _DISTANCE_UNITS
             elif key == 'angle_deg':
-                units = {'度', '°', 'degree', 'degrees'}
+                units = _ANGLE_UNITS
             elif key == 'value' and 'zoom' in action:
                 units = {'倍', 'x'}
             elif key == 'value' and 'speed' in action:
                 units = {'米每秒', '米/秒', 'm/s'} if action in {'set_move_speed', 'set_vertical_speed'} else {'度每秒', '度/秒'}
             if not any(math.isclose(number, value, abs_tol=1e-8) and (units is None or unit in units)
-                       for number, unit in quantities):
+                       for number, unit, _ in quantities):
                 return False
     return True
 
@@ -573,6 +663,7 @@ class CockpitService:
                 session.active_intent, session.clarification = '', False
                 session.requests[request_id] = (fingerprint, result)
                 return result
+            parameter_reply = text if session.clarification and _motion_parameter_reply(text) else None
             if text.lower() in _CONTINUE:
                 if not session.active_intent:
                     result = self._base(status='clarification', message='没有可继续的已确认任务，请说明新的动作。', request_id=request_id)
@@ -631,7 +722,8 @@ class CockpitService:
                 else:
                     self._version(payload)
                     response = self._proposal(result, grounding_text, request_id, session,
-                                              model_failure_code=model_failure_code)
+                                              model_failure_code=model_failure_code,
+                                              parameter_reply=parameter_reply)
                     session.clarification = response['status'] == 'clarification'
                     history += [{'role': 'user', 'text': text}, {'role': 'assistant', 'status': response['status'], 'text': response['message']}]
                     result.checkpoint.context['conversation'] = history[-12:]
@@ -645,13 +737,16 @@ class CockpitService:
                     session.requests[request_id] = (fingerprint, self._base(status='error',
                         error_code='MODEL_ERROR', message='本次理解失败，未执行动作。', request_id=request_id))
 
-    def _proposal(self, result, grounding_text, request_id, session, *, model_failure_code=None):
+    def _proposal(self, result, grounding_text, request_id, session, *, model_failure_code=None,
+                  parameter_reply=None):
         common = {'request_id': request_id, 'state': self._state()}
         if result.tool_call and result.checkpoint.confirmation_binding:
             call = result.tool_call
             _, forbidden = _separate_motion_constraints(grounding_text)
             if call.name in forbidden:
                 return self._base(status='clarification', message='动作与保持位置或航向的限制冲突，请明确要执行的动作。', **common)
+            if not _motion_agrees(call.name, call.arguments, grounding_text, parameter_reply):
+                return self._base(status='clarification', message='动作建议与明确的方向或对应数值不一致，请重新说明本次动作。', **common)
             if not grounded_parameters(call.name, call.arguments, grounding_text):
                 return self._base(status='clarification', message='请明确动作所需的数值和单位；我不会补猜参数。', **common)
             command = uuid4().hex
