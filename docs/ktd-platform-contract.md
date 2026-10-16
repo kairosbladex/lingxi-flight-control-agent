@@ -271,6 +271,8 @@ Java本地候选 `5f4ce20710606fde7c2730ee6c6a5b0de27cc743` 在原命令行中�
 
 ### 部署前剩余条件与回退
 
+2026-10-16补充[官方请求schema核验](evidence/dji-control-request-schema-20261016.json)：夺权 `flight_authority_grab` 的Data为null，不能携带actor或浏览器控制源；进入DRC的 `mqtt_broker.client_id` 用于设备连接中转MQTT，不是Java订阅连接的身份。飞机 `control_source` 是只读变化推送，已核文档没有给出浏览器UUID如何输入及绑定员工的版本契约。关联夺权/进入回复仅证明该次请求结果，不能直接设置持续航权。现有 `UavControlPowerTask.clean` 与 `UavControlPowerProcessor` 确实按平台心跳维护owner、超过300秒清理；保留这个平台策略，同时与MQTT认证期限、DRC心跳及厂商航权分开。可先实现本地控制尝试的typed请求/结果溯源，不必等待真机样本；权威actor许可仍需独立映射及失效契约，不能据上述ID相似性放行。
+
 本切片只形成离线候选。人工需先审核DDL、按正式线流程部署候选、验证同版本MySQL行为，并提供有来源的实际机型/固件、原始回包、设备时钟、业务操作者到厂商航权的绑定和链路状态，再设计隔离真机验收。当前不把测试中的已验证内部值对象当作生产HTTP授权已放行。
 
 回退优先关闭Agent控制开关与Javatracking开关，保留日志和未解决命令；不自动删除审计表、不将未知命令标成功、不重发。未带tracking的旧Java调用保持原业务分支。新增本地版本可通过独立revert提交回退，不改写共享历史。
