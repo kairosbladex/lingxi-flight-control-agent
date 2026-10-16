@@ -158,7 +158,7 @@ def _number(text):
 
 
 _QUANTITY = re.compile(r'([负-]?(?:\d+(?:\.\d+)?|[零〇一二两三四五六七八九十百千点]+|半))\s*'
-                       r'(厘米|公分|千米|公里|米每秒|米/秒|度每秒|度/秒|meters?|metres?|cm|km|m/s|m|米|degrees?|°|度|倍|x|℃)?', re.I)
+                       r'(厘米|公分|千米|公里|米每秒|米/秒|度每秒|度/秒|(?:meters?|metres?|cm|km|m/s|m|degrees?|x)(?![a-z])|米|°|度|倍|℃)?', re.I)
 _DISTANCE_UNITS = frozenset({'米', 'm', 'meter', 'meters', 'metre', 'metres'})
 _ANGLE_UNITS = frozenset({'度', '°', 'degree', 'degrees'})
 _MOTION_PREFIXES = {
@@ -179,6 +179,15 @@ _MOTION_PREFIXES = {name: re.compile(r'(?:' + pattern + r')\s*$', re.I)
 _PARAMETER_REPLY = re.compile(
     r'(?:(?:改为|改成|换成|调整为|设为|用|就|距离(?:改为|是)?|角度(?:改为|是)?'
     r'|make it|change it to)\s*)?' + _QUANTITY.pattern + r'(?:半)?[。.!！]?', re.I)
+# 范围端点、上下界和约数是限制，不是用户选定的精确参数。
+# 只剔除对应数量，保留同句其他精确值；不把附带速度限制变成位移禁令。
+_INEXACT_QUANTITIES = re.compile(
+    r'(?:\bbetween\s+)?' + _QUANTITY.pattern + r'\s*(?:到|至|或者|或|[-~～–—]|\bto\b|\band\b|\bor\b)\s*' + _QUANTITY.pattern
+    + r'|(?:不超过|不多于|不大于|最多|至多|至少|最少|不低于|不小于|超过|低于|小于|大于|少于|多于|不到|上限|下限|约'
+    r'|\b(?:at most|at least|up to|no more than|no less than|less than|more than|under|over|within|about|around|roughly|approximately|approx)\b\.?)\s*(?:为|是|[:：])?\s*'
+    + _QUANTITY.pattern
+    + r'|' + _QUANTITY.pattern + r'\s*(?:以内|以下|以上|之内|左右|上下|\bor so\b)'
+    r'|(?:一两|两三|三四|四五|五六|六七|七八|八九)\s*(?:厘米|公分|千米|公里|米|度|倍)', re.I)
 
 
 def _quantity_evidence(text):
@@ -206,6 +215,13 @@ def _quantity_evidence(text):
             value, unit = value * 1000, '米'
         quantities.append((value, unit, match.start()))
     return text, quantities
+
+
+def _exact_quantity_evidence(text):
+    text, quantities = _quantity_evidence(text)
+    spans = [match.span() for match in _INEXACT_QUANTITIES.finditer(text)]
+    return text, [(number, unit, offset) for number, unit, offset in quantities
+                  if not any(start <= offset < end for start, end in spans)]
 
 
 def _motion_source(text, offset):
@@ -247,7 +263,7 @@ def _motion_agrees(action, parameters, text, parameter_reply=None, parameter_sou
     units = _ANGLE_UNITS if action.startswith('turn_') else _DISTANCE_UNITS
     value = parameters.get(key, math.nan)
     original_text = text
-    text, quantities = _quantity_evidence(text)
+    text, quantities = _exact_quantity_evidence(text)
     matching = []
     for number, unit, offset in quantities:
         source, excluded = _motion_source(text, offset)
@@ -306,7 +322,7 @@ def _ordered_motion_steps(text):
 
 def grounded_parameters(action, parameters, text):
     """A conservative evidence check, not an intent parser or replacement LLM."""
-    text, quantities = _quantity_evidence(text)
+    text, quantities = _exact_quantity_evidence(text)
     for key, value in parameters.items():
         if isinstance(value, bool):
             words = ('打开', '开启', '启用', '开灯', 'on', 'enable') if value else ('关闭', '关掉', '禁用', 'off', 'disable')

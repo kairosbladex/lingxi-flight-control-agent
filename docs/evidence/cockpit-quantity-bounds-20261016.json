@@ -1,0 +1,437 @@
+{
+  "schema_version": "cockpit-quantity-bounds-evidence/v1",
+  "recorded_at": "2026-10-16T14:37:56.634Z",
+  "repository": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent",
+  "branch": "feature/natural-language-cockpit",
+  "baseline_product_sha": "64b9a1c32d0de3122b98c7d0c072be0468df57b4",
+  "baseline_head": "b65ab45f011e87c9314d05e5c3785a94c41cce98",
+  "candidate_commit": null,
+  "commit_reference": "The subsequent delivery documentation supplies the commit that contains this frozen evidence.",
+  "scope": "Reject numeric interval endpoints, bounds, alternatives and explicit approximate quantities as exact action parameters. Require complete English metric units, and share exact quantity evidence with motion direction checking.",
+  "mode": "offline_candidate",
+  "runtime": "Existing Python unittest gate; real CockpitService/OllamaDecider/BoundedAgentLoop/registry/simulator, synthetic external model HTTP response only.",
+  "inputs": {
+    "kind": "Synthetic contract examples fixed in the hashed test source",
+    "test_methods": 9,
+    "public_service_subcases": 45,
+    "expected_result_source": "Existing project contract: missing exact required parameters must clarify; models cannot choose or guess numeric values.",
+    "old_fixture": "fixtures/intent_scenarios.json",
+    "old_fixture_sha256": "355395aa8c3e367afcca06080ae06caa7fa9277d2d68b5ecde47f5d06725a7cd",
+    "old_model_evidence": "artifacts/cockpit-intents-100-20261016-v1-prompt-v1.0-current-98178f8/report.json",
+    "old_model_results_unchanged": true
+  },
+  "implementation": {
+    "files": [
+      "src/lingxi_flight_control/cockpit.py",
+      "tests/test_cockpit_quantity_bounds.py"
+    ],
+    "behavior": [
+      "Only numeric spans belonging to recognized inexact expressions are excluded; independent exact values survive.",
+      "The same filtered evidence grounds values and motion directions, so another motion with the same value cannot authorize an inexact motion.",
+      "English m/cm/km/metres/degrees/x units require a complete token; m cannot match the start of mile.",
+      "Existing finite recognizers remain bounded contradiction checks, not a complete natural language or quantity parser."
+    ],
+    "unchanged": [
+      "COCKPIT_SYSTEM_PROMPT",
+      "59 action/tool schemas",
+      "existing Agent loop/session/confirmation/executor architecture",
+      "default simulator and disabled real control",
+      "frozen 100-case input/labels and original model scores"
+    ]
+  },
+  "tdd_stages": [
+    {
+      "stage": "initial_red",
+      "command": "PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_cockpit_quantity_bounds.py' -v",
+      "test_methods": 6,
+      "subtest_failures": 25,
+      "errors": 0,
+      "exit_code": 1,
+      "failed_cases": [
+        "test_angle_and_speed_bounds_do_not_authorize_their_endpoint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_angle_and_speed_bounds_do_not_authorize_their_endpoint) (text='右转30到60度')",
+        "test_angle_and_speed_bounds_do_not_authorize_their_endpoint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_angle_and_speed_bounds_do_not_authorize_their_endpoint) (text='右转最多60度')",
+        "test_angle_and_speed_bounds_do_not_authorize_their_endpoint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_angle_and_speed_bounds_do_not_authorize_their_endpoint) (text='水平速度设为不超过5米/秒')",
+        "test_angle_and_speed_bounds_do_not_authorize_their_endpoint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_angle_and_speed_bounds_do_not_authorize_their_endpoint) (text='Set move speed to between 3 and 5 metres per second')",
+        "test_english_approximation_and_chinese_adjacent_number_choices_need_clarification (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_english_approximation_and_chinese_adjacent_number_choices_need_clarification) (text='Move forward about 10 metres')",
+        "test_english_approximation_and_chinese_adjacent_number_choices_need_clarification (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_english_approximation_and_chinese_adjacent_number_choices_need_clarification) (text='Move forward roughly 10 metres')",
+        "test_english_approximation_and_chinese_adjacent_number_choices_need_clarification (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_english_approximation_and_chinese_adjacent_number_choices_need_clarification) (text='Move forward approximately 10 metres')",
+        "test_english_approximation_and_chinese_adjacent_number_choices_need_clarification (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_english_approximation_and_chinese_adjacent_number_choices_need_clarification) (text='向前飞一两米')",
+        "test_english_approximation_and_chinese_adjacent_number_choices_need_clarification (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_english_approximation_and_chinese_adjacent_number_choices_need_clarification) (text='向前飞两三米')",
+        "test_model_cannot_choose_a_distance_interval_endpoint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_choose_a_distance_interval_endpoint) (text='向前飞5到10米')",
+        "test_model_cannot_choose_a_distance_interval_endpoint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_choose_a_distance_interval_endpoint) (text='向前飞5米到10米')",
+        "test_model_cannot_choose_a_distance_interval_endpoint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_choose_a_distance_interval_endpoint) (text='向前飞5至10米')",
+        "test_model_cannot_choose_a_distance_interval_endpoint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_choose_a_distance_interval_endpoint) (text='向前飞5~10米')",
+        "test_model_cannot_choose_a_distance_interval_endpoint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_choose_a_distance_interval_endpoint) (text='向前飞五到十米')",
+        "test_model_cannot_choose_a_distance_interval_endpoint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_choose_a_distance_interval_endpoint) (text='Move forward between 5 and 10 metres')",
+        "test_model_cannot_choose_a_distance_interval_endpoint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_choose_a_distance_interval_endpoint) (text='Move forward 5 to 10 meters')",
+        "test_model_cannot_convert_a_distance_bound_to_an_exact_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_convert_a_distance_bound_to_an_exact_distance) (text='向前飞不超过10米')",
+        "test_model_cannot_convert_a_distance_bound_to_an_exact_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_convert_a_distance_bound_to_an_exact_distance) (text='向前飞最多10米')",
+        "test_model_cannot_convert_a_distance_bound_to_an_exact_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_convert_a_distance_bound_to_an_exact_distance) (text='向前飞至少10米')",
+        "test_model_cannot_convert_a_distance_bound_to_an_exact_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_convert_a_distance_bound_to_an_exact_distance) (text='向前飞10米以内')",
+        "test_model_cannot_convert_a_distance_bound_to_an_exact_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_convert_a_distance_bound_to_an_exact_distance) (text='向前飞10米以上')",
+        "test_model_cannot_convert_a_distance_bound_to_an_exact_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_convert_a_distance_bound_to_an_exact_distance) (text='Move forward at most 10 metres')",
+        "test_model_cannot_convert_a_distance_bound_to_an_exact_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_convert_a_distance_bound_to_an_exact_distance) (text='Move forward at least 10 metres')",
+        "test_model_cannot_convert_a_distance_bound_to_an_exact_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_convert_a_distance_bound_to_an_exact_distance) (text='Move forward up to 10 metres')",
+        "test_model_cannot_convert_a_distance_bound_to_an_exact_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_convert_a_distance_bound_to_an_exact_distance) (text='Move forward less than 10 metres')"
+      ],
+      "evidence_note": "The first verbose tool output was truncated; a compact unittest result rerun on the unchanged failing source preserved all 25 subtest IDs.",
+      "observed_failure": "Expected clarification; actual preview_required with a numeric confirmation card."
+    },
+    {
+      "stage": "alternatives_red",
+      "test_methods": 7,
+      "subtest_failures": 4,
+      "errors": 0,
+      "exit_code": 1,
+      "tool_output": "test_an_exact_distance_survives_an_independent_speed_constraint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_an_exact_distance_survives_an_independent_speed_constraint) ... ok\ntest_angle_and_speed_bounds_do_not_authorize_their_endpoint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_angle_and_speed_bounds_do_not_authorize_their_endpoint) ... ok\ntest_english_approximation_and_chinese_adjacent_number_choices_need_clarification (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_english_approximation_and_chinese_adjacent_number_choices_need_clarification) ... \n  test_english_approximation_and_chinese_adjacent_number_choices_need_clarification (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_english_approximation_and_chinese_adjacent_number_choices_need_clarification) (text='Move forward 10 metres or so') ... FAIL\ntest_exact_values_and_explicit_unit_conversions_still_create_cards (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_exact_values_and_explicit_unit_conversions_still_create_cards) ... ok\ntest_explicit_alternatives_need_the_user_to_choose (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_explicit_alternatives_need_the_user_to_choose) ... \n  test_explicit_alternatives_need_the_user_to_choose (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_explicit_alternatives_need_the_user_to_choose) (text='向前飞5米或10米') ... FAIL\n  test_explicit_alternatives_need_the_user_to_choose (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_explicit_alternatives_need_the_user_to_choose) (text='向前飞5米或者10米') ... FAIL\n  test_explicit_alternatives_need_the_user_to_choose (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_explicit_alternatives_need_the_user_to_choose) (text='Move forward 5 or 10 metres') ... FAIL\ntest_model_cannot_choose_a_distance_interval_endpoint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_choose_a_distance_interval_endpoint) ... ok\ntest_model_cannot_convert_a_distance_bound_to_an_exact_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_convert_a_distance_bound_to_an_exact_distance) ... ok\n\n======================================================================\nFAIL: test_english_approximation_and_chinese_adjacent_number_choices_need_clarification (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_english_approximation_and_chinese_adjacent_number_choices_need_clarification) (text='Move forward 10 metres or so')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/tests/test_cockpit_quantity_bounds.py\", line 72, in test_english_approximation_and_chinese_adjacent_number_choices_need_clarification\n    self.assertEqual(reply['status'], 'clarification')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'preview_required' != 'clarification'\n- preview_required\n+ clarification\n\n\n======================================================================\nFAIL: test_explicit_alternatives_need_the_user_to_choose (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_explicit_alternatives_need_the_user_to_choose) (text='向前飞5米或10米')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/tests/test_cockpit_quantity_bounds.py\", line 80, in test_explicit_alternatives_need_the_user_to_choose\n    self.assertEqual(reply['status'], 'clarification')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'preview_required' != 'clarification'\n- preview_required\n+ clarification\n\n\n======================================================================\nFAIL: test_explicit_alternatives_need_the_user_to_choose (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_explicit_alternatives_need_the_user_to_choose) (text='向前飞5米或者10米')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/tests/test_cockpit_quantity_bounds.py\", line 80, in test_explicit_alternatives_need_the_user_to_choose\n    self.assertEqual(reply['status'], 'clarification')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'preview_required' != 'clarification'\n- preview_required\n+ clarification\n\n\n======================================================================\nFAIL: test_explicit_alternatives_need_the_user_to_choose (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_explicit_alternatives_need_the_user_to_choose) (text='Move forward 5 or 10 metres')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/tests/test_cockpit_quantity_bounds.py\", line 80, in test_explicit_alternatives_need_the_user_to_choose\n    self.assertEqual(reply['status'], 'clarification')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'preview_required' != 'clarification'\n- preview_required\n+ clarification\n\n\n----------------------------------------------------------------------\nRan 7 tests in 0.044s\n\nFAILED (failures=4)\n"
+    },
+    {
+      "stage": "equal_value_cross_clause_red",
+      "test_methods": 8,
+      "subtest_failures": 3,
+      "errors": 0,
+      "exit_code": 1,
+      "tool_output": "test_an_exact_distance_survives_an_independent_speed_constraint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_an_exact_distance_survives_an_independent_speed_constraint) ... ok\ntest_angle_and_speed_bounds_do_not_authorize_their_endpoint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_angle_and_speed_bounds_do_not_authorize_their_endpoint) ... ok\ntest_bound_cannot_borrow_an_equal_exact_value_from_another_motion (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_bound_cannot_borrow_an_equal_exact_value_from_another_motion) ... \n  test_bound_cannot_borrow_an_equal_exact_value_from_another_motion (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_bound_cannot_borrow_an_equal_exact_value_from_another_motion) (text='向左飞10米，向右飞最多10米') ... FAIL\n  test_bound_cannot_borrow_an_equal_exact_value_from_another_motion (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_bound_cannot_borrow_an_equal_exact_value_from_another_motion) (text='先右转60度，再左转最多60度') ... FAIL\n  test_bound_cannot_borrow_an_equal_exact_value_from_another_motion (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_bound_cannot_borrow_an_equal_exact_value_from_another_motion) (text='Move left 10 metres, then move right at most 10 metres') ... FAIL\ntest_english_approximation_and_chinese_adjacent_number_choices_need_clarification (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_english_approximation_and_chinese_adjacent_number_choices_need_clarification) ... ok\ntest_exact_values_and_explicit_unit_conversions_still_create_cards (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_exact_values_and_explicit_unit_conversions_still_create_cards) ... ok\ntest_explicit_alternatives_need_the_user_to_choose (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_explicit_alternatives_need_the_user_to_choose) ... ok\ntest_model_cannot_choose_a_distance_interval_endpoint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_choose_a_distance_interval_endpoint) ... ok\ntest_model_cannot_convert_a_distance_bound_to_an_exact_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_convert_a_distance_bound_to_an_exact_distance) ... ok\n\n======================================================================\nFAIL: test_bound_cannot_borrow_an_equal_exact_value_from_another_motion (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_bound_cannot_borrow_an_equal_exact_value_from_another_motion) (text='向左飞10米，向右飞最多10米')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/tests/test_cockpit_quantity_bounds.py\", line 111, in test_bound_cannot_borrow_an_equal_exact_value_from_another_motion\n    self.assertEqual(reply['status'], 'clarification')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'preview_required' != 'clarification'\n- preview_required\n+ clarification\n\n\n======================================================================\nFAIL: test_bound_cannot_borrow_an_equal_exact_value_from_another_motion (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_bound_cannot_borrow_an_equal_exact_value_from_another_motion) (text='先右转60度，再左转最多60度')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/tests/test_cockpit_quantity_bounds.py\", line 111, in test_bound_cannot_borrow_an_equal_exact_value_from_another_motion\n    self.assertEqual(reply['status'], 'clarification')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'preview_required' != 'clarification'\n- preview_required\n+ clarification\n\n\n======================================================================\nFAIL: test_bound_cannot_borrow_an_equal_exact_value_from_another_motion (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_bound_cannot_borrow_an_equal_exact_value_from_another_motion) (text='Move left 10 metres, then move right at most 10 metres')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/tests/test_cockpit_quantity_bounds.py\", line 111, in test_bound_cannot_borrow_an_equal_exact_value_from_another_motion\n    self.assertEqual(reply['status'], 'clarification')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'preview_required' != 'clarification'\n- preview_required\n+ clarification\n\n\n----------------------------------------------------------------------\nRan 8 tests in 0.051s\n\nFAILED (failures=3)\n"
+    },
+    {
+      "stage": "independent_cases_reproduced_red",
+      "test_methods": 9,
+      "subtest_failures": 4,
+      "errors": 0,
+      "exit_code": 1,
+      "tool_output": "test_an_exact_distance_survives_an_independent_speed_constraint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_an_exact_distance_survives_an_independent_speed_constraint) ... ok\ntest_angle_and_speed_bounds_do_not_authorize_their_endpoint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_angle_and_speed_bounds_do_not_authorize_their_endpoint) ... ok\ntest_bound_cannot_borrow_an_equal_exact_value_from_another_motion (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_bound_cannot_borrow_an_equal_exact_value_from_another_motion) ... ok\ntest_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance) ... \n  test_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance) (text='向前飞距离上限为12米') ... FAIL\n  test_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance) (text='Move right approx. 6 metres') ... FAIL\n  test_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance) (text='向前飞约5米') ... FAIL\n  test_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance) (text='Move forward 1 mile') ... FAIL\ntest_english_approximation_and_chinese_adjacent_number_choices_need_clarification (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_english_approximation_and_chinese_adjacent_number_choices_need_clarification) ... ok\ntest_exact_values_and_explicit_unit_conversions_still_create_cards (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_exact_values_and_explicit_unit_conversions_still_create_cards) ... ok\ntest_explicit_alternatives_need_the_user_to_choose (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_explicit_alternatives_need_the_user_to_choose) ... ok\ntest_model_cannot_choose_a_distance_interval_endpoint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_choose_a_distance_interval_endpoint) ... ok\ntest_model_cannot_convert_a_distance_bound_to_an_exact_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_convert_a_distance_bound_to_an_exact_distance) ... ok\n\n======================================================================\nFAIL: test_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance) (text='向前飞距离上限为12米')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/tests/test_cockpit_quantity_bounds.py\", line 123, in test_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance\n    self.assertEqual(reply['status'], 'clarification')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'preview_required' != 'clarification'\n- preview_required\n+ clarification\n\n\n======================================================================\nFAIL: test_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance) (text='Move right approx. 6 metres')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/tests/test_cockpit_quantity_bounds.py\", line 123, in test_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance\n    self.assertEqual(reply['status'], 'clarification')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'preview_required' != 'clarification'\n- preview_required\n+ clarification\n\n\n======================================================================\nFAIL: test_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance) (text='向前飞约5米')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/tests/test_cockpit_quantity_bounds.py\", line 123, in test_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance\n    self.assertEqual(reply['status'], 'clarification')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'preview_required' != 'clarification'\n- preview_required\n+ clarification\n\n\n======================================================================\nFAIL: test_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance) (text='Move forward 1 mile')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/tests/test_cockpit_quantity_bounds.py\", line 123, in test_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance\n    self.assertEqual(reply['status'], 'clarification')\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'preview_required' != 'clarification'\n- preview_required\n+ clarification\n\n\n----------------------------------------------------------------------\nRan 9 tests in 0.053s\n\nFAILED (failures=4)\n"
+    }
+  ],
+  "focused": {
+    "command": "PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_cockpit_quantity_bounds.py' -v",
+    "exit_code": 0,
+    "test_methods": 9,
+    "public_service_subcases": 45,
+    "tool_output": "test_an_exact_distance_survives_an_independent_speed_constraint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_an_exact_distance_survives_an_independent_speed_constraint) ... ok\ntest_angle_and_speed_bounds_do_not_authorize_their_endpoint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_angle_and_speed_bounds_do_not_authorize_their_endpoint) ... ok\ntest_bound_cannot_borrow_an_equal_exact_value_from_another_motion (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_bound_cannot_borrow_an_equal_exact_value_from_another_motion) ... ok\ntest_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_bound_copula_short_approximation_and_unsupported_unit_cannot_ground_distance) ... ok\ntest_english_approximation_and_chinese_adjacent_number_choices_need_clarification (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_english_approximation_and_chinese_adjacent_number_choices_need_clarification) ... ok\ntest_exact_values_and_explicit_unit_conversions_still_create_cards (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_exact_values_and_explicit_unit_conversions_still_create_cards) ... ok\ntest_explicit_alternatives_need_the_user_to_choose (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_explicit_alternatives_need_the_user_to_choose) ... ok\ntest_model_cannot_choose_a_distance_interval_endpoint (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_choose_a_distance_interval_endpoint) ... ok\ntest_model_cannot_convert_a_distance_bound_to_an_exact_distance (test_cockpit_quantity_bounds.CockpitQuantityBoundsTests.test_model_cannot_convert_a_distance_bound_to_an_exact_distance) ... ok\n\n----------------------------------------------------------------------\nRan 9 tests in 0.052s\n\nOK\n"
+  },
+  "full_gate": {
+    "command": "bash tools/ci/offline_tests.sh",
+    "exit_code": 0,
+    "test_methods": 573,
+    "failures": 0,
+    "errors": 0,
+    "tool_output": "+ PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_*.py'\n.............................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 573 tests in 2.670s\n\nOK\n",
+    "socket_guard": "Included by the unchanged sole offline test script."
+  },
+  "source_freeze": {
+    "files": {
+      "src/lingxi_flight_control/cockpit.py": "e833d97e97afe723923b8750f7012dc305db403973e44cba79bcb3dfa3521fbb",
+      "tests/test_cockpit_quantity_bounds.py": "d226ee4bb1136a1e7bbee6b04e4863ab3bfc53a78429589b18f0c944e98d87f5",
+      "src/lingxi_flight_control/ollama_decider.py": "4835e20296b476d60e9867ff328919049b8a131ccb8dc6148082750cada6351f",
+      "fixtures/intent_scenarios.json": "355395aa8c3e367afcca06080ae06caa7fa9277d2d68b5ecde47f5d06725a7cd"
+    },
+    "unchanged_across_final_gate_and_independent_run": true
+  },
+  "independent_verification": {
+    "reviewer": "outbound_binding_contract",
+    "finished_at": "2026-10-16T22:35:47+08:00",
+    "groups": 20,
+    "request_turns": 22,
+    "matched_groups": 20,
+    "matched_turns": 22,
+    "clarifications": 16,
+    "previews": 6,
+    "synthetic_model_http_calls": 22,
+    "tools_per_model_request": 59,
+    "real_model_calls": 0,
+    "network_connect_attempts": 0,
+    "confirmations": 0,
+    "dispatch_true": 0,
+    "simulator_state_changes": 0,
+    "files_modified": 0,
+    "earlier_run": "Excluded from final frozen-run counts because the root was still changing source.",
+    "root_review": "Read all 22 reported input/proposal/status rows and before/after hashes. Independently reproduced all four discovered failures plus equal-value cross-clause failures in public-service TDD, then checked their passing results and final full gate.",
+    "cases": [
+      {
+        "group": 1,
+        "input": "向前飞3～7厘米",
+        "proposal": [
+          "move_forward",
+          {
+            "distance_m": 0.07
+          }
+        ],
+        "expected": "clarification",
+        "actual": "clarification"
+      },
+      {
+        "group": 2,
+        "input": "向前飞0.5到1.5米",
+        "proposal": [
+          "move_forward",
+          {
+            "distance_m": 0.5
+          }
+        ],
+        "expected": "clarification",
+        "actual": "clarification"
+      },
+      {
+        "group": 3,
+        "input": "Fly left from 2 to 6 metres",
+        "proposal": [
+          "move_left",
+          {
+            "distance_m": 2
+          }
+        ],
+        "expected": "clarification",
+        "actual": "clarification"
+      },
+      {
+        "group": 4,
+        "input": "Go backwards 2–6 m",
+        "proposal": [
+          "move_backward",
+          {
+            "distance_m": 6
+          }
+        ],
+        "expected": "clarification",
+        "actual": "clarification"
+      },
+      {
+        "group": 5,
+        "input": "Move forward no more than 12 cm",
+        "proposal": [
+          "move_forward",
+          {
+            "distance_m": 0.12
+          }
+        ],
+        "expected": "clarification",
+        "actual": "clarification"
+      },
+      {
+        "group": 6,
+        "input": "向前飞距离上限为12米",
+        "proposal": [
+          "move_forward",
+          {
+            "distance_m": 12
+          }
+        ],
+        "expected": "clarification",
+        "actual": "clarification"
+      },
+      {
+        "group": 7,
+        "input": "Move right approx. 6 metres",
+        "proposal": [
+          "move_right",
+          {
+            "distance_m": 6
+          }
+        ],
+        "expected": "clarification",
+        "actual": "clarification"
+      },
+      {
+        "group": 8,
+        "input": "向前飞约5米",
+        "proposal": [
+          "move_forward",
+          {
+            "distance_m": 5
+          }
+        ],
+        "expected": "clarification",
+        "actual": "clarification"
+      },
+      {
+        "group": 9,
+        "input": "向前飞半米",
+        "proposal": [
+          "move_forward",
+          {
+            "distance_m": 0.5
+          }
+        ],
+        "expected": "preview_required",
+        "actual": "preview_required"
+      },
+      {
+        "group": 10,
+        "input": "向前飞0.5米",
+        "proposal": [
+          "move_forward",
+          {
+            "distance_m": 0.5
+          }
+        ],
+        "expected": "preview_required",
+        "actual": "preview_required"
+      },
+      {
+        "group": 11,
+        "input": "Move forward 1 mile",
+        "proposal": [
+          "move_forward",
+          {
+            "distance_m": 1
+          }
+        ],
+        "expected": "clarification",
+        "actual": "clarification"
+      },
+      {
+        "group": 12,
+        "input": "向前飞1英里",
+        "proposal": [
+          "move_forward",
+          {
+            "distance_m": 1
+          }
+        ],
+        "expected": "clarification",
+        "actual": "clarification"
+      },
+      {
+        "group": 13,
+        "input": "向前飞-0.5米",
+        "proposal": [
+          "move_forward",
+          {
+            "distance_m": 0.5
+          }
+        ],
+        "expected": "clarification",
+        "actual": "clarification"
+      },
+      {
+        "group": 14,
+        "input": "Move forward -2 metres",
+        "proposal": [
+          "move_forward",
+          {
+            "distance_m": 2
+          }
+        ],
+        "expected": "clarification",
+        "actual": "clarification"
+      },
+      {
+        "group": 15,
+        "input": "向前飞12米，速度上限4米/秒",
+        "proposal": [
+          "move_forward",
+          {
+            "distance_m": 12
+          }
+        ],
+        "expected": "preview_required",
+        "actual": "preview_required"
+      },
+      {
+        "group": 16,
+        "input": "Go forward 12 metres; speed no more than 4 m/s",
+        "proposal": [
+          "move_forward",
+          {
+            "distance_m": 12
+          }
+        ],
+        "expected": "preview_required",
+        "actual": "preview_required"
+      },
+      {
+        "group": 17,
+        "turn": 1,
+        "input": "向前飞三至六米",
+        "proposal": [
+          "move_forward",
+          {
+            "distance_m": 6
+          }
+        ],
+        "expected": "clarification",
+        "actual": "clarification"
+      },
+      {
+        "group": 17,
+        "turn": 2,
+        "input": "改为6米",
+        "same_session": true,
+        "proposal": [
+          "move_forward",
+          {
+            "distance_m": 6
+          }
+        ],
+        "expected": "preview_required",
+        "actual": "preview_required"
+      },
+      {
+        "group": 18,
+        "turn": 1,
+        "input": "Move forward approximately 7 metres",
+        "proposal": [
+          "move_forward",
+          {
+            "distance_m": 7
+          }
+        ],
+        "expected": "clarification",
+        "actual": "clarification"
+      },
+      {
+        "group": 18,
+        "turn": 2,
+        "input": "Make it 6 metres",
+        "same_session": true,
+        "proposal": [
+          "move_forward",
+          {
+            "distance_m": 6
+          }
+        ],
+        "expected": "preview_required",
+        "actual": "preview_required"
+      },
+      {
+        "group": 19,
+        "input": "先向前飞3到7米，然后右转45度",
+        "proposal": [
+          "move_forward",
+          {
+            "distance_m": 7
+          }
+        ],
+        "expected": "clarification",
+        "actual": "clarification"
+      },
+      {
+        "group": 20,
+        "input": "向左飞10米，向右飞最多10米",
+        "proposal": [
+          "move_right",
+          {
+            "distance_m": 10
+          }
+        ],
+        "expected": "clarification",
+        "actual": "clarification"
+      }
+    ]
+  },
+  "effects": {
+    "new_test_confirmations": 0,
+    "real_model_calls": 0,
+    "real_platform_writes": 0,
+    "real_mqtt_connections": 0,
+    "device_actions": 0,
+    "shared_deployments_or_restarts": 0
+  },
+  "limits": [
+    "Synthetic HTTP outputs deliberately include bad proposals. Passing guards do not establish model understanding accuracy.",
+    "Only explicit recognized quantity forms are checked; unknown wording and broader semantic ambiguity remain on the existing model/policy path.",
+    "Independent 20-group verification is a bounded supplement, not an additional model evaluation denominator.",
+    "No real device, business, production database or live model result was verified."
+  ],
+  "rollback": "Revert the semantic change independently; preserve original model evidence and existing command journals. Never resend prior commands as compensation."
+}
