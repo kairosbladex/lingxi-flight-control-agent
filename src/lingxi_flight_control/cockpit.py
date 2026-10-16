@@ -56,6 +56,35 @@ _DENY_PHRASES = ('不要', '别起飞', '别飞', '别动', '不执行', '如果
                  '不用', '不需要', '无需', '禁止', '勿', '明天', '后天', '定时', '待会', '稍后', '等会',
                  '大约', '大概', '差不多', '约莫', '大致', '来米',
                  'don\'t', 'do not', 'if ', 'can you explain')
+# 消息中的角色标记或“资料等于审批”不能变成操作意图，更不能替代确认入口。
+_AUTHORITY_CLAIM = re.compile(
+    r'\b(?:system|developer|assistant|tool)\s*[:：]'
+    r'|<\|\s*(?:system|developer|assistant|tool)\s*\|>'
+    r'|<\|im_start\|>\s*(?:system|developer|assistant|tool)\b'
+    r'|\[\s*(?:system|developer|assistant|tool)\s*\]'
+    r'|(?:管理员|系统).{0,12}(?:已经|已|默认|自动).{0,12}(?:批准|授权|确认)'
+    r'|(?:日志|文档|附件|网页|引用).{0,24}(?:当作|视为).{0,12}(?:授权|批准|确认)'
+    r'|\b(?:admin(?:istrator)?|system)\s+(?:(?:has|have)\s+)?(?:already\s+)?(?:approved|authorized|confirmed)\b'
+    r'|\btreat\b.{0,32}\b(?:log|document|attachment|quote)\b.{0,32}\bas\b.{0,24}\b(?:approval|authorization)\b', re.I)
+_CONTROL_REQUEST_PREFIX = r'\s*(?:(?:请先?|先|然后|再|帮我|麻烦|我想|我要|现在|立即|马上)\s*)*'
+_CONTROL_REQUEST_TARGET = r'(?:这架|无人机|当前|我|所|持有|飞行|的|设备|\s)*控制权'
+_CONTROL_REQUESTS = {
+    'control_acquire': re.compile(_CONTROL_REQUEST_PREFIX + r'(?:申请|获取|取得|接管|夺取|获得|拿到)'
+        + _CONTROL_REQUEST_TARGET + r'|\s*(?:(?:please|first|now|i want to|i would like to)\s+)*'
+        r'(?:acquire|request|take|obtain|grab)\s+(?:the\s+)?(?:(?:flight|drone)\s+)?control\b', re.I),
+    'control_release': re.compile(_CONTROL_REQUEST_PREFIX + r'(?:释放|放弃|交还|归还)'
+        + _CONTROL_REQUEST_TARGET + r'|\s*(?:(?:please|first|now|i want to|i would like to)\s+)*'
+        r'(?:release|relinquish|give up)\s+(?:the\s+)?(?:(?:flight|drone)\s+)?control\b', re.I),
+}
+_CONTROL_EXPLANATION = re.compile(r'如何|怎么|是什么|什么意思|流程|是否|\b(?:what|how|why|explain|means?|meaning)\b', re.I)
+
+
+def _control_request_agrees(action, text):
+    pattern = _CONTROL_REQUESTS.get(action)
+    return pattern is None or any(pattern.match(clause) and not _CONTROL_EXPLANATION.search(clause)
+                                  for clause in re.split(r'[,，;；。.!！?？\n]', text))
+
+
 _NON_IMMEDIATE = re.compile(
     r'(?<!分)别|不(?:要|用|必|需要)?(?:再|先)?(?:拍|飞|起飞|降落|返航|转|录像|执行|操作|继续)'
     r'|[\d零一二两三四五六七八九十百半]+\s*(?:秒钟?|分钟?|小时|天)\s*(?:以?后|再)'
@@ -716,7 +745,7 @@ class CockpitService:
             session.turns += 1
             session.requests[request_id] = (fingerprint, None)
             immediate_text, motion_constraints = _separate_motion_constraints(text)
-            if (not immediate_text or contains_unsafe_content(text)
+            if (not immediate_text or contains_unsafe_content(text) or _AUTHORITY_CLAIM.search(text)
                     or any(phrase in immediate_text.lower() for phrase in _DENY_PHRASES)
                     or (motion_constraints and _CONSTRAINT_DISCUSSION.search(immediate_text))
                     or _NON_IMMEDIATE.search(immediate_text)):
@@ -830,6 +859,9 @@ class CockpitService:
         common = {'request_id': request_id, 'state': self._state()}
         if result.tool_call and result.checkpoint.confirmation_binding:
             call = result.tool_call
+            if not _control_request_agrees(call.name, grounding_text):
+                return self._base(status='clarification',
+                    message='本次没有明确请求这项控制权操作，请重新说明动作；我不会替你申请或释放控制权。', **common)
             _, forbidden = _separate_motion_constraints(grounding_text)
             if call.name in forbidden:
                 return self._base(status='clarification', message='动作与保持位置或航向的限制冲突，请明确要执行的动作。', **common)
