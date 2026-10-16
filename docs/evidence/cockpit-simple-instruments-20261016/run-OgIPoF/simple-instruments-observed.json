@@ -1,0 +1,41 @@
+{
+  "sourceCommit": "35574cba46d498e0992de05504756bccf7014ade",
+  "reference": {
+    "viewport1920": {
+      "x": 1168,
+      "y": 853,
+      "width": 313,
+      "height": 184
+    },
+    "viewport1280": {
+      "x": 778.6666666666666,
+      "y": 748.6666666666666,
+      "width": 208.66666666666666,
+      "height": 122.66666666666667
+    }
+  },
+  "actual": {
+    "viewport1920": {
+      "panel": null,
+      "instruments": [
+        null,
+        null,
+        null
+      ],
+      "titles": []
+    },
+    "viewport1280": {
+      "panel": null,
+      "instruments": [
+        null,
+        null,
+        null
+      ],
+      "titles": []
+    }
+  },
+  "screenshots": [
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-instruments-20261016/run-OgIPoF/05f-simple-instruments-1920-observed.png",
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-instruments-20261016/run-OgIPoF/05g-simple-instruments-1280-observed.png"
+  ]
+}

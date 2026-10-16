@@ -1,0 +1,96 @@
+{
+  "schema_version": "cockpit-simple-instruments-evidence/v1",
+  "date": "2026-10-16",
+  "timezone": "Asia/Taipei",
+  "task_started_at": "2026-10-16T22:22:39+08:00",
+  "final_browser_completion_observed_at": "2026-10-16T22:49:33+08:00",
+  "work_mode": "offline local UI candidate; no model, business API, real media, MQTT, device or shared deployment",
+  "ui_repository": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui",
+  "ui_branch": "feature/natural-language-cockpit",
+  "ui_baseline_commit": "e8096317ed885ce255c77667f238e6743d0ce8c7",
+  "ui_baseline_worktree": "clean",
+  "delivery_state": "six scoped UI files left uncommitted for root review; no commit or push performed by this subtask",
+  "budget": {"minutes": 45, "initial_development_calls": 80, "root_extended_closing_calls_limit": 110, "extension_reason": "root requested actual endpoint-label readability acceptance; extension is for final regression, hashing and evidence only"},
+  "source_contract": "source-contract.json",
+  "tests": {
+    "unit": {"command": "npm test", "exit_code": 0, "passed": 120, "failed": 0, "skipped": 0, "added_pure_projection_tests": 3},
+    "build": {"command": "npm run build", "exit_code": 0, "existing_warning": "Vite media dependency chunk exceeds500kB"},
+    "format": {"command": "git diff --check", "exit_code": 0},
+    "browser": {
+      "command": "env -u COCKPIT_API_URL COCKPIT_EVIDENCE_DIR=/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-instruments-20261016 npm run e2e:cockpit",
+      "source": "offline-http-fixture",
+      "exit_code": 0,
+      "raw_result": "run-nrD1Gh/evidence.json",
+      "raw_result_sha256": "80b57cb4a59ba3ebace6786ae61ee239fc9b4f2c27d9d4795e6c5194ac71848b",
+      "scenarios": 96,
+      "fixture_api_requests": 175,
+      "fixture_confirmations": 21,
+      "forbidden_requests": 0,
+      "physical_device_requests": 0,
+      "browser_errors": [],
+      "added_scenarios": ["simple-three-instrument-source-layout", "simple-instruments-platform-missing-fields", "simple-instruments-unavailable", "simple-instruments-independent-missing-heights", "simple-instruments-zero-values", "simple-instruments-negative-angles", "simple-instruments-axis-boundaries", "simple-instruments-invalid-values", "simple-instruments-preserve-lifecycle"],
+      "added_fixture_requests": {"manual_state_reads": 10, "proposals": 2, "cancellations": 2, "confirmations": 0},
+      "instrument_automatic_requests": 0,
+      "instrument_media_requests": 0,
+      "instrument_automatic_confirmations": 0,
+      "boundary_labels_raw": "run-nrD1Gh/simple-instrument-boundary-labels.json",
+      "boundary_labels_overlaps": [{"pitch": 180, "overlaps": 0}, {"pitch": -180, "overlaps": 0}]
+    }
+  },
+  "before_and_after_final_gate_sha256": {
+    "unchanged": true,
+    "scoped_files": {
+      "README.md": "3f0edafbfa32d5cea64bae7506a5e0676432a8887352ada7bee375bdb0dd6407",
+      "src/CockpitWorkspace.vue": "ba232cc7db9419d77b3636cc8defc8cee0f415c1e780edec9842b591c9a12ad2",
+      "src/cockpitWorkspace.css": "a695b2d92a533e50f79945cf3efacc7e16209aaf4c478ff88f2cc68497ba1b47",
+      "src/cockpitControls.ts": "09aee1b217d7b1231e2980dd838c0e3ff25dd42f25b3953240e846f3fbb4c18f",
+      "tests/cockpitControls.test.mjs": "dfe2054c7db9836a6313b49509184c4edb629dbb571c3dd5e432b9438f3c74c2",
+      "scripts/cockpit-e2e.mjs": "c6b317922b7c4bc24e888998735af5ea7503242dc674d341fd2f4eeb25b17121"
+    },
+    "unchanged_dependencies_and_assets": {
+      "package.json": "8e8579ad3250051fe3137f60416fa45cf8d97fe3b76d83c99a73719c590fd413",
+      "package-lock.json": "14116b4f8bc0885bcacf5008bcea9c2a5b3c9fb95e1e44e5907abc3ac8fe6227",
+      "src/assets/cockpit/SOURCE.json": "87f3a823ee1c39f28945610cf7a9f5ed53bff0607f753c17c6d915716fd72b68"
+    }
+  },
+  "red_evidence": [
+    {"issue": "Original simple UI lacks the three instrument structures and source frames in both1920 and1280", "raw_json": "run-OgIPoF/simple-instruments-observed.json", "sha256": "3525dae96990aac951e1aea928bc29f8fc5c52c06a1faff3b50cecb15e9c0a4a", "screenshots": ["run-OgIPoF/05f-simple-instruments-1920-observed.png", "run-OgIPoF/05g-simple-instruments-1280-observed.png"]},
+    {"issue": "Explicit unavailable speed text exceeds the original numeric typography width", "raw_json": "run-zWy53r/simple-instruments-observed.json", "sha256": "604625e28662f591b4829307d732d41d17a113d79be975b8d516421641109f50", "screenshots": ["run-zWy53r/05f-simple-instruments-1920-observed.png", "run-zWy53r/05g-simple-instruments-1280-observed.png"]},
+    {"issue": "Actual camera pitch overlaps fixed endpoint text at both+180 and-180", "raw_json": "run-ZR28wo/simple-instrument-boundary-labels.json", "sha256": "2087aa4df9ce30d46f4332725b3c51befa0dff4d4cf2d867cd75bfaaddcdbfde", "overlaps_before": [1, 1], "screenshots": ["run-ZR28wo/12e-simple-gimbal-upper-boundary.png", "run-ZR28wo/12e-simple-gimbal-lower-boundary.png"]}
+  ],
+  "tdd_notes": [
+    "Actual Vue/Chrome first showed missing instrument DOM and null frames in both viewports before implementation. Expected frames were independently derived from the fixed source.",
+    "Three new pure projection tests initially failed because the proposed export did not exist; that import failure is not represented as a device or behavioral accuracy result. The implemented public helper then passed all19 focused control tests and all120 tests.",
+    "Screenshot review found explicit unknown text overflow; the browser frame-containment assertion failed before the scoped typography correction.",
+    "Root requested endpoint visibility evidence; actual label rectangles and both screenshots showed overlap before the fixed-label decluttering change.",
+    "An intermediate hit-target assertion assumed the original long chat would remain scrolled to its bottom after resize. The runner now uses an actual user wheel event to reach the original card. CockpitPanel and its scroll policy are unchanged."
+  ],
+  "explicit_adaptations": [
+    "Raw signed heading text is retained: -45deg displays-45.0deg, not old-store normalized315deg. Pointer uses the existing snapshot directly; no continuous-course history is added.",
+    "Execution mode, snapshot status and the absolute-height vertical-datum explanation remain visible in the card header.",
+    "Unavailable SPD/VS typography uses14px source-scaled type instead of20px numeric type so explicit unknown labels fit.",
+    "Corresponding fixed camera-pitch endpoint text is hidden in the top or bottom20percent of the axis to avoid overlap. Actual reading, pointer position and axis limits remain unchanged.",
+    "Unknown and out-of-axis angles have no directional fan, aircraft or dynamic gimbal line. No obstacle levels or safety conclusion are drawn."
+  ],
+  "visual_review": {
+    "final_run": "run-nrD1Gh",
+    "reviewed_final_screenshots": ["12e-simple-gimbal-upper-boundary.png", "12e-simple-gimbal-lower-boundary.png", "12d-simple-negative-angle-1280.png"],
+    "also_reviewed_before_endpoint_change": ["run-2b23Ha/12a-simple-platform-missing-fields.png", "run-2b23Ha/12d-simple-negative-angle-1280.png"],
+    "limits": "Product screenshots and source-derived geometry; not full original runtime pixel equality or online test-environment acceptance"
+  },
+  "recoverable_intermediate_artifacts": {
+    "archive_directory": "/tmp/cockpit-simple-instruments-intermediate-bLQ69c",
+    "moved_complete_runs": ["run-pc58Ec", "run-cx4bGx", "run-2b23Ha", "run-cdniMl"],
+    "moved_non_red_files_only": ["run-OgIPoF", "run-zWy53r", "run-ZR28wo"],
+    "path_mapping": "For archived files replace the original evidence-root prefix with archive_directory; run names and basenames are unchanged. The listed red files and complete final run remain persistent.",
+    "raw_bytes": "No raw JSON or PNG was rewritten or deleted. Historical paths inside archived JSON remain historical and require this mapping."
+  },
+  "limits": [
+    "Platform speed, gimbal, weather and obstacle fields remain absent from the strict snapshot contract; no backend schema was extended.",
+    "ASL is only an inherited label for altitude_m absolute height. Vertical datum is not provided and no sea-level conversion is claimed.",
+    "Nonzero speed, gimbal angle and malformed-value display cases use simulator HTTP fixtures, not authoritative platform samples.",
+    "414px acceptance remains the existing assistant workflow; simultaneous mobile instruments/media are not claimed.",
+    "Agent and Java product files, confirmation/media clients and original conflicted reference worktree were not changed by this subtask.",
+    "Offline tests do not prove model understanding accuracy, deployed telemetry integration, actual device flight or flight precision."
+  ]
+}
