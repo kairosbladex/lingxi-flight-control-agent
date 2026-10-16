@@ -432,6 +432,19 @@ class KtdPlatformExecutor:
                     or any(not _finite(snapshot.state.get(key), low, high) for key, low, high in
                            (("longitude", -180, 180), ("latitude", -90, 90), (height_key, -500, 10000), ("yaw_deg", -180, 180)))):
                 raise KtdPlatformError("FLIGHT_POSE_UNAVAILABLE")
+            if snapshot.profile == "DJI_HANGAR":
+                relative_height = snapshot.state.get("height_m")
+                if not _finite(relative_height, -500, 10000):
+                    raise KtdPlatformError("RELATIVE_HEIGHT_UNAVAILABLE")
+                # 厂商flyto在当前相对高度低于20米时会先爬升，超出单一相对移动意图。
+                if relative_height < 20:
+                    raise KtdPlatformError("DJI_FLYTO_IMPLICIT_CLIMB")
+                vertical = request.parameters["distance_m"] * (1 if action == "move_up" else -1 if action == "move_down" else 0)
+                # 目标低于20米的实际行为尚未核验；这是项目保守边界，不冒称厂商禁令。
+                if relative_height + vertical < 20:
+                    raise KtdPlatformError("DJI_LOW_TARGET_UNVERIFIED")
+                if not _finite(snapshot.state["altitude_m"] + vertical, 2, 10000):
+                    raise KtdPlatformError("DJI_TARGET_ALTITUDE_OUT_OF_RANGE")
             body.update(type=_MOVE_TYPES[action], mode=2, param=request.parameters["distance_m"])
             return KtdCommand("/screen/uav/operation/control", body)
         if snapshot.profile != "DJI_HANGAR":

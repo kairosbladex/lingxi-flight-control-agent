@@ -31,12 +31,13 @@
 
 ## 不能自动扩大支持的差异
 
-1. **距离实现存在，但能力声明与实现有差异。** `DJHangarOperation.java:494` 从 `UdpDatas` 读取经纬度、绝对高度和 yaw，以 `GeoUtil.calcLatAndlon` 转目标点，再以固定最大速度 5 m/s 调用 `fly_to_point`；`PZHangarOperation.java:316` 使用 `height`，转成厘米后下发。候选因此分别要求权威 `altitude_m` 或 `height_m`，不能混用高度基准。`D10Operation.java:593` 走摇杆速度路径，候选拒绝 D10。
+1. **距离实现存在，但能力声明与实现有差异。** `DJHangarOperation.java:494` 从 `UdpDatas` 读取经纬度、绝对高度和 yaw，以 `GeoUtil.calcLatAndlon` 转目标点，再以固定最大速度 5 m/s 调用 `fly_to_point`；`PZHangarOperation.java:316` 使用 `height`，转成厘米后下发。DJI候选要求权威 `altitude_m`，并补充校验相对起飞点 `height_m` 以避免隐含爬升；PZ要求 `height_m`，不能混用高度基准。`D10Operation.java:593` 走摇杆速度路径，候选拒绝 D10。
 2. **当前声明不能被候选覆盖为 true。** `LargeScreenController.java:2310` 对 DJI 只声明速度或杆量，对 PZ 只声明速度；`:2322` 仅给 ZHUOYI 距离能力，但 `:1349` 该旧品牌操作器为空。候选必须拒绝这些实际为 false 的距离能力；测试夹具里的 true 是显式构造的条件样本，不是平台已开放证明。
 3. **角度不等于距离模式里的时长。** `DJHangarOperation.java:533` 的偏航分支按参数绝对值循环发送角速度，未证明其精确角度语义。因此 `turn_left/right` 暂不编译；连续速度、杆量、键盘模式也暂不支持。
 4. **起飞高度基准未对齐。** `FlightRouteControlDTO.takeoffPointAlt` 直接传到 `TakeoffToPointDTO.target_height`；后者明确是 WGS84 绝对高度。现有工具 `takeoff.altitude_m` 的相对起飞语义不能直接透传。起飞暂不编译。DJI `DJHangarOperation.java:282` 明确拒绝当前点降落，故也不映射 `land`。
 5. **控制权查询可能写业务。** GET `/uavControlPower/obtain` 会保存控制权，且任务创建者可能自动抢占（`UavControlPowerController.java:50`、`:183`）；不能当只读检查。申请/转让会发消息。候选不实现这些自动接管动作，权威适配器必须在执行前证明已持有控制权。
 6. **速度/杆量需要持续心跳。** DJI 控制序列检查所有权、3 秒过期时间（`DJHangarOperation.java:298`、`:352`、`:485`），参考 UI 每秒发 `control/heartbeat/<hangarCode>`（`controlCenter.vue:1825`）。单次 HTTP 无法替代这个生命周期，本候选不创建 MQTT 心跳。
+7. **飞点可能包含用户没要求的爬升。** 2026-10-16核对[DJI Dock 2官方指令飞行](https://developer.dji.com/doc/cloud-api-tutorial/cn/api-reference/dock-to-cloud/mqtt/dock/dock2/drc.html)及其[正文资源](https://developer.dji.com/doc/cloud-api-tutorial/assets/js/v-14902db9.9eb6fabc.js)，原文为“如果飞行器相对起飞点高度低于20m，会先上升到20m”。因此DJI距离动作在相对高度未知时返回 `RELATIVE_HEIGHT_UNAVAILABLE`，当前低于20米返回 `DJI_FLYTO_IMPLICIT_CLIMB`。目标低于相对20米另返回 `DJI_LOW_TARGET_UNVERIFIED`：这是项目对未核验行为的保守边界，**不是厂商文档明确禁止低目标高度**。编译出的目标椭球高同时须在官方2–10000米范围。PZ不套用DJI的20米规则；不会改成发送额外爬升动作。
 
 ## 注入契约与确认门禁
 
@@ -74,7 +75,7 @@ executor = KtdPlatformExecutor(
 | `profile` | 实际 Java 操作器路径 `DJI_HANGAR` 或 `PZ_HANGAR`；不能只按展示品牌名称猜测 |
 | `state` | 真实在线、在空中状态、经纬度、yaw、相关高度；没有字段即未知，不能填默认安全值 |
 
-移动需要 `online/airborne=True`、有限经纬度和 `yaw_deg`，DJI 要求 `altitude_m`，PZ 要求 `height_m`。航线写操作要求明确在空中。已有 `ACTION_SPECS` 与请求验证先检查工具参数，再叠加平台范围限制。未映射动作返回 `ACTION_UNSUPPORTED`。
+移动需要 `online/airborne=True`、有限经纬度和 `yaw_deg`，DJI要求 `altitude_m` 及经上述门禁校验的 `height_m`，PZ要求 `height_m`。航线写操作要求明确在空中。已有 `ACTION_SPECS` 与请求验证先检查工具参数，再叠加平台范围限制。未映射动作返回 `ACTION_UNSUPPORTED`。
 
 每次 `preview` 和首次 `confirm` 都重新读取权威状态并检查绑定、权限、控制权及其租约、能力、在线与时间。控制权租约缺失/无效返回 `CONTROL_LEASE_UNAVAILABLE`，到期或恰好处于到期时刻返回 `CONTROL_LEASE_EXPIRED`，不发送控制请求。即使新 OSD 刷新了 `observed_at`，也不能续租旧 owner。到期时间必须由权威 Java 提供，适配器不得按“当前时间加默认 TTL”或按 OSD 时间推算。`read_state` 可以显示缺失或过期的租约，但这不授予写权限。`available_actions()` 使用同一套门禁筛选界面可用动作；禁用时最多返回获准的 `read_state`，权威状态不可用时返回空集合。确认卡绑定请求、资源、状态版本及完整快照内容（不绑定单纯刷新时间）；任何实际字段变化都拒绝旧卡。默认 30 秒过期、最多 128 个未处理卡。`cancel` 只取消待确认卡，不调用急停或取消返航；已提交动作不能靠取消卡撤销。
 
@@ -192,3 +193,17 @@ PYTHONPATH=src python3 tools/bench/platform_cockpit_smoke.py
 ```
 
 HTTP回环已验证：3次Agent HTTP、5次快照GET、1次脚本模型决定、0次确认/控制POST/外部平台/设备请求。Java样本的拒绝贯通到最终Agent回执。另有纯HTTP边界注入用例证明，在显式合成授权且手动确认的条件下，动作仍调用原Java控制路径并只返回 `submitted`，不伪造完成状态。
+
+### 原始报文投影的兼容扩展
+
+同一v1响应允许 `telemetry.source=java-raw-frame`，并携带严格的 `frame` 对象：`schema_version=lingxi-telemetry-frame/v1`、与资源绑定一致的 `profile`、原始报文UTF-8字节的 `payload_sha256`、布尔 `complete`。`sequence` 仍为null；不把随机生成的tid/bid当作序号，不返回原报文、topic或设备SN。旧 `java-udp-cache` 形状及样本保留，不能添加frame字段伪装成原帧。
+
+`complete=true` 只说明当前帧来源和资源匹配，并且当前帧的经纬度、yaw、已知飞行状态及机型所需高度均有效：DJI使用绝对高度，PZ使用相对高度。Java还要校验时效和显式离线状态；Python独立检查上述声明与state一致。任一原帧字段缺失保持未知，不借用旧缓存；部分帧仍可供只读展示，但声称同时具有写许可会被拒绝。缺少厂商航权和控制链路证据仍然拒绝所有控制，`UAV_MOVE_DISTANCE`仍为false。
+
+原帧timestamp严格沿用已核对协议单位（DJI毫秒，PZ秒），不猜单位或补当前时间。这里记录的是协议上报时间与服务端处理入口接收时间，未证明设备时钟已校准或该时间就是传感器采样时刻。Python继续取两者较早者为 `observed_at`，并要求5秒时效。浏览器显示这个快照时间和距今时长，不将页面已加载或请求成功当作新鲜设备状态。
+
+实际Repository对DJI/PZ无原帧返回 `TELEMETRY_FRAME_UNAVAILABLE`，包括冷启动和容量淘汰；有帧但来源冲突返回 `TELEMETRY_SOURCE_MISMATCH`，不回填旧合并缓存。缓存最多4096设备，处理重放、乱序、同时间内容冲突和显式离线；有界的淘汰/离线时间边界可能要求新入缓存设备等待更晚的一帧。旧Source默认接口和 `java-udp-cache` 合成样本继续用于兼容验证，不表示新的真实Repository会在DJI/PZ缺帧时降级读取旧对象。
+
+原帧跨语言夹具为 `fixtures/ktd-platform-raw-snapshot-v1.json`，来源提交 `8cc7f1452d52c18d659777833053eb1c7cb58eb7` 及源码哈希记录在相邻provenance文件。追加验证为Python完整466项、快照25项、执行器33项；Java 8模块编译及38项测试通过。没有重跑真实模型评测，也没有使用真实设备输入。
+
+官方还明确区分服务受理与飞点进度：`fly_to_point_progress` 通过网关events上报，包含 `fly_to_id` 与 `wayline_progress/wayline_ok/wayline_failed/wayline_cancel`。`result=0` 或剩余距离为0本身不等于完成。当前代码尚未提供这些事件到Agent命令的持久关联；未来可按官方契约开发并用脱敏原始回包验收。真实机场/无人机型号与固件、控制源到业务操作者的映射、失权/重连时序和高度基准仍需确定，不能据一次夺权回复生成长期授权。

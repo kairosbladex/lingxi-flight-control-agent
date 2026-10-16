@@ -45,7 +45,7 @@ class PlatformExecutorTests(unittest.TestCase):
             permissions=frozenset({"move_forward", "read_state"}),
             capabilities={"move_forward": True, "UAV_MOVE_DISTANCE": True},
             state={"online": True, "airborne": True, "longitude": 113.0,
-                   "latitude": 23.0, "altitude_m": 100.0, "yaw_deg": 90.0},
+                   "latitude": 23.0, "altitude_m": 100.0, "height_m": 50.0, "yaw_deg": 90.0},
         )
         self.journal_path = self.directory.name + "/commands.sqlite3"
 
@@ -153,7 +153,7 @@ class PlatformExecutorTests(unittest.TestCase):
             with self.subTest(action=action):
                 self.snapshot = replace(self.snapshot, permissions=frozenset({action}),
                                         capabilities={action: True, "UAV_MOVE_DISTANCE": True},
-                                        state={**self.snapshot.state, "height_m": 30})
+                                        state={**self.snapshot.state, "height_m": 50})
                 executor = self.executor()
                 result = self.confirm(executor, executor.preview(self.request(action, {"distance_m": 20}, action)))
                 self.assertEqual(result.to_dict()["status"], "submitted")
@@ -256,11 +256,52 @@ class PlatformExecutorTests(unittest.TestCase):
         self.assertEqual(self.transport.calls, [])
 
     def test_pz_distance_requires_relative_height_used_by_its_java_path(self):
-        self.snapshot = replace(self.snapshot, profile="PZ_HANGAR")
+        self.snapshot = replace(self.snapshot, profile="PZ_HANGAR",
+                                state={**self.snapshot.state, "height_m": None})
         self.assertEqual(self.executor().preview(self.request()).error_code, "FLIGHT_POSE_UNAVAILABLE")
         self.snapshot = replace(self.snapshot, state={**self.snapshot.state, "height_m": 20})
         executor = self.executor()
         self.assertEqual(self.confirm(executor, executor.preview(self.request())).to_dict()["status"], "submitted")
+
+    def test_dji_unknown_or_low_relative_height_cannot_trigger_an_implicit_climb(self):
+        for value, code in ((None, 'RELATIVE_HEIGHT_UNAVAILABLE'), (True, 'RELATIVE_HEIGHT_UNAVAILABLE'),
+                            ('20', 'RELATIVE_HEIGHT_UNAVAILABLE'), (float('nan'), 'RELATIVE_HEIGHT_UNAVAILABLE'),
+                            (-1, 'DJI_FLYTO_IMPLICIT_CLIMB'), (0, 'DJI_FLYTO_IMPLICIT_CLIMB'),
+                            (19.99, 'DJI_FLYTO_IMPLICIT_CLIMB')):
+            with self.subTest(height=value):
+                self.snapshot = replace(self.snapshot, state={**self.snapshot.state, 'height_m': value})
+                result = self.executor().preview(self.request())
+                self.assertEqual(result.error_code, code)
+                self.assertEqual(result.to_dict()['status'], 'rejected')
+        self.assertEqual(self.transport.calls, [])
+
+    def test_dji_low_target_is_unverified_and_absolute_target_obeys_vendor_range(self):
+        self.snapshot = replace(self.snapshot, permissions=frozenset({'move_down', 'move_up'}),
+                                capabilities={'move_down': True, 'move_up': True, 'UAV_MOVE_DISTANCE': True})
+        for action, altitude, height, distance, code in (
+            ('move_down', 100, 25, 5.01, 'DJI_LOW_TARGET_UNVERIFIED'),
+            ('move_down', 10, 50, 9, 'DJI_TARGET_ALTITUDE_OUT_OF_RANGE'),
+            ('move_up', 9999, 50, 2, 'DJI_TARGET_ALTITUDE_OUT_OF_RANGE'),
+        ):
+            with self.subTest(action=action, code=code):
+                self.snapshot = replace(self.snapshot, state={**self.snapshot.state,
+                                        'altitude_m': altitude, 'height_m': height})
+                self.assertEqual(self.executor().preview(self.request(action, {'distance_m': distance})).error_code, code)
+        self.assertEqual(self.transport.calls, [])
+
+    def test_dji_relative_height_boundaries_and_pz_low_height_are_not_conflated(self):
+        for profile, action, height, distance in (
+            ('DJI_HANGAR', 'move_forward', 20, 10),
+            ('DJI_HANGAR', 'move_down', 25, 5),
+            ('PZ_HANGAR', 'move_forward', 5, 10),
+        ):
+            with self.subTest(profile=profile, action=action):
+                self.snapshot = replace(self.snapshot, profile=profile,
+                    permissions=frozenset({action}), capabilities={action: True, 'UAV_MOVE_DISTANCE': True},
+                    state={**self.snapshot.state, 'height_m': height})
+                card = self.executor().preview(self.request(action, {'distance_m': distance}, profile + action))
+                self.assertEqual(card.to_dict()['status'], 'preview_required')
+        self.assertEqual(self.transport.calls, [])
 
     def test_corrupt_journal_fails_closed_without_sending(self):
         executor = self.executor()

@@ -75,7 +75,9 @@ class KtdSnapshotProvider:
         if profile not in (None, 'DJI_HANGAR', 'PZ_HANGAR'):
             _reject()
         state = self._state(data.get('state'))
-        permissions, capabilities, availability = self._authorization(data, state, owner, lease, profile, now)
+        frame_complete = self._frame_complete(data['telemetry'], profile, state)
+        permissions, capabilities, availability = self._authorization(
+            data, state, owner, lease, profile, now, frame_complete)
         return KtdSnapshot(actor_id=self.binding.actor_id, project_id=self.binding.project_id,
             hangar_id=self.binding.hangar_id, drone_id=self.binding.drone_id, site_id=self.site_id,
             task_id=self.task_id, context_version=self.binding.context_version,
@@ -86,7 +88,8 @@ class KtdSnapshotProvider:
     @staticmethod
     def _observation_time(data, now):
         telemetry = data.get('telemetry')
-        if (not isinstance(telemetry, Mapping) or telemetry.get('source') != 'java-udp-cache'
+        if (not isinstance(telemetry, Mapping)
+                or telemetry.get('source') not in ('java-udp-cache', 'java-raw-frame')
                 or 'sequence' not in telemetry or telemetry['sequence'] is not None
                 or not _fact_version(telemetry.get('version'))):
             _reject()
@@ -102,6 +105,29 @@ class KtdSnapshotProvider:
                 or not math.isclose(expires, observed + 5, rel_tol=0, abs_tol=1e-6)):
             _reject('AUTHORITATIVE_STATE_STALE')
         return float(observed)
+
+    @staticmethod
+    def _frame_complete(telemetry, profile, state):
+        if telemetry['source'] == 'java-udp-cache':
+            if 'frame' in telemetry:
+                _reject('INVALID_TELEMETRY_FRAME')
+            return None
+        frame = telemetry.get('frame')
+        if (not isinstance(frame, Mapping)
+                or set(frame) != {'schema_version', 'profile', 'payload_sha256', 'complete'}
+                or frame.get('schema_version') != 'lingxi-telemetry-frame/v1'
+                or profile not in ('DJI_HANGAR', 'PZ_HANGAR')
+                or frame.get('profile') != profile
+                or not _fact_version(frame.get('payload_sha256'))
+                or type(frame.get('complete')) is not bool):
+            _reject('INVALID_TELEMETRY_FRAME')
+        if frame['complete']:
+            # 完整只表示同一原报文中有这些字段，不证明厂商航权或设备动作完成。
+            height = 'altitude_m' if profile == 'DJI_HANGAR' else 'height_m'
+            required = ('longitude', 'latitude', 'yaw_deg', height, 'flight_status', 'airborne')
+            if state['online'] is not True or any(state[key] is None for key in required):
+                _reject('INVALID_TELEMETRY_FRAME')
+        return frame['complete']
 
     @staticmethod
     def _control(data, now):
@@ -138,7 +164,7 @@ class KtdSnapshotProvider:
                 _reject()
         return copy.deepcopy(dict(value))
 
-    def _authorization(self, data, state, owner, lease, profile, now):
+    def _authorization(self, data, state, owner, lease, profile, now, frame_complete):
         permissions, capabilities = data.get('permissions'), data.get('capabilities')
         availability = data.get('action_availability')
         if (not isinstance(permissions, list) or any(not isinstance(item, str) for item in permissions)
@@ -164,6 +190,7 @@ class KtdSnapshotProvider:
             _reject('SNAPSHOT_AUTHORIZATION_CONFLICT')
         if available - {'read_state'}:
             if (owner != self.binding.actor_id or lease is None or lease <= now
-                    or profile is None or state.get('online') is not True):
+                    or profile is None or state.get('online') is not True
+                    or frame_complete is False):
                 _reject('SNAPSHOT_AUTHORIZATION_CONFLICT')
         return frozenset(permissions), copy.deepcopy(dict(capabilities)), copy.deepcopy(dict(availability))

@@ -40,6 +40,21 @@ def snapshot_payload(now=1000.0, *, writable=False, task_id='java-task-1'):
     }}
 
 
+def raw_snapshot_payload(*, profile='DJI_HANGAR', writable=False):
+    """Synthetic single-frame evidence; no vendor authority or device claim."""
+    payload = snapshot_payload(writable=writable)
+    data = payload['data']
+    data['profile'] = profile
+    data['telemetry'].update(source='java-raw-frame', frame={
+        'schema_version': 'lingxi-telemetry-frame/v1', 'profile': profile,
+        'payload_sha256': 'd' * 64, 'complete': True,
+    })
+    data['state']['flight_status'] = '3'
+    if profile == 'PZ_HANGAR':
+        data['state'].update(altitude_m=None, height_m=10)
+    return payload
+
+
 class FakeOpener:
     def __init__(self, payload=None):
         self.payload = snapshot_payload() if payload is None else payload
@@ -98,6 +113,61 @@ class KtdSnapshotTests(unittest.TestCase):
         self.assertEqual(request.get_header('Projectid'), 'project-1')
         self.assertEqual(timeout, 5.0)
         self.assertEqual(len(self.opener.requests), 1)
+
+    def test_raw_frame_profiles_preserve_times_state_and_write_denials(self):
+        for profile in ('DJI_HANGAR', 'PZ_HANGAR'):
+            with self.subTest(profile=profile):
+                self.opener.payload = raw_snapshot_payload(profile=profile)
+                snapshot = self.provider()()
+                self.assertEqual(snapshot.profile, profile)
+                self.assertEqual(snapshot.observed_at, 999.0)
+                self.assertEqual(snapshot.permissions, frozenset({'read_state'}))
+                self.assertEqual(snapshot.state, self.opener.payload['data']['state'])
+                self.assertFalse(snapshot.capabilities['UAV_MOVE_DISTANCE'])
+
+    def test_raw_frame_metadata_is_strict_and_cannot_disguise_legacy_cache(self):
+        valid = raw_snapshot_payload()['data']['telemetry']['frame']
+        cases = [None, {}, {**valid, 'schema_version': 'unknown'},
+                 {**valid, 'profile': 'PZ_HANGAR'}, {**valid, 'profile': None},
+                 {**valid, 'payload_sha256': 'x' * 64}, {**valid, 'payload_sha256': 1},
+                 {**valid, 'complete': 'true'}, {**valid, 'complete': 1},
+                 {**valid, 'raw_payload': 'fixture-private-detail'}]
+        for metadata in cases:
+            with self.subTest(metadata=metadata):
+                self.opener.payload = raw_snapshot_payload()
+                self.opener.payload['data']['telemetry']['frame'] = metadata
+                self.assert_rejected()
+        self.opener.payload = raw_snapshot_payload()
+        del self.opener.payload['data']['telemetry']['frame']
+        self.assert_rejected()
+        self.opener.payload = raw_snapshot_payload()
+        self.opener.payload['data']['telemetry']['source'] = 'java-udp-cache'
+        self.assert_rejected()
+
+    def test_complete_frame_requires_same_frame_pose_and_known_flight_state(self):
+        for profile, field in (('DJI_HANGAR', 'longitude'), ('DJI_HANGAR', 'latitude'),
+                               ('DJI_HANGAR', 'yaw_deg'), ('DJI_HANGAR', 'altitude_m'),
+                               ('PZ_HANGAR', 'height_m'), ('DJI_HANGAR', 'flight_status'),
+                               ('DJI_HANGAR', 'airborne'), ('DJI_HANGAR', 'online')):
+            with self.subTest(profile=profile, field=field):
+                self.opener.payload = raw_snapshot_payload(profile=profile)
+                self.opener.payload['data']['state'][field] = None
+                self.assert_rejected()
+        self.opener.payload = raw_snapshot_payload()
+        self.opener.payload['data']['state']['online'] = False
+        self.assert_rejected()
+
+    def test_partial_raw_frame_stays_partial_and_cannot_claim_write_permission(self):
+        self.opener.payload = raw_snapshot_payload()
+        data = self.opener.payload['data']
+        data['telemetry']['frame']['complete'] = False
+        data['state']['longitude'] = None
+        snapshot = self.provider()()
+        self.assertIsNone(snapshot.state['longitude'])
+        self.assertEqual(snapshot.permissions, frozenset({'read_state'}))
+        self.opener.payload = raw_snapshot_payload(writable=True)
+        self.opener.payload['data']['telemetry']['frame']['complete'] = False
+        self.assert_rejected()
 
     def test_nullable_task_is_omitted_from_query_and_still_checked(self):
         self.opener.payload = snapshot_payload(task_id=None)
@@ -308,6 +378,33 @@ class KtdSnapshotTests(unittest.TestCase):
             self.assertEqual(executor.available_actions(), frozenset({'read_state'}))
             result = executor.preview(FlightControlActionRequest('c', 'k', 'route_resume', {}, 7))
             self.assertEqual(result.error_code, 'ACTION_NOT_PERMITTED')
+        self.assertTrue(all(request.get_method() == 'GET' for request, _ in self.opener.requests))
+
+    def test_actual_java_raw_frame_fixture_clears_only_the_field_freshness_denial(self):
+        fixture = Path(__file__).resolve().parents[1] / 'fixtures' / 'ktd-platform-raw-snapshot-v1.json'
+        self.opener.raw = fixture.read_bytes()
+        self.binding = replace(self.binding, actor_id='employee-1')
+        self.transport = KtdHttpTransport('https://platform.test/api', token='fixture-token',
+                                         actor_id='employee-1', opener=self.opener)
+        self.now = 1700000000.0
+        provider = self.provider(task_id='task-1')
+        snapshot = provider()
+        self.assertEqual(snapshot.observed_at, 1699999999.0)
+        self.assertEqual(snapshot.state['altitude_m'], 60.0)
+        self.assertEqual(snapshot.state['height_m'], 50.0)
+        self.assertEqual(snapshot.permissions, frozenset({'read_state'}))
+        self.assertFalse(snapshot.capabilities['UAV_MOVE_DISTANCE'])
+        reasons = snapshot.action_availability['route_resume']['reasons']
+        self.assertNotIn('TELEMETRY_FIELD_FRESHNESS_UNAVAILABLE', reasons)
+        self.assertIn('VENDOR_AUTHORITY_UNAVAILABLE', reasons)
+        self.assertIn('CONTROL_LINK_FRESHNESS_UNAVAILABLE', reasons)
+        with tempfile.TemporaryDirectory() as directory:
+            executor = KtdPlatformExecutor(self.binding, site_id='site-1', task_id='task-1',
+                transport=self.transport, snapshot_provider=provider, enabled=True,
+                journal=SqliteCommandJournal(directory + '/commands.db'), clock=lambda: self.now)
+            self.assertEqual(executor.available_actions(), frozenset({'read_state'}))
+            self.assertEqual(executor.preview(FlightControlActionRequest('c', 'k', 'route_resume', {}, 7)).error_code,
+                             'ACTION_NOT_PERMITTED')
         self.assertTrue(all(request.get_method() == 'GET' for request, _ in self.opener.requests))
 
 
