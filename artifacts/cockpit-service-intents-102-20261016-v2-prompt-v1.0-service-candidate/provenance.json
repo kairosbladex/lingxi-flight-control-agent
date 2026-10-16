@@ -1,0 +1,223 @@
+{
+  "schema_version": "cockpit-service-intent-run-provenance/v1",
+  "created_at": "2026-10-16T15:53:30.290Z",
+  "outcome_layer": "pre_fix_service_candidate",
+  "raw_report": {
+    "path": "artifacts/cockpit-service-intents-102-20261016-v2-prompt-v1.0-service-candidate/report.json",
+    "sha256": "ea8167e3b389676d29c8be2c03ccb87368ecffb0bbef6a1e57a3125a6d14efda",
+    "kept_original_bytes": true
+  },
+  "run": {
+    "run_id": "b4a0c373-f56c-42bb-ab27-0d3596ce2512",
+    "mode": "live_service_previews",
+    "started_at": "2026-10-16T15:30:12.283915+00:00",
+    "finished_at": "2026-10-16T15:46:27.931678+00:00",
+    "code_sha": "de0725faaf8ca9d885078767b903152697d50703",
+    "branch": "feature/natural-language-cockpit",
+    "dirty_worktree": true,
+    "source_sha256": {
+      "tools/bench/cockpit_intents.py": "27e29edcb794137dd6458b017f2ab40806355f3eddbb29e4336d01c2903fd29c",
+      "src/lingxi_flight_control/cockpit.py": "e833d97e97afe723923b8750f7012dc305db403973e44cba79bcb3dfa3521fbb",
+      "src/lingxi_flight_control/agent.py": "c83c30c2efd4ec546298dddae779d52d0eb6ae6c3f4d819ddcd197041a3a672b",
+      "src/lingxi_flight_control/full_control.py": "d844dd9da7ede6615fdaf28c89b594f98c71476e7fbe9f81ec50078aabf34360",
+      "src/lingxi_flight_control/models.py": "e10c3de393d93743ed60bb695a52c2b6a1f8357bb0ce302e77532043ea9392ba",
+      "src/lingxi_flight_control/executor.py": "2c9d96df7ffb58a5f7cf280469888fb47465cef63509bc7cc23b3486bb990f7e",
+      "src/lingxi_flight_control/ollama_decider.py": "4835e20296b476d60e9867ff328919049b8a131ccb8dc6148082750cada6351f",
+      "tools/bench/cockpit_service_intents.py": "4305f8c83fc025ac61a3e7e340c8f8824a25afb3213f3713d1ef8de29f036f70",
+      "src/lingxi_flight_control/session.py": "42448cccaffb63aee50270ec8f965199e66c45763e5513ba5ec28dea31bdbd94",
+      "src/lingxi_flight_control/safety.py": "eaa18da6d719e4c395c048c58760905d465c7434f0998ff2fc8ebd4590e55402"
+    },
+    "source_changed_during_run": false,
+    "actor": "intent-evaluation-actor",
+    "provider": "ollama",
+    "scope": "CockpitService.handle_model_policy_and_real_simulator_preview_without_confirmation",
+    "model": "qwen3.5:9b",
+    "endpoint_sha256": "edbf1c508eb9e7d23058581aad6c2b55e813d9f8dc6b92605ce4838bc310316c",
+    "prompt_sha256": "ecdcc2bca38b762dcda44ba49e074c534757a4bf5623417a09eb94bd81035564",
+    "tool_schema_sha256": "395be055f367ee1fa3d6d64b70836896813f0aa1f382fe8e3c182b6c9f18ae21",
+    "model_options": {
+      "temperature": 0,
+      "num_ctx": 32768,
+      "output_reserve": 2048,
+      "num_predict": 2048,
+      "max_attempts": 1,
+      "max_steps": 3,
+      "tool_selection": "full"
+    },
+    "budgets": {
+      "max_samples": 120,
+      "max_model_calls": 180,
+      "max_seconds": 1800,
+      "max_tokens": 2000000,
+      "request_timeout": 30
+    },
+    "usage": {
+      "service_requests": 102,
+      "preview_calls": 68,
+      "read_only_tool_calls": 0,
+      "state_reads": 191,
+      "confirmations": 0,
+      "mutating_tool_calls": 0,
+      "platform_calls": 0,
+      "model_calls": 92,
+      "reserved_token_upper_estimate": 954549,
+      "prompt_tokens": null,
+      "output_tokens": null,
+      "known_prompt_tokens": 347874,
+      "known_output_tokens": 13172,
+      "unknown_usage_calls": 6,
+      "token_usage_complete": false,
+      "cost": null,
+      "cost_status": "not_provided_by_local_provider"
+    },
+    "surface": "service",
+    "fixture_provenance_sha256": "11ca52651a5d5984e1edce3c66a479e1418eb708dd8ea84c64e90e2cb0cde385",
+    "fixture_changed_during_run": false
+  },
+  "fixture": {
+    "path": "fixtures/intent-scenarios-v2.json",
+    "sha256": "6ac73f55874d0c0fabcc01fae5074b57538ab1659a9384b907d5902107cac354",
+    "provenance_path": "fixtures/intent-scenarios-v2.provenance.json",
+    "provenance_sha256": "11ca52651a5d5984e1edce3c66a479e1418eb708dd8ea84c64e90e2cb0cde385",
+    "parent_path": "fixtures/intent_scenarios.json",
+    "parent_sha256": "355395aa8c3e367afcca06080ae06caa7fa9277d2d68b5ecde47f5d06725a7cd",
+    "old_inputs_and_intent_labels_preserved": true,
+    "count": 102,
+    "categories": 17,
+    "declared_expected_action_coverage": 59,
+    "source": "synthetic_agent_authored_contract",
+    "human_reviewed": false,
+    "real_flight_truth": false
+  },
+  "semantic_hash_checks": {
+    "inputs_sha256": {
+      "computed": "272a67f42f69f189dc6c5aa2d98125bf31bd2122a556d23c765ee6adb4a159a1",
+      "reported": "272a67f42f69f189dc6c5aa2d98125bf31bd2122a556d23c765ee6adb4a159a1",
+      "matches": true
+    },
+    "intent_labels_sha256": {
+      "computed": "37ab74d818b62960a5e4225016c729a8b5439608c82bafe4732a2d99244f0ffc",
+      "reported": "37ab74d818b62960a5e4225016c729a8b5439608c82bafe4732a2d99244f0ffc",
+      "matches": true
+    },
+    "service_labels_sha256": {
+      "computed": "e5389e0b6c418e2a17b2c5ecb343f19762dfb03d007cce262787b0f78d8fbb47",
+      "reported": "e5389e0b6c418e2a17b2c5ecb343f19762dfb03d007cce262787b0f78d8fbb47",
+      "matches": true
+    },
+    "context_sha256": {
+      "computed": "2b7b47f00d225ed6bd7d14e869bb37a49005f16124bd2a467dd1f0186aff5d8a",
+      "reported": "2b7b47f00d225ed6bd7d14e869bb37a49005f16124bd2a467dd1f0186aff5d8a",
+      "matches": true
+    },
+    "labels_sha256": {
+      "computed": "5ce715de143da4603833682209259df9abbe4b4c1cf79ba2cd2dc8c8c774931a",
+      "reported": "5ce715de143da4603833682209259df9abbe4b4c1cf79ba2cd2dc8c8c774931a",
+      "matches": true
+    }
+  },
+  "source_hash_verification": {
+    "tools/bench/cockpit_intents.py": {
+      "basis": "frozen_current_bench",
+      "expected_sha256": "27e29edcb794137dd6458b017f2ab40806355f3eddbb29e4336d01c2903fd29c",
+      "actual_sha256": "27e29edcb794137dd6458b017f2ab40806355f3eddbb29e4336d01c2903fd29c",
+      "matches": true
+    },
+    "src/lingxi_flight_control/cockpit.py": {
+      "basis": "git_show_de0725faaf8ca9d885078767b903152697d50703",
+      "expected_sha256": "e833d97e97afe723923b8750f7012dc305db403973e44cba79bcb3dfa3521fbb",
+      "actual_sha256": "e833d97e97afe723923b8750f7012dc305db403973e44cba79bcb3dfa3521fbb",
+      "matches": true
+    },
+    "src/lingxi_flight_control/agent.py": {
+      "basis": "git_show_de0725faaf8ca9d885078767b903152697d50703",
+      "expected_sha256": "c83c30c2efd4ec546298dddae779d52d0eb6ae6c3f4d819ddcd197041a3a672b",
+      "actual_sha256": "c83c30c2efd4ec546298dddae779d52d0eb6ae6c3f4d819ddcd197041a3a672b",
+      "matches": true
+    },
+    "src/lingxi_flight_control/full_control.py": {
+      "basis": "git_show_de0725faaf8ca9d885078767b903152697d50703",
+      "expected_sha256": "d844dd9da7ede6615fdaf28c89b594f98c71476e7fbe9f81ec50078aabf34360",
+      "actual_sha256": "d844dd9da7ede6615fdaf28c89b594f98c71476e7fbe9f81ec50078aabf34360",
+      "matches": true
+    },
+    "src/lingxi_flight_control/models.py": {
+      "basis": "git_show_de0725faaf8ca9d885078767b903152697d50703",
+      "expected_sha256": "e10c3de393d93743ed60bb695a52c2b6a1f8357bb0ce302e77532043ea9392ba",
+      "actual_sha256": "e10c3de393d93743ed60bb695a52c2b6a1f8357bb0ce302e77532043ea9392ba",
+      "matches": true
+    },
+    "src/lingxi_flight_control/executor.py": {
+      "basis": "git_show_de0725faaf8ca9d885078767b903152697d50703",
+      "expected_sha256": "2c9d96df7ffb58a5f7cf280469888fb47465cef63509bc7cc23b3486bb990f7e",
+      "actual_sha256": "2c9d96df7ffb58a5f7cf280469888fb47465cef63509bc7cc23b3486bb990f7e",
+      "matches": true
+    },
+    "src/lingxi_flight_control/ollama_decider.py": {
+      "basis": "git_show_de0725faaf8ca9d885078767b903152697d50703",
+      "expected_sha256": "4835e20296b476d60e9867ff328919049b8a131ccb8dc6148082750cada6351f",
+      "actual_sha256": "4835e20296b476d60e9867ff328919049b8a131ccb8dc6148082750cada6351f",
+      "matches": true
+    },
+    "tools/bench/cockpit_service_intents.py": {
+      "basis": "frozen_current_bench",
+      "expected_sha256": "4305f8c83fc025ac61a3e7e340c8f8824a25afb3213f3713d1ef8de29f036f70",
+      "actual_sha256": "4305f8c83fc025ac61a3e7e340c8f8824a25afb3213f3713d1ef8de29f036f70",
+      "matches": true
+    },
+    "src/lingxi_flight_control/session.py": {
+      "basis": "git_show_de0725faaf8ca9d885078767b903152697d50703",
+      "expected_sha256": "42448cccaffb63aee50270ec8f965199e66c45763e5513ba5ec28dea31bdbd94",
+      "actual_sha256": "42448cccaffb63aee50270ec8f965199e66c45763e5513ba5ec28dea31bdbd94",
+      "matches": true
+    },
+    "src/lingxi_flight_control/safety.py": {
+      "basis": "git_show_de0725faaf8ca9d885078767b903152697d50703",
+      "expected_sha256": "eaa18da6d719e4c395c048c58760905d465c7434f0998ff2fc8ebd4590e55402",
+      "actual_sha256": "eaa18da6d719e4c395c048c58760905d465c7434f0998ff2fc8ebd4590e55402",
+      "matches": true
+    }
+  },
+  "independent_summary": {
+    "denominator": 102,
+    "correct": 90,
+    "incorrect": 6,
+    "uncertain": 0,
+    "missing": 0,
+    "timeout": 6,
+    "error": 0
+  },
+  "independent_evidence": "docs/evidence/cockpit-service-intents-20261016.json",
+  "model_metadata": {
+    "source": "root_reported_before_and_after_metadata_observations",
+    "provider": "ollama",
+    "ollama_version": "0.21.0",
+    "model": "qwen3.5:9b",
+    "digest": "6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7",
+    "observations_utc": [
+      "2026-10-16T15:30:04.218Z",
+      "2026-10-16T15:46:41.353Z"
+    ],
+    "equal_before_and_after": true,
+    "independently_queried_by_this_verifier": false,
+    "limitation": "Before/after observations only; not a cryptographic per-request model pin. Raw metadata files were not supplied to this verifier."
+  },
+  "side_effect_totals": {
+    "confirmations": 0,
+    "mutating_tool_calls": 0,
+    "platform_calls": 0
+  },
+  "known_limitations": [
+    "修复前服务候选：90/6/6不得标为即将修改产品的修复后准确率；本次未重新请求模型。",
+    "Agent编写的102条合成契约，没有独立真人标签或真实飞行真值；accuracy=not_evaluable。",
+    "v1为100条建议层，v2为102条服务层且有显式前态和独立服务标签，不能直接合并为同口径A/B。",
+    "read_state冻结标签要求实际read_state工具记录；inquiry_03有两次服务状态读取而工具记录0，严格不匹配不等于没有读取状态。",
+    "unsafe_action_proposals=1只统计预期非action却给出动作的情形；另有3条预期动作被替换为control_acquire的错误写预览。",
+    "68次预览包含4次错误写预览，不等于68次正确动作；确认、写执行、平台调用为0。",
+    "6条模型超时保留102分母；总tokens/费用未知，已知usage不能替代完整用量。",
+    "每例独立单轮服务/模拟器，仅评首项建议；不评完整多轮确认、取消、恢复、并发或设备效果。",
+    "调用数与副作用计数为原报告记录并与行汇总核对；没有独立网络抓包、逐请求模型digest或真机证据。"
+  ],
+  "accuracy": null,
+  "accuracy_status": "not_evaluable"
+}

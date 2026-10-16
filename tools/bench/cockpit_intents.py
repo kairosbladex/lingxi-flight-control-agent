@@ -39,8 +39,14 @@ from lingxi_flight_control.ollama_decider import (
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+if __name__ == "__main__":
+    # The documented PYTHONPATH=src script invocation still needs the bench package.
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+    sys.modules["tools.bench.cockpit_intents"] = sys.modules[__name__]
 DEFAULT_FIXTURE = REPOSITORY_ROOT / "fixtures" / "intent_scenarios.json"
+SERVICE_FIXTURE = REPOSITORY_ROOT / "fixtures" / "intent-scenarios-v2.json"
 SCHEMA_VERSION = "cockpit-intent-scenarios/v1"
+SERVICE_SCHEMA_VERSION = "cockpit-intent-scenarios/v2"
 KINDS = frozenset({"action", "clarification", "rejected", "no_action"})
 OUTCOMES = ("correct", "incorrect", "uncertain", "missing", "timeout", "error")
 
@@ -60,7 +66,7 @@ def load_scenarios(path: str | Path = DEFAULT_FIXTURE) -> dict[str, Any]:
     """Reject malformed/duplicate labels before they can affect a denominator."""
     raw = Path(path).read_bytes()
     dataset = json.loads(raw)
-    if not isinstance(dataset, dict) or dataset.get("schema_version") != SCHEMA_VERSION:
+    if not isinstance(dataset, dict) or dataset.get("schema_version") not in {SCHEMA_VERSION, SERVICE_SCHEMA_VERSION}:
         raise ValueError("unsupported intent dataset schema")
     if dataset.get("source") != "synthetic_reviewed_contract":
         raise ValueError("intent dataset must declare synthetic_reviewed_contract source")
@@ -93,6 +99,9 @@ def load_scenarios(path: str | Path = DEFAULT_FIXTURE) -> dict[str, Any]:
                 raise ValueError(f"invalid expected arguments in {case['id']}: {'; '.join(errors)}")
         elif case["expected_action"] is not None or case["expected_arguments"]:
             raise ValueError(f"non-action expectation carries an action: {case['id']}")
+    if dataset["schema_version"] == SERVICE_SCHEMA_VERSION:
+        from tools.bench.cockpit_service_intents import validate_service_scenarios
+        validate_service_scenarios(dataset)
     # Raw bytes hash catches formatting/input changes; semantic hashes below bind labels separately.
     dataset["fixture_sha256"] = hashlib.sha256(raw).hexdigest()
     return dataset
@@ -265,6 +274,8 @@ class _BudgetedTransport:
         self.reserved_tokens += reservation
         try:
             response = http_transport(url, payload, min(timeout, self.timeout, remaining))
+            if not isinstance(response, Mapping):
+                raise ValueError("invalid model HTTP response")
         except Exception as exc:
             if _is_timeout(exc):
                 # A request clipped by the remaining run time is an interrupted
@@ -423,17 +434,21 @@ def _git_value(*arguments):
         return None
 
 
-def _source_hashes():
+def _source_hashes(surface="proposal"):
     paths = [Path(__file__), *(REPOSITORY_ROOT / "src" / "lingxi_flight_control" / name
                               for name in ("cockpit.py", "agent.py", "full_control.py", "models.py",
                                            "executor.py", "ollama_decider.py"))]
+    if surface == "service":
+        paths += [REPOSITORY_ROOT / "tools" / "bench" / "cockpit_service_intents.py",
+                  *(REPOSITORY_ROOT / "src" / "lingxi_flight_control" / name for name in ("session.py", "safety.py"))]
     return {str(path.relative_to(REPOSITORY_ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
             for path in paths}
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--fixture", type=Path, default=DEFAULT_FIXTURE)
+    parser.add_argument("--surface", choices=("proposal", "service"), default="proposal")
+    parser.add_argument("--fixture", type=Path)
     parser.add_argument("--output", type=Path, help="save UTF-8 JSON report; default is stdout")
     parser.add_argument("--only-ids", help="comma-separated scenario ids; all other samples remain missing")
     parser.add_argument("--live", action="store_true", help="opt in to model calls; never executes actions")
@@ -448,31 +463,43 @@ def main(argv=None):
     if any(not math.isfinite(value) or value <= 0 for value in
            (args.max_samples, args.max_model_calls, args.max_seconds, args.max_tokens, args.timeout)):
         parser.error("all budgets must be positive and finite")
-    dataset = load_scenarios(args.fixture)
+    fixture = args.fixture or (SERVICE_FIXTURE if args.surface == "service" else DEFAULT_FIXTURE)
+    dataset = load_scenarios(fixture)
+    expected_schema = SERVICE_SCHEMA_VERSION if args.surface == "service" else SCHEMA_VERSION
+    if dataset["schema_version"] != expected_schema:
+        parser.error("fixture schema does not match the selected evaluation surface")
     try:
         selection_ids = _selection_ids(dataset, args.only_ids)
     except ValueError as error:
         parser.error(str(error))
-    sources = _source_hashes()
+    sources = _source_hashes(args.surface)
     started_at = datetime.now(timezone.utc).isoformat()
     outcomes, usage = ({}, {"model_calls": 0, "mutating_tool_calls": 0, "platform_calls": 0,
                            "confirmations": 0, "prompt_tokens": 0, "output_tokens": 0, "cost": 0})
     outcomes.update({case["id"]: {"status": "missing", "reason": "selection_not_run"}
                      for case in dataset["scenarios"] if case["id"] not in selection_ids})
     if args.live:
-        outcomes, usage = run_live(dataset, model=args.model, base_url=args.base_url,
+        runner = run_live
+        if args.surface == "service":
+            from tools.bench.cockpit_service_intents import run_service_live
+            runner = run_service_live
+        outcomes, usage = runner(dataset, model=args.model, base_url=args.base_url,
                                    max_samples=args.max_samples, max_model_calls=args.max_model_calls,
                                    max_seconds=args.max_seconds, max_tokens=args.max_tokens, timeout=args.timeout,
                                    only_ids=selection_ids)
     from lingxi_flight_control.cockpit import COCKPIT_SYSTEM_PROMPT
 
-    report = evaluate_outcomes(dataset, outcomes)
+    if args.surface == "service":
+        from tools.bench.cockpit_service_intents import evaluate_service_outcomes
+        report = evaluate_service_outcomes(dataset, outcomes)
+    else:
+        report = evaluate_outcomes(dataset, outcomes)
     report["run"] = {
         "run_id": str(uuid4()), "mode": "live_model_proposals" if args.live else "offline_coverage_only",
         "started_at": started_at, "finished_at": datetime.now(timezone.utc).isoformat(),
         "code_sha": _git_value("rev-parse", "HEAD"), "branch": _git_value("branch", "--show-current"),
         "dirty_worktree": bool(_git_value("status", "--porcelain")),
-        "source_sha256": sources, "source_changed_during_run": sources != _source_hashes(),
+        "source_sha256": sources, "source_changed_during_run": sources != _source_hashes(args.surface),
         "actor": "intent-evaluation-actor", "provider": "ollama" if args.live else "not_called",
         "scope": "bounded_loop_proposals_and_input_guard_before_service_policy",
         "selection_ids": selection_ids,
@@ -486,6 +513,12 @@ def main(argv=None):
                     "max_seconds": args.max_seconds, "max_tokens": args.max_tokens, "request_timeout": args.timeout},
         "usage": usage,
     }
+    if args.surface == "service":
+        report["run"].update(surface="service", mode="live_service_previews" if args.live else "offline_service_coverage_only",
+            scope="CockpitService.handle_model_policy_and_real_simulator_preview_without_confirmation")
+        provenance = fixture.with_suffix(".provenance.json")
+        report["run"]["fixture_provenance_sha256"] = hashlib.sha256(provenance.read_bytes()).hexdigest() if provenance.is_file() else None
+        report["run"]["fixture_changed_during_run"] = hashlib.sha256(fixture.read_bytes()).hexdigest() != dataset["fixture_sha256"]
     serialized = json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
     if args.output is not None:
         args.output.parent.mkdir(parents=True, exist_ok=True)
