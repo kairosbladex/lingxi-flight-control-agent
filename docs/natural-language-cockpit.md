@@ -149,10 +149,35 @@ PYTHONPATH=src python3 tools/bench/cockpit_latency_probe.py --live --output /tmp
 
 仍有限制：总耗时在模型调用前后检查，不能抢占已经阻塞的HTTP调用；单次HTTP另有超时。`continue_from_breakpoint` 自身状态契约未在本切片扩展。直接用多个线程共享裸模拟器时仍有检查/执行原子性缺口；当前单个Cockpit服务锁覆盖此路径，不承诺跨进程共享执行器安全。完整真机流程和测试环境视觉一致性继续缺少证据。
 
+## 2026-10-16 本地源码续轮：完整驾驶舱与Java快照接入
+
+本轮基线为后端 `136b692`、指定前端 `ea682fa`，仍在 `feature/natural-language-cockpit`。用户指出本地源码可用后，已补查Java主项目并核验现有缓存；前端采用 `onegismap_a-b4-20260910` 内正式主线 `35574cba46d498e0992de05504756bccf7014ade`（10月12日），Java候选从本地缓存正式线 `98a8da4`（10月9日）建立独立 `feature/flight-agent-platform-snapshot` 工作树。远端下载失败不再作为本地候选开发的前提；缓存不称作远端最新。原主目录、旧前端冲突和未提交文件均未改动。
+
+目标是把本地源码转成可审查的完整界面候选及Java读取链路；本轮预算60分钟/120次开发检查，后续增加10分钟Java最终编译核验。运行身份为本机开发/离线测试，权限范围为本地源码、测试、构建和现有开发分支提交。输入仅来自固定源码、合成快照和UI夹具；没有真实平台登录、设备、业务写入或共享部署。
+
+指定前端新增完整驾驶舱外壳：顶部、左右355px设备/遥测区、中央位置/视频区、底部飞行及载荷控制台、专业/简控切换、可收起助手。16件原素材从固定主线Git对象逐文件导出，来源和哈希记录在前端 `src/assets/cockpit/SOURCE.json`，未使用脏工作区或test独有代码。全页只创建一个 `CockpitSession`；手动“前进7.5米”与聊天共用提议、确认、取消和上下文，不自动确认，不直接调用Java/MQTT。平台 `yaw_deg` 与模拟器 `heading_deg` 均能显示。
+
+位置来自服务快照，缺失电量、链路和姿态显示“未提供”；地理底图、直播、持续摇杆/键鼠仍未接入。简控是按本地主线重建的候选，**不是测试环境完整视觉/业务一致性已通过**。根Agent已目视复核[桌面专业布局](evidence/cockpit-workspace-desktop-20261016.png)、[共享动作卡](evidence/cockpit-workspace-confirmation-20261016.png)及手机截图；[浏览器JSON](evidence/cockpit-workspace-ui-20261016.json)保留原临时截图路径。
+
+Java新增只读快照候选，Python新增严格 `KtdSnapshotProvider`、固定快照GET和独立 `platform_cockpit_server.py`。配置仅来自服务端环境，默认只读；平台写动作必须同时满足显式开关、权威许可和逐项确认。Java合成响应已经跨语言解码，并通过两个脚本自建的回环HTTP服务贯通Agent会话，拒绝结果没有被模型或启动开关覆盖。详细契约、环境变量和当前拒绝原因见 [平台接入说明](ktd-platform-contract.md)。
+
+| 本轮验证 | 已核验结果 | 范围 |
+| --- | --- | --- |
+| Python完整离线回归 | 458项通过 | 含新增20项快照、9项运行装配；全套socket守护仍通过 |
+| 前端单元/契约测试 | 60项通过 | 共享会话、手动提议、遥测未知值、平台航向及服务端代理身份 |
+| 前端构建 | Vue/TS/Vite通过 | 未发现服务端测试凭据进入客户端bundle |
+| 前端离线浏览器 | 22类场景、37次夹具API，0越界/浏览器异常/设备调用 | 1920×1080完整布局、414×747原流程及旧preview入口 |
+| Java候选 | 8模块离线Maven reactor构建成功，17项指定测试通过 | 真实Controller/Service和遥测投影；不启动Spring业务上下文 |
+| Java响应→HTTP→Agent | 3次Agent HTTP、5次快照GET、1次脚本模型决定，0控制POST | 使用真实Java序列化的合成响应；不是在线Java或真机验证 |
+
+本轮没有重新运行100条真实模型评测，不将新工程检查叠加为识别率提升。Java源码侧的构建和验证记录随其独立候选交付；非空taskId目前仅支持代码5的固定机场任务，跳飞等类型需要另外核对实时机场来源。完整Spring运行、真实数据读回、线上页面和设备效果仍未验收。
+
+Java候选已本地提交为 `c06398bb8d84dfd0d07dbaf64ced4ab64f80ee55`，分支 `feature/flight-agent-platform-snapshot`；推送被GitLab明确拒绝为“not allowed to push code”，本地提交和完整工作树保留。前端本轮提交为 `46c0bcc8fb9000c540c9fcba3785d3c10229eb0c`。Python交付以当前分支最终Git记录为准；每个仓库的推送结果独立核验，不因Java远端拒绝回滚其他已验证成果。
+
 ## 尚未闭合的真实环境条件
 
 详见 [Java契约核对](ktd-platform-contract.md)：现有距离实现与能力声明不一致；起飞高度基准、偏航角度和当前点降落不能强行映射。现有正式HTTP还不能提供同时经过资源鉴权的完整位姿、新鲜度、控制权租约和逐动作许可；调试OSD接口不作为替代。没有可关联的设备完成回执，HTTP200仅能标记 `submitted`。
 
-需要Java负责人提供并确认权威只读snapshot契约、逐机型能力和可关联设备回执；再在隔离测试资源上做获授权的集成、人工界面与设备验收。本轮已尝试只读核对Java `origin/prod`，GitLab明确返回“not allowed to download code”，无法取得按项目规则开发Java补充接口所需的最新正式基线。此轮不修改Java、不部署、不调用业务/设备接口、不合并dev-wxl/test、不创建合并请求。
+首轮因远端下载受限未修改Java；现已按用户明确的本地源码路径完成独立只读候选。当前Java快照仍不能证明厂商航权、链路时效和逐字段原帧时效，因此仅允许新鲜 `read_state`，所有控制动作仍拒绝，距离能力仍为false。还需补齐这些真实来源、执行前原子授权和可关联设备回执，再在隔离资源上进行获授权的集成、人工界面及设备验收。不能通过手动把capability改为true或把当前HTTP时间当作遥测时间来完成目标。没有共享部署、真实平台/设备请求、dev-wxl/test合并或合并请求。
 
 回滚：不启用平台执行器；前端设置 `VITE_FLIGHT_AGENT_MODE=preview` 返回旧预览入口，或回退本功能提交。新服务停机后未执行卡失效。已经提交的真实指令不可能靠回退代码撤销，持久journal必须保留；本轮没有真实提交。

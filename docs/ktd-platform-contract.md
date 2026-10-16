@@ -1,6 +1,6 @@
 # ktd_backend 控制接口适配候选
 
-2026-10-16。交付是默认关闭的 Python HTTP 适配器与离线契约测试。未连接 Java 服务、MQTT 或无人机，未部署，设备动作完成、距离精度和测试环境视觉一致性均未验证。
+2026-10-16。当前候选包含默认关闭的 Python 控制适配器、Java 只读快照接口、严格的快照提供器和平台启动装配。未连接真实 Java 服务、MQTT 或无人机，未部署，设备动作完成、距离精度和测试环境视觉一致性均未验证。
 
 ## 审计基线与范围
 
@@ -58,14 +58,14 @@ executor = KtdPlatformExecutor(
 )
 ```
 
-`KtdSnapshot` 是必须由另一个**服务端权威适配器**提供的内部类型，当前切片不实现该在线提供器。不得把浏览器 pose、浏览器自报 actor、模型输出或 HTTP 2xx 构造成权威快照：
+`KtdSnapshot` 是必须由**服务端权威适配器**提供的内部类型。新增 `KtdSnapshotProvider` 通过固定 Java 快照 GET 严格解码该类型；在线部署尚未验证。不得把浏览器 pose、浏览器自报 actor、模型输出或 HTTP 2xx 构造成权威快照：
 
 | 字段 | 所需来源和含义 |
 | --- | --- |
 | `actor_id` | 与服务端请求使用的 Java 登录身份一致；不能用一个共享登录身份冒充不同操作者 |
 | `project_id/hangar_id/drone_id/site_id/task_id` | 当前账号有权访问且绑定一致的 Java 资源；真实任务和设备关联也必须已核对 |
 | `context_version` | 与 `RuntimeBinding` 一致的会话绑定版本 |
-| `version` | 权威快照版本；权限、状态、能力变化时更新 |
+| `version` | 新Java接口使用真实输入内容的64字符十六进制SHA256；兼容旧注入接口的非负整数。权限、状态、能力变化时更新，不按轮询次数编造版本 |
 | `observed_at` | UTC Unix 秒；默认 5 秒以内，未来时间、未知或过期拒绝 |
 | `control_owner` | Java 当前控制权归属，写请求必须等于 actor |
 | `control_lease_expires_at` | 权威 Java 提供的控制权租约到期时间，UTC Unix 秒；所有写动作要求有限数值且严格大于当前时刻；缺失默认 `None` 仅兼容构造，绝不授权写入 |
@@ -142,9 +142,9 @@ git diff --check
 
 `com/platform/mqtt/own/ControlHeartbeatProcessor.java:48`、`:55` 只续期上述已登记的运动指令。由此只能确认“当前 Java 距离分支没有这个保护”，不能推断真实厂商设备不要求已有飞行控制权、合适模式或连接健康。平台记录 owner、厂商飞行航权、DRC 会话、设备链路是不同事实。当前没有找到可只读、带时间和归属地证明后几项的 HTTP 契约，仍需缺失即拒绝。
 
-### 最小 Java 只读快照契约建议（尚未实现）
+### Java 只读快照契约的来源
 
-建议新增一个明确鉴权的 GET `/lingxi/agent/platform/snapshot`，由 `projectId` 请求头和 `siteId/droneId/taskId` 查询参数限定资源；这是建议路径，当前不存在。操作者必须由当前登录令牌派生，不能从查询参数提供。服务端应检查项目权限、站点/机库/无人机关联、设备领用、真实任务设备关联及操作权限后，再返回一次不可变的快照；不得自动 obtain、发心跳、抢航权、启动视频或保存业务状态。
+下列是首轮审计提出的契约要求。续轮已在独立Java候选中实现 GET `/lingxi/agent/platform/snapshot` 的只读部分，由 `projectId` 请求头和 `siteId/hangarId/droneId/taskId` 查询参数限定资源；当前共享环境尚未部署此路径。操作者从当前登录令牌派生，不能从查询参数提供。服务端校验项目权限、站点/机库/无人机关联、设备领用及真实任务设备关联后返回不可变投影；不会自动 obtain、发心跳、抢航权、启动视频或保存业务状态。缺少证据的控制条件仍返回拒绝原因。
 
 最小返回内容应包含：
 
@@ -154,4 +154,41 @@ git diff --check
 4. 经真实控制链路解析的 `operation_profile`、当前厂商航权归属、会话/链路健康及其观测时间。服务端明确决定某动作是否依赖心跳，不把“Java 分支没有检查”当作已满足条件。
 5. 基于账号授权、项目资源、机型实现、当前链路/模式/状态形成的逐动作 `allowed_actions` 和 `denied_reasons`，并保留 `UAV_MOVE_DISTANCE` 真实值。不能只返回前端按钮配置；不支持、不确定和临时不可用必须区分。
 
-现有 Python `KtdSnapshot` 可由该服务端 DTO 经过严格验证后构造；构造前必须验证租约、采样/接收时间、链路/航权及动作限制。`observed_at` 取已验证的证据观测时间，不能取快照获取时间；`task_batch_id` 仍仅属于 Agent 会话，不冒充 Java taskId。未来执行端还应支持 `expected_snapshot_version` 的原子校验，避免“读取时获准、发送前已变更”的窗口；现有 HTTP 控制接口没有这个门禁。本轮交付保持适配器默认关闭，并清楚标记缺少在线权威提供器。
+Python提供器在构造 `KtdSnapshot` 前验证租约、采样/接收时间、资源、权限与逐动作可用决定的一致性。`observed_at` 取 `sampled_at/received_at` 较早者，不能取快照获取时间；`task_batch_id` 仍仅属于Agent会话，不冒充Java taskId。未来执行端还需支持 `expected_snapshot_version` 的原子校验，避免“读取时获准、发送前已变更”的窗口；现有控制HTTP没有这个门禁。当前所有真实控制开关继续默认关闭。
+
+## 本地源码续轮与实际接入方式
+
+用户确认以本地源码继续后，核对到主项目 `/Users/wangxiaolin/IdeaProjects/ktd_backend`，其缓存 `origin/prod=e8e3157`。b3副本保存了更新12个提交的正式线缓存 `98a8da4bf13f4ba623fb816da1a5cb9b09f8453a`（2026-10-09）。新Java工作树为 `/Users/wangxiaolin/PycharmProjects/ktd_backend-flight-agent-snapshot`，分支 `feature/flight-agent-platform-snapshot` 从该缓存正式线创建，未搬入test历史。该版本明确为本地缓存，不声称远端最新。原Java主目录、b3及旧前端脏工作区保持原样。
+
+Java响应为 `R.ok(data)`，`schema_version=lingxi-platform-snapshot/v1`。DTO只接受资源标识；服务从登录态获取员工身份。资源校验通过后才读取控制权和遥测。快照/遥测/控制权版本均由可追溯字段计算SHA256；`generated_at` 不参与快照版本。owner必须唯一且匹配当前设备；有效租约为数据库 `updateTime+300秒`，读取不续租。遥测接收时间来自 `putWRJ` 维护的 `LAST_PUSH_TIME`，不使用可能由业务字段更新刷新的缓存时间。`UdpDatas.peekUavSnapshot` 只复制标量，不调用具有清理副作用的旧 `getUAV`。
+
+采样时间只在已核对的DJI/PZ配置路径上使用 `positionTime`；缺失保持null，未知profile拒绝采样来源。没有使用 `timeStamp` 回填或按量级猜单位，因为旧源码中部分机型会把该字段设为服务端当前时间。当前缓存仍会合并多次增量字段，缺少每个字段的原帧证明，不能将缓存投影称为完整可信设备帧。
+
+响应包含59项 `action_availability` 及稳定拒绝原因。`permissions` 表示所有门禁通过后的动作集合；Python要求它与 `available=true` 集合严格一致，且相应capability必须为布尔true。未知动作、重复JSON字段、错类型、绑定不符、未来/缺失/过期时间、矛盾许可、重定向和错误信封均不能升级成授权。Java序列化合成样本及来源哈希保存在 `fixtures/ktd-platform-snapshot-v1.json` 和相邻的 `.provenance.json`，Python提供器已经实际解码这份Java输出。
+
+**当前Java候选仍仅能开放新鲜的 `read_state`。** 厂商航权、控制链路时效、逐字段时效未获证实，所有写动作继续明确拒绝，距离能力仍为false。启动时传入控制开关不会覆盖这些拒绝；单测中的距离许可true只是合成条件，不代表Java已经开放真实飞行。
+
+`tools/platform_cockpit_server.py` 是独立的平台入口，只监听 `127.0.0.1`，默认只读。旧 `tools/cockpit_server.py` 继续是模拟器。以下配置全部由服务端进程环境注入，不写入浏览器、Git或本报告：
+
+| 配置 | 用途 |
+| --- | --- |
+| `KTD_BASE_URL` | 固定Java origin，可选 `/api`；默认必须HTTPS |
+| `KTD_SERVER_TOKEN` | 当前服务端登录凭据，禁止放进 `VITE_` 变量或命令行参数 |
+| `KTD_ACTOR_EMPLOYEE_ID` | 必须与Java返回的当前员工身份完全一致 |
+| `KTD_PROJECT_ID / KTD_SITE_ID / KTD_HANGAR_ID / KTD_DRONE_ID` | 服务端固定资源范围 |
+| `KTD_TASK_ID` | 可选真实Java任务标识，不能使用Agent批次代替 |
+| `FLIGHT_AGENT_TASK_BATCH_ID / FLIGHT_AGENT_CONTEXT_VERSION` | Agent运行批次及非负上下文版本；版本默认1 |
+| `FLIGHT_AGENT_GATEWAY_TOKEN` | 可信网关凭据，仅在服务端使用 |
+| `FLIGHT_AGENT_JOURNAL` | 私有持久SQLite日志绝对路径；父目录需已存在、归当前用户且权限0700 |
+| `KTD_ALLOW_INSECURE_HTTP` | 仅显式 `true` 才允许受信内网HTTP；默认false |
+
+平台浏览器请求必须经过可信网关。Vite开发代理现支持在Node进程中同时注入 `FLIGHT_AGENT_GATEWAY_TOKEN` 与 `FLIGHT_AGENT_ACTOR_ID`，员工ID须与后端配置一致；它先删除浏览器伪造的同名头再设置服务器值。此逻辑不进入客户端bundle，不是生产网关部署。
+
+```bash
+# 在上述服务端配置已经安全注入后，默认仍只读；本轮没有启动此真实平台入口
+PYTHONPATH=src python3 tools/platform_cockpit_server.py --port 8794
+# 以下验证只连接脚本自己的两个回环服务，不需要平台配置或凭据
+PYTHONPATH=src python3 tools/bench/platform_cockpit_smoke.py
+```
+
+HTTP回环已验证：3次Agent HTTP、5次快照GET、1次脚本模型决定、0次确认/控制POST/外部平台/设备请求。Java样本的拒绝贯通到最终Agent回执。另有纯HTTP边界注入用例证明，在显式合成授权且手动确认的条件下，动作仍调用原Java控制路径并只返回 `submitted`，不伪造完成状态。

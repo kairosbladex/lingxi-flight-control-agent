@@ -10,12 +10,13 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import re
 import sqlite3
 import threading
 import time
 from typing import Any
 from urllib.error import HTTPError
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 from uuid import uuid4
 
@@ -51,6 +52,24 @@ def _finite(value: Any, low: float, high: float) -> bool:
     return type(value) in (int, float) and math.isfinite(value) and low <= value <= high
 
 
+def _valid_snapshot_version(value: Any) -> bool:
+    return ((type(value) is int and value >= 0)
+            or (isinstance(value, str) and re.fullmatch(r'[0-9a-fA-F]{64}', value) is not None))
+
+
+def _unique_json_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError('duplicate JSON member')
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(_value):
+    raise ValueError('non-finite JSON number')
+
+
 class KtdPlatformError(ValueError):
     """仅携带稳定错误码，不携带上游响应或异常文本。"""
 
@@ -65,14 +84,15 @@ class KtdSnapshot:
     site_id: str
     task_id: str | None
     context_version: int
-    version: int
+    version: int | str
     observed_at: float
     control_owner: str | None
-    profile: str
+    profile: str | None
     permissions: frozenset[str]
     capabilities: Mapping[str, bool]
     state: Mapping[str, Any]
     control_lease_expires_at: float | None = None
+    action_availability: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -210,6 +230,29 @@ class KtdHttpTransport:
                           headers={"Authorization": "Bearer " + self._token, "Content-Type": "application/json",
                                    "projectId": context.project_id, "X-Trace-Id": context.trace_id,
                                    "X-Idempotency-Key": context.idempotency_key})
+        return self._read_response(request)
+
+    def read_snapshot(self, binding: RuntimeBinding, *, site_id: str,
+                      task_id: str | None) -> KtdHttpResponse:
+        """One server-bound read endpoint; neither callers nor tools supply a URL."""
+        if not isinstance(binding, RuntimeBinding) or binding.actor_id != self.actor_id:
+            raise KtdPlatformError("TRANSPORT_SCOPE_MISMATCH")
+        if (not all(_identifier(value) for value in (binding.project_id, binding.hangar_id,
+                                                    binding.drone_id, site_id))
+                or (task_id is not None and not _identifier(task_id))):
+            raise KtdPlatformError("INVALID_REQUEST_CONTEXT")
+        query = {'siteId': site_id, 'hangarId': binding.hangar_id, 'droneId': binding.drone_id}
+        if task_id is not None:
+            query['taskId'] = task_id
+        request = Request(self._base_url + '/lingxi/agent/platform/snapshot?' + urlencode(query),
+                          method='GET', headers={'Authorization': 'Bearer ' + self._token,
+                                                 'projectId': binding.project_id})
+        try:
+            return self._read_response(request, strict_json=True)
+        except Exception:
+            raise KtdPlatformError('SNAPSHOT_TRANSPORT_ERROR') from None
+
+    def _read_response(self, request: Request, *, strict_json: bool = False) -> KtdHttpResponse:
         try:
             response = self._opener.open(request, timeout=self._timeout)
         except HTTPError as error:
@@ -220,7 +263,9 @@ class KtdHttpTransport:
         if len(raw) > 65536:
             raise KtdPlatformError("INVALID_UPSTREAM_RESPONSE")
         try:
-            payload = json.loads(raw)
+            payload = (json.loads(raw, object_pairs_hook=_unique_json_object,
+                                  parse_constant=_reject_json_constant)
+                       if strict_json else json.loads(raw))
         except (ValueError, UnicodeError):
             payload = {}
         return KtdHttpResponse(status, payload if isinstance(payload, dict) else {})
@@ -278,13 +323,18 @@ class KtdPlatformExecutor:
         expected.update(site_id=self.site_id, task_id=self.task_id)
         if any(getattr(snapshot, key) != value for key, value in expected.items()):
             raise KtdPlatformError("RESOURCE_BINDING_MISMATCH")
-        if (type(snapshot.context_version) is not int or type(snapshot.version) is not int or snapshot.version < 0
+        if (type(snapshot.context_version) is not int or not _valid_snapshot_version(snapshot.version)
                 or not _finite(snapshot.observed_at, 0, self._clock())
                 or self._clock() - snapshot.observed_at > self._max_age):
             raise KtdPlatformError("AUTHORITATIVE_STATE_STALE")
         if (not isinstance(snapshot.permissions, frozenset) or not isinstance(snapshot.capabilities, Mapping)
                 or not isinstance(snapshot.state, Mapping) or action not in snapshot.permissions):
             raise KtdPlatformError("ACTION_NOT_PERMITTED")
+        if snapshot.action_availability is not None:
+            entry = snapshot.action_availability.get(action) if isinstance(snapshot.action_availability, Mapping) else None
+            if (not isinstance(entry, Mapping) or entry.get('available') is not True
+                    or entry.get('reasons') != []):
+                raise KtdPlatformError('ACTION_UNAVAILABLE')
         if action != "read_state":
             if snapshot.control_owner != self.binding.actor_id:
                 raise KtdPlatformError("CONTROL_NOT_OWNED")
@@ -332,6 +382,8 @@ class KtdPlatformExecutor:
             result.update({key: copy.deepcopy(value) for key, value in snapshot.state.items() if key in _STATE_FIELDS})
             result.update(snapshot_version=snapshot.version, observed_at=snapshot.observed_at,
                           control_owner=snapshot.control_owner, control_lease_expires_at=snapshot.control_lease_expires_at)
+            if snapshot.action_availability is not None:
+                result['action_availability'] = copy.deepcopy(dict(snapshot.action_availability))
         return result
 
     def read_state(self) -> Mapping[str, Any]:
