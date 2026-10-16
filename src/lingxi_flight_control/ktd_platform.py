@@ -139,10 +139,16 @@ class KtdReceipt:
     receipt_tracking: bool = False
     parameters: Mapping[str, Any] | None = None
     device_report: Mapping[str, Any] | None = None
+    kind: str | None = None
+    vendor_report: Mapping[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         result = asdict(self)
         result["status"] = self.status.value if isinstance(self.status, FlightControlStatus) else self.status
+        if self.kind is None:
+            result.pop('kind')
+        if self.vendor_report is None:
+            result.pop('vendor_report')
         return result
 
     @classmethod
@@ -202,7 +208,10 @@ class SqliteCommandJournal:
                 if row is None:
                     raise KtdPlatformError('JOURNAL_RECORD_MISSING')
                 result = dict(receipt)
-                report = json.loads(row[0]).get('device_report')
+                stored = json.loads(row[0])
+                if stored.get('kind') != result.get('kind'):
+                    raise KtdPlatformError('JOURNAL_KIND_MISMATCH')
+                report = stored.get('device_report')
                 if report is not None:
                     incoming = result.get('device_report')
                     if incoming is not None:
@@ -214,6 +223,18 @@ class SqliteCommandJournal:
                         result['device_report'] = later
                     else:
                         result['device_report'] = report
+                report = stored.get('vendor_report')
+                if report is not None:
+                    incoming = result.get('vendor_report')
+                    if incoming is not None:
+                        from .vendor_control import validate_vendor_report_update
+                        earlier, later = ((incoming, report) if incoming['version'] <= report['version']
+                                          else (report, incoming))
+                        validate_vendor_report_update(earlier, later,
+                            now if now is not None else later['updated_at'])
+                        result['vendor_report'] = later
+                    else:
+                        result['vendor_report'] = report
                 connection.execute("UPDATE commands SET receipt=? WHERE scope=? AND fingerprint=?", (_json(result), scope, fingerprint))
         finally:
             connection.close()
@@ -234,6 +255,27 @@ class SqliteCommandJournal:
                 connection.execute('UPDATE commands SET receipt=? WHERE scope=? AND fingerprint=?',
                                    (_json(receipt), scope, fingerprint))
                 return dict(report)
+        finally:
+            connection.close()
+
+    def record_vendor_report(self, scope: str, fingerprint: str, report: Mapping[str, Any], now: float) -> dict:
+        from .vendor_control import VENDOR_KIND, validate_vendor_report_update
+        connection = self._connection()
+        try:
+            with connection:
+                connection.execute('BEGIN IMMEDIATE')
+                row = connection.execute('SELECT receipt FROM commands WHERE scope=? AND fingerprint=?',
+                                         (scope, fingerprint)).fetchone()
+                if row is None:
+                    raise KtdPlatformError('JOURNAL_RECORD_MISSING')
+                receipt = json.loads(row[0])
+                if receipt.get('kind') != VENDOR_KIND:
+                    raise KtdPlatformError('JOURNAL_KIND_MISMATCH')
+                validate_vendor_report_update(receipt.get('vendor_report'), report, now)
+                receipt['vendor_report'] = copy.deepcopy(dict(report))
+                connection.execute('UPDATE commands SET receipt=? WHERE scope=? AND fingerprint=?',
+                                   (_json(receipt), scope, fingerprint))
+                return copy.deepcopy(dict(report))
         finally:
             connection.close()
 
@@ -314,6 +356,52 @@ class KtdHttpTransport:
         except Exception:
             raise KtdPlatformError('COMMAND_RECEIPT_TRANSPORT_ERROR') from None
 
+    def submit_vendor_request(self, command: KtdCommand, context: KtdRequestContext) -> KtdHttpResponse:
+        from .vendor_control import VENDOR_METHODS
+        required = {'schemaVersion', 'commandId', 'idempotencyKey', 'traceId', 'method',
+                    'siteId', 'hangarId', 'droneId', 'snapshotVersion', 'expiresAt'}
+        body = command.body
+        if (command.path != '/screen/uav/operation/control/vendor-request'
+                or context.actor_id != self.actor_id or not isinstance(body, Mapping)
+                or set(body) not in (required, required | {'taskId'})
+                or body.get('schemaVersion') != 'lingxi-vendor-control-request/v1'
+                or body.get('method') not in VENDOR_METHODS
+                or body.get('idempotencyKey') != context.idempotency_key
+                or body.get('traceId') != context.trace_id
+                or not isinstance(body.get('snapshotVersion'), str)
+                or not _valid_snapshot_version(body['snapshotVersion'])
+                or not _finite(body.get('expiresAt'), 0, float('inf'))
+                or not all(_identifier(value) for value in (context.project_id, context.trace_id,
+                    context.idempotency_key, body.get('commandId'), body.get('siteId'),
+                    body.get('hangarId'), body.get('droneId')))
+                or ('taskId' in body and not _identifier(body['taskId']))):
+            raise KtdPlatformError('INVALID_VENDOR_REQUEST')
+        request = Request(self._base_url + command.path, data=_json(body).encode(), method='POST',
+            headers={'Authorization': 'Bearer ' + self._token, 'Content-Type': 'application/json',
+                     'projectId': context.project_id, 'X-Trace-Id': context.trace_id,
+                     'X-Idempotency-Key': context.idempotency_key})
+        return self._read_response(request, strict_json=True)
+
+    def read_vendor_receipt(self, binding: RuntimeBinding, *, site_id: str,
+                            task_id: str | None, command_id: str, method: str) -> KtdHttpResponse:
+        from .vendor_control import VENDOR_METHODS
+        if not isinstance(binding, RuntimeBinding) or binding.actor_id != self.actor_id:
+            raise KtdPlatformError('TRANSPORT_SCOPE_MISMATCH')
+        if (method not in VENDOR_METHODS or not all(_identifier(value) for value in
+                (binding.project_id, binding.hangar_id, binding.drone_id, site_id, command_id))
+                or (task_id is not None and not _identifier(task_id))):
+            raise KtdPlatformError('INVALID_REQUEST_CONTEXT')
+        query = {'commandId': command_id, 'method': method, 'siteId': site_id,
+                 'hangarId': binding.hangar_id, 'droneId': binding.drone_id}
+        if task_id is not None:
+            query['taskId'] = task_id
+        request = Request(self._base_url + '/lingxi/agent/commands/vendor-receipt?' + urlencode(query),
+            method='GET', headers={'Authorization': 'Bearer ' + self._token, 'projectId': binding.project_id})
+        try:
+            return self._read_response(request, strict_json=True)
+        except Exception:
+            raise KtdPlatformError('VENDOR_RECEIPT_TRANSPORT_ERROR') from None
+
     def read_visuals(self, binding: RuntimeBinding, *, site_id: str,
                      task_id: str | None) -> KtdHttpResponse:
         """Read stored display descriptions only; never fetch or start a stream."""
@@ -343,7 +431,7 @@ class KtdHttpTransport:
         if len(raw) > 65536:
             raise KtdPlatformError("INVALID_UPSTREAM_RESPONSE")
         try:
-            payload = (json.loads(raw, object_pairs_hook=_unique_json_object,
+            payload = (json.loads(raw.decode('utf-8'), object_pairs_hook=_unique_json_object,
                                   parse_constant=_reject_json_constant)
                        if strict_json else json.loads(raw))
         except (ValueError, UnicodeError):
@@ -353,7 +441,7 @@ class KtdHttpTransport:
 
 @dataclass(frozen=True)
 class _Pending:
-    request: FlightControlActionRequest
+    request: Any
     receipt: KtdReceipt
     snapshot_hash: str
     command: KtdCommand
@@ -367,7 +455,8 @@ class KtdPlatformExecutor:
                  transport: Any, snapshot_provider: Callable[[], KtdSnapshot],
                  journal: SqliteCommandJournal, enabled: bool = False,
                  clock: Callable[[], float] = time.time, ttl_sec: float = 30,
-                 snapshot_max_age_sec: float = 5, track_commands: bool = False):
+                 snapshot_max_age_sec: float = 5, track_commands: bool = False,
+                 enable_vendor_requests: bool = False, allowed_vendor_methods: tuple[str, ...] = ()):
         binding.validate()
         if (not all(_identifier(value) for key, value in binding.to_dict().items() if key != "context_version")
                 or not _identifier(site_id) or (task_id is not None and not _identifier(task_id))
@@ -378,12 +467,23 @@ class KtdPlatformExecutor:
             raise ValueError("a durable command journal is required")
         if isinstance(transport, KtdHttpTransport) and transport.actor_id != binding.actor_id:
             raise ValueError("transport login identity must match runtime actor")
+        from .vendor_control import VENDOR_METHODS
+        if (type(enable_vendor_requests) is not bool or not isinstance(allowed_vendor_methods, (tuple, list))
+                or any(not isinstance(method, str) or method not in VENDOR_METHODS for method in allowed_vendor_methods)
+                or len(set(allowed_vendor_methods)) != len(allowed_vendor_methods)):
+            raise ValueError('invalid vendor request configuration')
         self.binding, self.site_id, self.task_id = binding, site_id, task_id
         self._transport, self._provider, self._journal = transport, snapshot_provider, journal
         self._enabled, self._clock, self._ttl, self._max_age = enabled, clock, ttl_sec, snapshot_max_age_sec
         self._track_commands = track_commands
+        self._enable_vendor_requests = enable_vendor_requests
+        self._allowed_vendor_methods = tuple(allowed_vendor_methods)
         self._pending: dict[str, _Pending] = {}
         self._lock = threading.RLock()
+
+    @property
+    def vendor_request_methods(self) -> tuple[str, ...]:
+        return self._allowed_vendor_methods if self._enable_vendor_requests else ()
 
     def runtime_context(self) -> ExecutionContext:
         return ExecutionContext(f"{self.binding.project_id}:{self.binding.hangar_id}:{self.binding.task_batch_id}",
@@ -433,6 +533,23 @@ class KtdPlatformExecutor:
         snapshot = self._load_snapshot()
         self._validate_snapshot(snapshot, action)
         return snapshot
+
+    def _validate_vendor_snapshot(self, snapshot: KtdSnapshot) -> None:
+        self._validate_snapshot(snapshot, 'read_state')
+        if self._clock() - snapshot.observed_at > min(self._max_age, 5):
+            raise KtdPlatformError('AUTHORITATIVE_STATE_STALE')
+        if snapshot.profile != 'DJI_HANGAR':
+            raise KtdPlatformError('PROFILE_UNSUPPORTED')
+        if not isinstance(snapshot.version, str) or not _valid_snapshot_version(snapshot.version):
+            raise KtdPlatformError('TRACKED_SNAPSHOT_VERSION_REQUIRED')
+        if snapshot.control_owner != self.binding.actor_id:
+            raise KtdPlatformError('CONTROL_NOT_OWNED')
+        if not _finite(snapshot.control_lease_expires_at, 0, float('inf')):
+            raise KtdPlatformError('CONTROL_LEASE_UNAVAILABLE')
+        if snapshot.control_lease_expires_at <= self._clock():
+            raise KtdPlatformError('CONTROL_LEASE_EXPIRED')
+        if snapshot.state.get('online') is not True:
+            raise KtdPlatformError('DEVICE_NOT_ONLINE')
 
     def available_actions(self) -> frozenset[str]:
         """仅列出当前权威资源、权限、能力和状态允许预览的已支持动作。"""
@@ -489,11 +606,15 @@ class KtdPlatformExecutor:
         return _hash(values)
 
     def _receipt(self, request, status, *, snapshot=None, error_code=None, message="", **fields):
+        from .vendor_control import VendorControlRequest, VENDOR_KIND
         action = request.action.value if isinstance(request.action, FlightControlAction) else request.action
+        vendor = isinstance(request, VendorControlRequest)
+        if vendor:
+            fields.setdefault('kind', VENDOR_KIND)
         return KtdReceipt(status, action, request.command_id, request.idempotency_key,
                           self.binding.context_version, self._state(snapshot), error_code=error_code,
                           message=message, parameters=copy.deepcopy(dict(request.parameters)),
-                          receipt_tracking=self._track_commands and action in _MOVE_TYPES, **fields)
+                          receipt_tracking=vendor or self._track_commands and action in _MOVE_TYPES, **fields)
 
     def _reject(self, request, code):
         return self._receipt(request, FlightControlStatus.REJECTED, error_code=code,
@@ -553,6 +674,83 @@ class KtdPlatformExecutor:
             return KtdCommand("/screen/uav/gimbal/control", body)
         raise KtdPlatformError("ACTION_UNSUPPORTED")
 
+    def _compile_vendor_request(self, request, snapshot, trace_id, deadline) -> KtdCommand:
+        if not _finite(deadline, 0, float('inf')) or deadline <= self._clock():
+            raise KtdPlatformError('CONFIRMATION_EXPIRED')
+        body = {'schemaVersion': 'lingxi-vendor-control-request/v1',
+            'commandId': request.command_id, 'idempotencyKey': request.idempotency_key,
+            'traceId': trace_id, 'method': request.method, 'siteId': self.site_id,
+            'hangarId': self.binding.hangar_id, 'droneId': self.binding.drone_id,
+            'snapshotVersion': snapshot.version, 'expiresAt': deadline}
+        if self.task_id is not None:
+            body['taskId'] = self.task_id
+        return KtdCommand('/screen/uav/operation/control/vendor-request', body)
+
+    def preview_vendor_request(self, request) -> KtdReceipt:
+        from .vendor_control import VendorControlRequest
+        with self._lock:
+            try:
+                if not isinstance(request, VendorControlRequest):
+                    raise ValueError('invalid request')
+                request.validate()
+            except (ValueError, TypeError, AttributeError, OverflowError):
+                fallback = VendorControlRequest('invalid', 'invalid', 'flight_authority_grab',
+                                                self.binding.context_version)
+                return self._reject(fallback, 'INVALID_PARAMETERS')
+            if request.context_version != self.binding.context_version:
+                return self._reject(request, 'STALE_CONTEXT')
+            if not self._enable_vendor_requests:
+                return self._reject(request, 'VENDOR_REQUESTS_DISABLED')
+            if request.method not in self._allowed_vendor_methods:
+                return self._reject(request, 'VENDOR_METHOD_NOT_ALLOWED')
+            try:
+                snapshot = self._load_snapshot()
+                self._validate_vendor_snapshot(snapshot)
+                fingerprint = self._fingerprint(request)
+                existing = self._journal.read(self._scope(request.idempotency_key))
+                if existing:
+                    return KtdReceipt.from_dict(existing[1]) if existing[0] == fingerprint else self._reject(request, 'IDEMPOTENCY_CONFLICT')
+                for pending in self._pending.values():
+                    if pending.request.idempotency_key == request.idempotency_key:
+                        return pending.receipt if self._fingerprint(pending.request) == fingerprint else self._reject(request, 'IDEMPOTENCY_CONFLICT')
+                self._pending = {key: value for key, value in self._pending.items() if value.deadline > self._clock()}
+                if len(self._pending) >= 128:
+                    return self._reject(request, 'PENDING_LIMIT_REACHED')
+                confirmation_id, trace_id = uuid4().hex, uuid4().hex
+                deadline = min(self._clock() + self._ttl, snapshot.observed_at + min(self._max_age, 5),
+                               snapshot.control_lease_expires_at)
+                command = self._compile_vendor_request(request, snapshot, trace_id, deadline)
+                snapshot_hash = self._snapshot_hash(snapshot)
+                receipt = self._receipt(request, FlightControlStatus.PREVIEW_REQUIRED, snapshot=snapshot,
+                    confirmation_id=confirmation_id, confirmation_binding=_hash({'kind': request.kind,
+                        'request': fingerprint, 'snapshot': snapshot_hash, 'command': asdict(command), 'deadline': deadline}),
+                    expires_at=datetime.fromtimestamp(deadline, timezone.utc).isoformat(), trace_id=trace_id,
+                    message='待确认独立厂商请求；不代表厂商权限、DRC连接或设备动作已生效')
+                self._pending[confirmation_id] = _Pending(copy.deepcopy(request), receipt, snapshot_hash, command, deadline)
+                return receipt
+            except KtdPlatformError as error:
+                return self._reject(request, str(error))
+            except Exception:
+                return self._reject(request, 'JOURNAL_OR_STATE_UNAVAILABLE')
+
+    @staticmethod
+    def _request_from_receipt(receipt):
+        from .vendor_control import VendorControlRequest, VENDOR_ACTION, VENDOR_KIND
+        if not isinstance(receipt.parameters, Mapping):
+            raise KtdPlatformError('CONFIRMATION_MISMATCH')
+        if receipt.kind == VENDOR_KIND:
+            if receipt.action != VENDOR_ACTION or set(receipt.parameters) != {'method'}:
+                raise KtdPlatformError('CONFIRMATION_MISMATCH')
+            request = VendorControlRequest(receipt.command_id, receipt.idempotency_key,
+                                           receipt.parameters['method'], receipt.context_version)
+        elif receipt.kind is None:
+            request = FlightControlActionRequest(receipt.command_id, receipt.idempotency_key,
+                receipt.action, dict(receipt.parameters), receipt.context_version)
+        else:
+            raise KtdPlatformError('CONFIRMATION_MISMATCH')
+        request.validate()
+        return request
+
     def preview(self, request: FlightControlActionRequest) -> KtdReceipt:
         with self._lock:
             try:
@@ -611,22 +809,21 @@ class KtdPlatformExecutor:
 
     def confirm(self, confirmation_id: str, *, command_id: str, idempotency_key: str,
                 confirmation_binding: str, context_version: int) -> KtdReceipt:
+        from .vendor_control import VendorControlRequest, VENDOR_KIND
         with self._lock:
             fallback = FlightControlActionRequest(command_id, idempotency_key, "read_state", {}, context_version)
-            if not self._enabled:
-                return self._reject(fallback, "PLATFORM_DISABLED")
             pending = self._pending.get(confirmation_id)
             request = pending.request if pending else fallback
             try:
                 previous = self._journal.read(self._scope(idempotency_key))
+                vendor = isinstance(request, VendorControlRequest) or bool(previous and previous[1].get('kind') == VENDOR_KIND)
+                if not vendor and not self._enabled:
+                    return self._reject(request, 'PLATFORM_DISABLED')
                 if previous:
                     receipt = KtdReceipt.from_dict(previous[1])
                     if not self._matches(receipt, confirmation_id, command_id, idempotency_key, confirmation_binding, context_version):
                         return self._reject(request, "CONFIRMATION_MISMATCH")
-                    if not isinstance(receipt.parameters, Mapping):
-                        return self._reject(request, "CONFIRMATION_MISMATCH")
-                    stored_request = FlightControlActionRequest(receipt.command_id, receipt.idempotency_key,
-                        receipt.action, dict(receipt.parameters), receipt.context_version)
+                    stored_request = self._request_from_receipt(receipt)
                     if self._fingerprint(stored_request) != previous[0]:
                         return self._reject(request, "CONFIRMATION_MISMATCH")
                     return receipt
@@ -634,17 +831,30 @@ class KtdPlatformExecutor:
                     return self._reject(request, "CONFIRMATION_NOT_FOUND")
                 if not self._matches(pending.receipt, confirmation_id, command_id, idempotency_key, confirmation_binding, context_version):
                     return self._reject(request, "CONFIRMATION_MISMATCH")
+                if vendor and not self._enable_vendor_requests:
+                    self._pending.pop(confirmation_id)
+                    return self._reject(request, 'VENDOR_REQUESTS_DISABLED')
+                if vendor and request.method not in self._allowed_vendor_methods:
+                    self._pending.pop(confirmation_id)
+                    return self._reject(request, 'VENDOR_METHOD_NOT_ALLOWED')
                 if self._clock() >= pending.deadline:
                     self._pending.pop(confirmation_id)
                     return self._reject(request, "CONFIRMATION_EXPIRED")
-                snapshot = self._snapshot(FlightControlAction(request.action).value)
-                command = self._compile(request, snapshot)
+                if vendor:
+                    snapshot = self._load_snapshot()
+                    self._validate_vendor_snapshot(snapshot)
+                    command = self._compile_vendor_request(request, snapshot, pending.receipt.trace_id, pending.deadline)
+                else:
+                    snapshot = self._snapshot(FlightControlAction(request.action).value)
+                    command = self._compile(request, snapshot)
                 if self._snapshot_hash(snapshot) != pending.snapshot_hash or command != pending.command:
                     self._pending.pop(confirmation_id)
                     return self._reject(request, "AUTHORITATIVE_STATE_CHANGED")
                 fingerprint, scope = self._fingerprint(request), self._scope(idempotency_key)
                 fields = dict(snapshot=snapshot, confirmation_id=confirmation_id,
                               confirmation_binding=confirmation_binding, trace_id=pending.receipt.trace_id)
+                if vendor:
+                    fields['expires_at'] = pending.receipt.expires_at
                 unknown = self._receipt(request, "unknown", error_code="PLATFORM_OUTCOME_UNKNOWN",
                                         message="平台结果未知，禁止自动重发；需要人工核对", **fields)
                 if not self._journal.claim(scope, fingerprint, unknown.to_dict()):
@@ -659,20 +869,28 @@ class KtdPlatformExecutor:
             result = unknown
             try:
                 context = KtdRequestContext(self.binding.actor_id, self.binding.project_id, pending.receipt.trace_id, idempotency_key)
-                if self._track_commands:
+                if self._track_commands and not vendor:
                     command = KtdCommand(command.path, {**command.body, 'tracking': {
                         'schemaVersion': 'lingxi-command-request/v1', 'commandId': request.command_id,
                         'idempotencyKey': idempotency_key, 'traceId': pending.receipt.trace_id,
                         'snapshotVersion': snapshot.version,
                         'expiresAt': min(pending.deadline, snapshot.observed_at + self._max_age),
                         'hangarId': self.binding.hangar_id}})
-                response = self._transport.submit(command, context)
+                response = (self._transport.submit_vendor_request(command, context) if vendor
+                            else self._transport.submit(command, context))
                 if isinstance(response, KtdHttpResponse) and isinstance(response.payload, Mapping):
                     code = response.payload.get("code")
                     if response.status_code == 200 and type(code) is int and code == 200:
                         status = 'submitted'
                         report = None
-                        if self._track_commands:
+                        if vendor:
+                            from .vendor_control import decode_vendor_receipt
+                            report = decode_vendor_receipt(response, binding=self.binding,
+                                site_id=self.site_id, task_id=self.task_id, request=request,
+                                trace_id=pending.receipt.trace_id, now=self._clock())
+                            if report['status'] in {'dispatching', 'unknown', 'conflict', 'expired'}:
+                                status = 'unknown'
+                        elif self._track_commands:
                             from .command_receipts import decode_command_receipt
                             report = decode_command_receipt(response, binding=self.binding,
                                 site_id=self.site_id, task_id=self.task_id, request=request,
@@ -681,7 +899,7 @@ class KtdPlatformExecutor:
                                 status = 'unknown'
                         result = self._receipt(request, status,
                             message="平台已受理，设备动作是否完成尚未验证" if status == 'submitted' else '平台结果未知，请查询回执，勿重复提交',
-                            device_report=report, **fields)
+                            **({'vendor_report': report} if vendor else {'device_report': report}), **fields)
                     elif (200 <= response.status_code < 500 and not 300 <= response.status_code < 400
                           and type(code) is int and 400 <= code < 500):
                         result = self._receipt(request, FlightControlStatus.REJECTED, error_code="PLATFORM_REJECTED",
@@ -706,6 +924,8 @@ class KtdPlatformExecutor:
                 if entry is None:
                     raise KtdPlatformError('COMMAND_NOT_FOUND')
                 receipt = KtdReceipt.from_dict(entry[1])
+                if receipt.kind is not None:
+                    raise KtdPlatformError('COMMAND_RECEIPT_BINDING_MISMATCH')
                 if receipt.command_id != command_id or receipt.context_version != context_version:
                     raise KtdPlatformError('COMMAND_RECEIPT_BINDING_MISMATCH')
                 if receipt.receipt_tracking is not True or not callable(getattr(self._transport, 'read_receipt', None)):
@@ -728,6 +948,39 @@ class KtdPlatformExecutor:
                 raise
             except Exception:
                 raise KtdPlatformError('COMMAND_RECEIPT_UNAVAILABLE') from None
+
+    def query_vendor_receipt(self, command_id: str, *, idempotency_key: str, context_version: int) -> dict:
+        from .vendor_control import VENDOR_KIND, decode_vendor_receipt
+        if (not _identifier(command_id) or not _identifier(idempotency_key)
+                or type(context_version) is not int or context_version != self.binding.context_version):
+            raise KtdPlatformError('INVALID_VENDOR_RECEIPT_REQUEST')
+        with self._lock:
+            try:
+                scope = self._scope(idempotency_key)
+                entry = self._journal.read(scope)
+                if entry is None:
+                    raise KtdPlatformError('COMMAND_NOT_FOUND')
+                receipt = KtdReceipt.from_dict(entry[1])
+                if (receipt.kind != VENDOR_KIND or receipt.command_id != command_id
+                        or receipt.context_version != context_version or receipt.idempotency_key != idempotency_key):
+                    raise KtdPlatformError('VENDOR_RECEIPT_BINDING_MISMATCH')
+                if receipt.receipt_tracking is not True or not callable(getattr(self._transport, 'read_vendor_receipt', None)):
+                    raise KtdPlatformError('RECEIPT_UNSUPPORTED')
+                if receipt.status not in {'submitted', 'unknown'}:
+                    raise KtdPlatformError('COMMAND_NOT_DISPATCHED')
+                request = self._request_from_receipt(receipt)
+                if self._fingerprint(request) != entry[0]:
+                    raise KtdPlatformError('VENDOR_RECEIPT_BINDING_MISMATCH')
+                response = self._transport.read_vendor_receipt(self.binding, site_id=self.site_id,
+                    task_id=self.task_id, command_id=command_id, method=request.method)
+                report = decode_vendor_receipt(response, binding=self.binding, site_id=self.site_id,
+                    task_id=self.task_id, request=request, trace_id=receipt.trace_id, now=self._clock())
+                report = self._journal.record_vendor_report(scope, entry[0], report, self._clock())
+                return {**report, 'context_version': context_version}
+            except KtdPlatformError:
+                raise
+            except Exception:
+                raise KtdPlatformError('VENDOR_RECEIPT_UNAVAILABLE') from None
 
     def cancel(self, confirmation_id: str, *, command_id: str, idempotency_key: str,
                confirmation_binding: str, context_version: int) -> KtdReceipt:

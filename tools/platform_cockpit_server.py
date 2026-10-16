@@ -18,6 +18,8 @@ def main(argv=None):
     parser.add_argument('--base-url', default=DEFAULT_BASE_URL, help='模型服务地址')
     parser.add_argument('--enable-platform-control', action='store_true',
                         help='显式开放已获权威许可的动作提议与逐次确认；需单独的设备测试授权')
+    parser.add_argument('--enable-vendor-requests', action='store_true',
+                        help='显式允许配置白名单内的厂商请求提议与逐次确认；不授予持续航权或启用飞行动作')
     args = parser.parse_args(argv)
     if not 1 <= args.port <= 65535:
         parser.error('port必须在1至65535之间')
@@ -26,7 +28,7 @@ def main(argv=None):
         service = build_platform_cockpit(config, lambda: OllamaDecider(
             model=args.model, base_url=args.base_url, system_prompt=COCKPIT_SYSTEM_PROMPT,
             timeout=20, max_attempts=1, max_output_tokens=2048, keep_alive='30m'),
-            enable_control=args.enable_platform_control)
+            enable_control=args.enable_platform_control, enable_vendor_requests=args.enable_vendor_requests)
         server = build_standalone_server(service, '127.0.0.1', args.port,
                                           allowed_origin='http://127.0.0.1:5173')
     except (ValueError, OSError):
@@ -34,6 +36,8 @@ def main(argv=None):
         print('平台入口启动失败，请核对服务端配置、私有日志目录和监听端口。', file=sys.stderr)
         return 2
     mode = '逐次确认控制已启用' if args.enable_platform_control else '只读，控制未启用'
+    if args.enable_vendor_requests:
+        mode += '；厂商请求仅开放配置白名单，仍需逐项确认'
     print(f'平台飞控服务 http://127.0.0.1:{server.server_port} · {mode}', flush=True)
     try:
         server.serve_forever()

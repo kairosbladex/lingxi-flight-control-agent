@@ -557,3 +557,23 @@ Java本地提交 **`af034e1b16512a67d96d57ef2f12c7518c98a898`**，未重试下�
 本轮仅本地代码、离线夹具、现有模型服务候选和开发分支提交；114样本尝试共102次模型HTTP，模型bench确认/写工具/平台调用均0。真实MQTT、业务库迁移、平台/设备写入、共享部署和重启均0。原Java主目录与冲突旧前端未编辑；个人GitHub映射不含本组三仓，未另行同步。原始报告全部保留，回滚用本任务独立revert，不删journal或重发未知命令。剩余为typed vendor确认接线、权威航权/控制源失效契约、完整设备/天气只读数据、MySQL及线上/设备验收，整体目标保持进行中。
 
 收尾仅延长10分钟用于证据格式、提交、文档及远端SHA核验；不增加模型、产品功能或外部业务副作用。
+
+## 厂商请求完整确认链任务卡（2026-10-17）
+
+基线为干净的Agent `35f3d720d02db3cf47aeded76d586dcbce6b0cc8`、UI `77639f2f335019440b37a14d19a1ca21cef95868`、Java本地 `af034e1b16512a67d96d57ef2f12c7518c98a898`，沿用各自语义开发分支。目标是在原Agent循环、会话、确认卡、pending及SQLite journal内接入独立typed vendor请求：明确厂商航权申请、进入DRC、退出DRC；验收为自然语言提议、逐项确认、固定Java POST、原身份分型GET、独立请求回执及重启/并发/过期/未知不重发。旧59项动作、平台取放权及键鼠模式语义不变，默认不开启新工具或写能力。
+
+输入来自已核验的Java HTTP/service/VO、实际WebConfig序列化、现有快照及合成外部模型/HTTP响应；输出为最小兼容实现、单元/服务/浏览器测试、真实Java合成fixture和证据。模式为离线候选，身份为本机开发进程及合成操作者；root预算70分钟/180次开发调用，executor50分钟/100次，UI45分钟/100次，Javafixture30分钟/60次，真实模型预算0。继续使用TDD，仅在外部模型和Java HTTP边界注入替身，原loop/executor/journal和converter真实运行。
+
+请求工具默认关闭且方法allowlist为空；启用不改变旧movement开关或授权拒绝原因。确认保守绑定原快照采样/接收时间最小值加5秒、同一版本和平台owner租约，Java最终重新鉴权；Java请求成功只表示该method一次请求的结果，持续航权与DRC仍unknown、设备效果not_verified，不能自动续接飞行动作。允许本地源码、私有临时SQLite/H2、离线构建、回环夹具及已有权限内开发分支提交推送；Java仅本地提交，不重试被拒下载/推送。非目标为持续航权协议、broker provider、业务库迁移、真实模型改善、真实媒体/设备和共享部署。启动Java业务应用、平台设备写入、共享发布及具体设备验收仍需覆盖动作的明确授权。
+
+### Agent确认链交付
+
+三种厂商请求已在原loop/session/card/pending/journal接通，自然语言提议只生成typed卡，原五字段确认后最多一次POST，GET严格关联原记录的方法、身份和资源。默认仍59工具，独立开关和非空服务端方法白名单同时启用才有第60个提议工具。旧取放权、键鼠模式、动作权限与movement回执不变；厂商结果不创建飞行waiting、不恢复原意图或允许继续。用户明确改口能替换澄清中的旧意图；模型把DRC换成键鼠模式、错方法或无请求取权均澄清。可信卡在owner变化/过期时的本地拒绝保留vendor种类，避免前端误标为提交结果未知。
+
+主Agent最终独立运行 `bash tools/ci/offline_tests.sh` 为 **619/619**（4.765秒），含外部socket守护，新增29个测试方法；公开会话/装配12、executor/decoder16、Java原样fixture1（内含13案例，不混为13方法）。严格UTF-8/重复键、signed32失败码、过期/unknown、终态证据冻结、并发SQLite与GET早到POST晚回、取消/重置/跨会话、关闭写开关重启查询均通过。原59-tool schema和prompt v1.1哈希核对未变，没有新增真实模型评测。
+
+Java仅新增测试导出和合成证据，本地提交 `e623312c173fd698657a39fa22e4ad98c0630a80`；生产代码仍为 `af034e1`。完整11模块232/232由其真实Maven运行获得，root逐份核对10份源码/测试及提交字节、23份当次XML哈希/计数/时间，没有重复跑未变化的Maven。原样13案例、2快照、56份HTTP正文通过实际RestAop/WebConfig converter导出，90,137字节按原样复制为 [Java厂商fixture](../fixtures/ktd-vendor-http-v1.json)，相邻provenance绑定来源、hash与Java提交。
+
+主Agent正式回环HTTP验收为 [vendor-control-smoke报告](../artifacts/vendor-control-smoke-20261017-final/report.json)：46次Agent HTTP、51次自有Java假服务HTTP、3次vendor POST、6次脚本模型决定、8份严格18字段公开回执，97次连接全部限制在两个自有127.0.0.1端口；25份源码/fixture运行前后hash一致。包含三方法、成功/负int-min失败/unknown、重复确认不重发、默认关闭、显式移动拒绝、取消/重置、身份/严格查询与重启关闭后GET。原始包独立解码阶段不改字节；HTTP阶段仅在明确合成副本重绑本次请求标识，差异逐项保存。这不是在线Java或模型准确率验收。两份开发run原样保留，不覆盖正式报告。
+
+实现文件为 `cockpit.py/ktd_platform.py/vendor_control.py/platform_runtime.py`、启动器、三个测试及smoke；完整命令、9份最终源码hash、红绿与验证分层见 [根Agent证据](evidence/cockpit-vendor-request-20261017.json)。回退关闭独立vendor开关/白名单或独立revert，保留journal及未知请求，不自动重发。UI的最终浏览器冻结另行记录；本切片真实模型、业务库、真实MQTT/平台/设备写入和共享部署/重启均0，持续航权/DRC、MySQL及完整线上UI/业务和设备效果仍未验证。

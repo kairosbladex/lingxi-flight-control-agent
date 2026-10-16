@@ -286,3 +286,21 @@ enter凭据来自可选服务端 `DrcBrokerProvider`，无默认实现；缺失�
 本切片只形成离线候选。人工需先审核DDL、按正式线流程部署候选、验证同版本MySQL行为，并提供有来源的实际机型/固件、原始回包、设备时钟、业务操作者到厂商航权的绑定和链路状态，再设计隔离真机验收。当前不把测试中的已验证内部值对象当作生产HTTP授权已放行。
 
 回退优先关闭Agent控制开关与Javatracking开关，保留日志和未解决命令；不自动删除审计表、不将未知命令标成功、不重发。未带tracking的旧Java调用保持原业务分支。新增本地版本可通过独立revert提交回退，不改写共享历史。
+
+## 独立厂商请求的Agent确认契约（2026-10-17）
+
+Java候选已有默认关闭的专用POST `/screen/uav/operation/control/vendor-request` 和GET `/lingxi/agent/commands/vendor-receipt`。Agent沿用原会话、五个确认字段、pending与SQLite journal，追加typed `VendorControlRequest`，没有新增Agent循环。旧59项动作、`control_acquire/release`、键鼠/摇杆模式和movement回执v1保持原含义。
+
+服务端 `FLIGHT_AGENT_VENDOR_METHODS` 是JSON字符串数组，默认 `[]`，仅允许无重复的 `flight_authority_grab/drc_mode_enter/drc_mode_exit`。启动器另有 `--enable-vendor-requests`，默认关闭；只有两者同时配置才增加单独的 `request_vendor_control(method)` 工具行，domain为 `vendor_request`。这行仅说明配置允许提议，不能代替Java员工 `taskManage:Issued`、资源和owner鉴权；也不会开启 `--enable-platform-control`、改变原拒绝原因或距离能力。本文是离线候选契约，不是启用真实设备的授权。
+
+确认卡新增 `kind=vendor_control_request`、`action=request_vendor_control`、`parameters={method:…}`，仍用原五字段确认与取消。用户必须单独明确厂商航权申请、进入DRC或退出DRC；模型替换成别的方法、能力询问、否定、历史或伪造审批材料不出卡。预览不提交控制POST；确认不再调用模型改参数。取消、新输入、重置、快照内容/版本变化及控制权变化使旧卡失效。
+
+卡和POST授权期限保守取原卡TTL、原快照 `observed_at+5` 与平台owner租约最小值，不能按重新获取/生成快照时间续期。Java新POST要求 `now<expiresAt<=now+5`；Agent进一步收紧到原遥测时效。这一额外收紧来自Agent，不能声称Java vendor service本身已有独立的遥测过期门禁。`snapshotVersion`、原期限及完整typed请求持久绑定，不在重复确认或重启恢复时重造期限。
+
+POST为平面 `schemaVersion=lingxi-vendor-control-request/v1`、`method/commandId/idempotencyKey/traceId/siteId/hangarId/droneId/snapshotVersion/expiresAt`，有真实task才附 `taskId`；不发送员工、broker、client、原始报文或 `tracking`。GET由原journal推导method和资源，不能由浏览器指定。HTTP使用固定路径、严格重复键JSON解析、无重定向和无自动重试。先持久unknown屏障，再最多一次POST；即使返回错误信封或解析失败，也不能推断“肯定未发”而重发。
+
+Java vendor VO恰好25字段，独立schema为 `lingxi-vendor-control-result/v1`、kind为 `vendor_service_result`，发送标识只有bid/tid，没有fly_to_id。状态为 `dispatching/submitted/request_succeeded/failed/expired/unknown/conflict`。result_code是可空的有符号32位整数：0对应请求成功、非零对应失败（包括负值），错误码须与 `DEVICE_RESULT_<int>` 一致。实际WebConfig将外层R空值转为空串，但局部VO保留内部null；不能复用movement解码器或只手拼序列化样本。
+
+浏览器只手动查询 `GET /api/flight-control/agent/vendor-receipt?command_id=…&context_version=…`，使用原网关/会话身份，只接受这两个单值参数与空正文。成功严格18字段：`success/schema_version/execution_mode/kind/command_id/context_version/method/reported_status/report_source/receipt_version/reported_at/received_at/result_code/vendor_authority/drc_link/device_effect/continuation_allowed/trace_id`。固定值为 `true`、`vendor-control-receipt/v1`、`platform`、`vendor_service_result`、`ktd-command-journal`、`unknown/unknown`、`not_verified` 和 `false`。不暴露actor、资源内部绑定、幂等键、发送标识、私有报告或凭据。
+
+父确认回执仍是submitted/unknown/rejected/cancelled，不把厂商终态当movement accepted/completed；终态通过分型GET查询。成功只表示本method这一次请求结果，不能授予持续航权、DRC活动状态或飞行续接。厂商结果窗为首次提交加120秒，与5秒快照和owner租约分开；到期仅投影dispatching/submitted，unknown不自动变expired。旧版本不能覆盖新结果，同版本矛盾拒绝；重启可查询已提交记录，但不恢复飞行意图、不重新提交。关闭Agent写开关用于回退时保留journal与未知记录。

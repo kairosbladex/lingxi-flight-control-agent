@@ -25,7 +25,7 @@ from .full_control import (
     ACTION_SPECS, FlightControlAction, FlightControlActionRequest, RuntimeBinding,
     _CONTROL_FREE_ACTIONS, parameter_json_schema,
 )
-from .models import DecisionKind, LoopStatus, ModelDecision, ToolDefinition, ToolSchema
+from .models import DecisionKind, LoopStatus, ModelDecision, ToolDefinition, ToolParameter, ToolSchema
 from .ktd_platform import KtdPlatformError
 from .ollama_decider import ModelOutputTruncatedError, ModelTimeoutError, PromptBudgetExceeded
 from .safety import SafetyFastPath
@@ -85,6 +85,24 @@ def _control_request_agrees(action, text):
     pattern = _CONTROL_REQUESTS.get(action)
     return pattern is None or any(pattern.match(clause) and not _CONTROL_EXPLANATION.search(clause)
                                   for clause in re.split(r'[,，;；。.!！?？\n]', text))
+
+
+_VENDOR_REQUESTS = {
+    'flight_authority_grab': re.compile(_CONTROL_REQUEST_PREFIX
+        + r'(?:申请|获取|取得|请求|夺取)(?:DJI|大疆|厂商)(?:的)?(?:厂商)?(?:飞控)?航权'
+        r'|\s*(?:(?:please|now|i want to|i would like to)\s+)*'
+        r'(?:request|grab|acquire)\s+(?:the\s+)?(?:DJI|vendor)\s+(?:flight\s+)?authority', re.I),
+    'drc_mode_enter': re.compile(_CONTROL_REQUEST_PREFIX + r'(?:进入|开启|启用|打开)\s*DRC(?:模式)?'
+        r'|\s*(?:(?:please|now|i want to|i would like to)\s+)*(?:enter|enable|start)\s+(?:the\s+)?DRC(?:\s+mode)?', re.I),
+    'drc_mode_exit': re.compile(_CONTROL_REQUEST_PREFIX + r'(?:退出|关闭|停用)\s*DRC(?:模式)?'
+        r'|\s*(?:(?:please|now|i want to|i would like to)\s+)*(?:exit|disable|stop)\s+(?:the\s+)?DRC(?:\s+mode)?', re.I),
+}
+
+
+def _vendor_request_agrees(method, text):
+    pattern = _VENDOR_REQUESTS.get(method)
+    return (pattern is not None and not re.search(r'[?？]', text)
+            and pattern.fullmatch(text.strip().rstrip('。.!！').strip()) is not None)
 
 
 _NON_IMMEDIATE = re.compile(
@@ -147,7 +165,7 @@ def _model_failure_code(error):
 
 
 def build_proposal_registry(executor):
-    """Same 59 action contracts, with unreachable mutation handlers."""
+    """Same 59 action contracts, plus explicitly enabled typed vendor proposals."""
     runtime = coerce_executor(executor)
     registry = ToolRegistry(runtime_context_provider=runtime.runtime_context)
     for action, spec in ACTION_SPECS.items():
@@ -161,6 +179,15 @@ def build_proposal_registry(executor):
             action.value, spec.description, ToolSchema(parameters, spec.required),
             forbidden if mutating else lambda _args: dict(runtime.read_state()),
             side_effect=mutating, requires_confirmation=mutating,
+        ))
+    vendor_methods = getattr(runtime, 'vendor_request_methods', ())
+    if vendor_methods:
+        registry.register(ToolDefinition(
+            'request_vendor_control',
+            '仅在用户单独明确要求时请求DJI厂商飞控航权、进入DRC或退出DRC；不等于平台取放控制权或键鼠模式。'
+            '成功只表示本次厂商请求结果，不证明持续航权、DRC链路或飞行完成。',
+            ToolSchema({'method': ToolParameter('string', enum=tuple(vendor_methods))}, ('method',)),
+            forbidden, side_effect=True, requires_confirmation=True,
         ))
     return registry
 
@@ -458,6 +485,7 @@ class CockpitService:
         # Durable device evidence is internal. Only the explicitly projected
         # receipt endpoint may expose its public report fields.
         fields.pop('device_report', None)
+        fields.pop('vendor_report', None)
         return {'execution_mode': self.execution_mode, 'dispatched': False,
                 'device_effect': 'not_verified', **fields}
 
@@ -521,13 +549,16 @@ class CockpitService:
             except SessionError:
                 raise _ApiError('INVALID_SESSION', '缺少有效的独立会话标识。') from None
             receipt_route = route == '/api/flight-control/agent/receipt' and method == 'GET'
+            vendor_receipt_route = route == '/api/flight-control/agent/vendor-receipt' and method == 'GET'
             visuals_route = route == '/api/flight-control/visuals' and method == 'GET'
-            payload = (self._receipt_query(path, body) if receipt_route else
+            payload = (self._receipt_query(path, body) if receipt_route or vendor_receipt_route else
                        self._visuals_query(path, body) if visuals_route else json.loads(body or '{}'))
             if not isinstance(payload, dict):
                 raise _ApiError('INVALID_REQUEST', '请求体必须是JSON对象。')
             if receipt_route:
                 result = self._command_receipt(session_id, payload)
+            elif vendor_receipt_route:
+                result = self._vendor_receipt(session_id, payload)
             elif visuals_route:
                 result = self._visuals(session_id, payload)
             elif route in {'/api/flight-control/context', '/api/flight-control/state'} and method == 'GET':
@@ -683,6 +714,30 @@ class CockpitService:
             'received_at': receipt['received_at'], 'continuation_allowed': continuation_allowed,
             'device_effect': 'not_verified', 'trace_id': receipt['trace_id']}
 
+    def _vendor_receipt(self, session_id, payload):
+        self._version(payload)
+        query = getattr(self.executor, 'query_vendor_receipt', None)
+        if self.execution_mode != 'platform' or not callable(query):
+            raise _ApiError('RECEIPT_UNSUPPORTED', '当前执行器不支持厂商请求回执查询。', status='rejected')
+        with self._lock:
+            self._session(session_id)
+        try:
+            receipt = query(payload['command_id'], idempotency_key=payload['command_id'],
+                            context_version=payload['context_version'])
+        except KtdPlatformError as exc:
+            raise _ApiError(str(exc), '暂时无法读取厂商请求回执，请稍后重试。', 503) from None
+        self._version(payload)
+        # This independent request result never restores active flight intent,
+        # completes a movement step, or grants sustained authority.
+        return {'schema_version': 'vendor-control-receipt/v1', 'execution_mode': 'platform',
+            'kind': 'vendor_service_result', 'command_id': receipt['command_id'],
+            'context_version': receipt['context_version'], 'method': receipt['method'],
+            'reported_status': receipt['status'], 'report_source': 'ktd-command-journal',
+            'receipt_version': receipt['version'], 'reported_at': receipt['reported_at'],
+            'received_at': receipt['received_at'], 'result_code': receipt['result_code'],
+            'vendor_authority': 'unknown', 'drc_link': 'unknown', 'device_effect': 'not_verified',
+            'continuation_allowed': False, 'trace_id': receipt['trace_id']}
+
     def _context(self):
         definitions = build_proposal_registry(self.executor).definitions()
         available = getattr(self.executor, 'available_actions', None)
@@ -690,8 +745,10 @@ class CockpitService:
             available = available()
         tools = []
         for definition in definitions:
-            enabled = available is None or definition.name in available
-            tools.append({'action': definition.name, 'domain': ACTION_SPECS[FlightControlAction(definition.name)].domain,
+            vendor = definition.name == 'request_vendor_control'
+            enabled = vendor or available is None or definition.name in available
+            tools.append({'action': definition.name,
+                'domain': 'vendor_request' if vendor else ACTION_SPECS[FlightControlAction(definition.name)].domain,
                 'description': definition.description,
                 'parameters': {key: parameter_json_schema(value) for key, value in definition.schema.properties.items()},
                 'required': list(definition.schema.required), 'available': enabled,
@@ -770,7 +827,8 @@ class CockpitService:
                 replacement = _ordered_motion_steps(text)
                 single = _explicit_motion_step(text)
                 replacement_source = _single_motion_source(text) or (single[0] if single else None)
-                if replacement is not None or replacement_source is not None:
+                vendor_replacement = any(_vendor_request_agrees(method, text) for method in _VENDOR_REQUESTS)
+                if replacement is not None or replacement_source is not None or vendor_replacement:
                     # 新动作方向即使缺参，也不能借旧句数值、方向和进度。
                     grounding_text = text
                     session.completed_steps.clear()
@@ -861,6 +919,14 @@ class CockpitService:
         common = {'request_id': request_id, 'state': self._state()}
         if result.tool_call and result.checkpoint.confirmation_binding:
             call = result.tool_call
+            vendor = call.name == 'request_vendor_control'
+            vendor_intent = any(_vendor_request_agrees(method, grounding_text) for method in _VENDOR_REQUESTS)
+            if vendor_intent and not vendor:
+                return self._base(status='clarification',
+                    message='厂商请求不能替换为平台控制权、键鼠模式或飞行动作，请重新明确本次请求。', **common)
+            if vendor and not _vendor_request_agrees(call.arguments.get('method'), grounding_text):
+                return self._base(status='clarification',
+                    message='请单独明确要申请厂商飞控航权、进入DRC还是退出DRC；不会替换平台控制权或键鼠操作。', **common)
             if not _control_request_agrees(call.name, grounding_text):
                 return self._base(status='clarification',
                     message='本次没有明确请求这项控制权操作，请重新说明动作；我不会替你申请或释放控制权。', **common)
@@ -879,8 +945,13 @@ class CockpitService:
                 return self._base(status='clarification',
                     message='动作建议与明确顺序中的下一项不一致，请重新说明要执行的下一项。', **common)
             command = uuid4().hex
-            request = FlightControlActionRequest(command, command, call.name, dict(call.arguments), self.binding.context_version)
-            receipt = self.executor.preview(request).to_dict()
+            if vendor:
+                from .vendor_control import VendorControlRequest
+                request = VendorControlRequest(command, command, call.arguments['method'], self.binding.context_version)
+                receipt = self.executor.preview_vendor_request(request).to_dict()
+            else:
+                request = FlightControlActionRequest(command, command, call.name, dict(call.arguments), self.binding.context_version)
+                receipt = self.executor.preview(request).to_dict()
             if receipt['status'] != 'preview_required':
                 return self._base(**{**receipt, **common})
             card = {**self._confirmation(receipt), 'action': call.name, 'parameters': dict(call.arguments),
@@ -888,8 +959,12 @@ class CockpitService:
                     if isinstance(receipt['expires_at'], str) else receipt['expires_at'],
                     'execution_mode': self.execution_mode,
                     'receipt_tracking': receipt.get('receipt_tracking', False)}
+            if vendor:
+                card['kind'] = 'vendor_control_request'
             session.card = card
-            return self._base(status='preview_required', message='请核对动作与参数，确认后仅执行这一项。', card=deepcopy(card), **common)
+            return self._base(status='preview_required',
+                message=('请核对厂商请求；结果不代表持续航权或DRC链路，确认后仅提交这一项。'
+                         if vendor else '请核对动作与参数，确认后仅执行这一项。'), card=deepcopy(card), **common)
         if result.status == LoopStatus.CLARIFICATION:
             return self._base(status='clarification', message=result.message, **common)
         if result.status == LoopStatus.FINAL:
@@ -913,13 +988,15 @@ class CockpitService:
                 return self._base(status='rejected', error_code='CONFIRMATION_MISMATCH',
                                   message='确认卡不存在、已被替换或不属于当前会话。', state=self._state())
             if not cancel:
-                action = FlightControlAction(card['action'])
+                vendor = card.get('kind') == 'vendor_control_request'
+                action = None if vendor else FlightControlAction(card['action'])
                 raw_state = self.executor.read_state()
-                if (action not in _CONTROL_FREE_ACTIONS and action != FlightControlAction.READ_STATE
+                if ((vendor or action not in _CONTROL_FREE_ACTIONS and action != FlightControlAction.READ_STATE)
                         and raw_state.get('control_owner') != self.binding.actor_id):
                     self._invalidate(session)
                     return self._base(status='rejected', error_code='CONTROL_NOT_OWNED',
-                                      message='控制权已变化，请重新检查。', state=self._state())
+                                      message='控制权已变化，请重新检查。', state=self._state(),
+                                      **({'kind': 'vendor_control_request'} if vendor else {}))
             method = self.executor.cancel if cancel else self.executor.confirm
             receipt = method(**payload).to_dict()
             session.card = None
@@ -931,6 +1008,7 @@ class CockpitService:
             response['dispatched'] = self.execution_mode == 'platform' and receipt['status'] in {'submitted', 'unknown'}
             session.receipts[(fingerprint, cancel)] = response
             if (not cancel and self.execution_mode == 'platform'
+                    and card.get('kind') != 'vendor_control_request'
                     and receipt['status'] in {'submitted', 'unknown'}
                     and card.get('receipt_tracking') is True and session.active_intent):
                 session.waiting = _WaitingCommand(card['command_id'], card['context_version'],

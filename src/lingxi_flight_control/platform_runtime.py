@@ -25,6 +25,7 @@ class PlatformRuntimeConfig:
     allow_insecure_http: bool = False
     media_allowed_origins: tuple[str, ...] = ()
     media_allow_insecure_http: bool = False
+    allowed_vendor_methods: tuple[str, ...] = ()
 
     def __post_init__(self):
         self.binding.validate()
@@ -47,6 +48,12 @@ class PlatformRuntimeConfig:
         from .ktd_visuals import validate_media_origins
         object.__setattr__(self, 'media_allowed_origins', validate_media_origins(
             self.media_allowed_origins, allow_insecure_http=self.media_allow_insecure_http))
+        vendor_methods = self.allowed_vendor_methods
+        if (not isinstance(vendor_methods, tuple)
+                or any(not isinstance(value, str) or value not in {
+                    'flight_authority_grab', 'drc_mode_enter', 'drc_mode_exit'} for value in vendor_methods)
+                or len(set(vendor_methods)) != len(vendor_methods)):
+            raise ValueError('FLIGHT_AGENT_VENDOR_METHODS 必须为无重复的厂商方法白名单')
 
     @classmethod
     def from_environment(cls, environment: Mapping[str, str]) -> PlatformRuntimeConfig:
@@ -69,6 +76,12 @@ class PlatformRuntimeConfig:
             media_origins = json.loads(environment.get('FLIGHT_AGENT_MEDIA_ALLOWED_ORIGINS', '[]'))
         except (ValueError, TypeError):
             raise ValueError('FLIGHT_AGENT_MEDIA_ALLOWED_ORIGINS 必须是JSON数组') from None
+        try:
+            vendor_methods = json.loads(environment.get('FLIGHT_AGENT_VENDOR_METHODS', '[]'))
+        except (ValueError, TypeError):
+            raise ValueError('FLIGHT_AGENT_VENDOR_METHODS 必须是JSON数组') from None
+        if not isinstance(vendor_methods, list):
+            raise ValueError('FLIGHT_AGENT_VENDOR_METHODS 必须是JSON数组')
         return cls(
             base_url=required('KTD_BASE_URL'),
             binding=RuntimeBinding(required('KTD_ACTOR_EMPLOYEE_ID'), required('KTD_PROJECT_ID'),
@@ -81,18 +94,21 @@ class PlatformRuntimeConfig:
             allow_insecure_http=raw_http == 'true',
             media_allowed_origins=media_origins,
             media_allow_insecure_http=media_http == 'true',
+            allowed_vendor_methods=tuple(vendor_methods),
         )
 
 
 def build_platform_cockpit(config: PlatformRuntimeConfig, decider_factory, *,
-                           enable_control: bool = False, opener=None, clock=time.time):
+                           enable_control: bool = False, enable_vendor_requests: bool = False,
+                           opener=None, clock=time.time):
     """将既有Agent会话接到Java适配器；构建本身不请求Java或模型。"""
     from .cockpit import CockpitService
     from .ktd_platform import KtdPlatformExecutor, SqliteCommandJournal
     from .ktd_snapshot import KtdSnapshotProvider
     from .ktd_visuals import KtdVisualsProvider
 
-    if not isinstance(config, PlatformRuntimeConfig) or type(enable_control) is not bool:
+    if (not isinstance(config, PlatformRuntimeConfig) or type(enable_control) is not bool
+            or type(enable_vendor_requests) is not bool):
         raise ValueError('平台运行配置或控制开关无效')
     if not callable(decider_factory) or not callable(clock):
         raise ValueError('模型工厂和时钟必须可调用')
@@ -107,7 +123,8 @@ def build_platform_cockpit(config: PlatformRuntimeConfig, decider_factory, *,
     journal = SqliteCommandJournal(config.journal_path)
     executor = KtdPlatformExecutor(config.binding, site_id=config.site_id, task_id=config.task_id,
         transport=transport, snapshot_provider=provider, journal=journal,
-        enabled=enable_control, track_commands=True, clock=clock)
+        enabled=enable_control, track_commands=True, clock=clock,
+        enable_vendor_requests=enable_vendor_requests, allowed_vendor_methods=config.allowed_vendor_methods)
     visuals = KtdVisualsProvider(config.binding, site_id=config.site_id, task_id=config.task_id,
         transport=transport, allowed_origins=config.media_allowed_origins,
         allow_insecure_http=config.media_allow_insecure_http, clock=clock)
