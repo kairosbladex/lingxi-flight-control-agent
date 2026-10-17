@@ -1,6 +1,8 @@
 # 继续工作
 
-当前目标是自然语言理解、澄清、确认、指定前端与原Java控制接口的完整流程；整体仍在进行中。
+当前目标以2026-10-17用户最新指令为准：默认右下角气泡，点击打开传统聊天窗口，复用自然语言理解、澄清、确认及原Java适配链。此软件切片已实现并完成离线交付；UI `ecc7798e2f3da81c007bfa7031c7f1cc61fd0507` 已推送核验。完整驾驶舱仅为 `?mode=cockpit` 兼容入口，设备详情/天气和全驾驶舱对齐停止扩展。不要因下文历史目标继续扩大UI。
+
+最新[气泡聊天证据](evidence/chat-bubble-20261017.json)：root独立复跑后端619/619、前端140/140及构建、1个HTTP综合回归、27气泡/22实际Agent-Java适配链/115兼容场景。新 `FlightChatWidget.vue` 首开加载，隐藏不重置、不重发；局部样式可独立嵌入，IME/Escape、移动短视口和长会话隐藏期间返回后的最新消息均验证。最终自有假Java链为12 Agent HTTP/6脚本模型/22快照GET/1回执GET/1控制POST，确认前及取消后0POST，手动回执不重发。fixture仅固定合成配置/自有端口，最新源hash `21bc3a88…`；原Javaconverter SHA `19f13c59…` 未变。所有最终报告与10张PNG随UI提交保存，115旧入口JSON另保存，其大图仍在原临时run目录。无新真实模型评测、共享部署、业务写入或设备动作，真实控制默认关闭。
 
 2026-10-17最新Agent产品 **`e0ef1e744b13fd723b12962ea7414b060df2bcf2`** 已推送核验：原loop/session/card/pending/SQLite journal接通独立vendor请求确认链，默认关闭且方法allowlist空；原59动作、prompt v1.1与movement门禁不变。最终唯一离线 **619/619**、socket守护及diff通过；29个新方法覆盖完整服务、默认关闭、错方法/键鼠串用、取消、时效、幂等并发/重启/未知不重发及原Java13案例。正式自有回环HTTP46次Agent/51次假Java、3次vendor POST、6次脚本模型决定、8份严格18字段报告，25份source前后hash稳定，真实平台/模型/设备0。见[完整请求链证据](evidence/cockpit-vendor-request-20261017.json)及[正式smoke](../artifacts/vendor-control-smoke-20261017-final/report.json)。
 
@@ -8,7 +10,7 @@ Java最新本地 **`e623312c173fd698657a39fa22e4ad98c0630a80`** 仅追加真实H
 
 UI最新 **`21b9239a0e81e194e771bcacfa408f624d87efdd`** 已推送核验、工作区干净：140项/构建及115离线浏览器场景（旧102+新13vendor），224夹具API/31确认、0禁止/设备/浏览器错误。root独立重跑单测/构建、核验最终原始JSON/67份source-run-build hash/11份提交字节和三张vendor图，见[UI复核](evidence/cockpit-vendor-ui-20261017.json)。厂商结果手动独立查询，18字段/七状态/signed32，authority/link未知且无continue；取消和明确零发送拒绝清查询引用。Git保留最终原始JSON、3关键PNG及红绿/来源/恢复索引；193份重复完整run原图可从 `/tmp/lingxi-vendor-ui-20261017.6TxuXx` 按UI provenance逐项恢复，未删除或改写。原模型报告、固定旧UI及原Java工作树保持。
 
-后续可继续核验employee/DRC/control_source的来源、版本及失效契约，以及有来源的设备详情/天气只读投影。当前5秒确认窗只针对一次厂商请求，成功不能解锁movement或恢复飞行意图；持续航权、默认Broker provider、真实固件、MySQL及设备效果仍缺证据。前端typed卡与结果使用原助手位置、确认链及独立手动查询，不新增控制按钮。下文是历史快照，不能将其中“无HTTP/Agent入口”的旧结论当作当前状态。
+employee/DRC/control_source的来源、版本及失效契约仍是后续真实控制前提，本轮不为聊天入口扩大此项实现；设备详情/天气不再推进。当前5秒确认窗只针对一次厂商请求，成功不能解锁movement或恢复飞行意图；持续航权、默认Broker provider、真实固件、MySQL及设备效果仍缺证据。前端typed卡与结果使用原确认链及独立手动查询，不新增控制按钮。下文是历史快照，不能将其中“无HTTP/Agent入口”的旧结论或全驾驶舱后续项当作本轮范围。
 
 原服务bench `b7f428c` 的102条/59动作、修复前90匹配/6不匹配/6超时，以及prompt v1.1相同6条定向6/6、其余96条missing全部原样保留；本轮没有重新请求真实模型或改变provider。它们与619工程门禁分开，不推断新模型准确率，见[门禁定向证据](evidence/cockpit-request-authority-20261017.json)和[原全量报告](evidence/cockpit-service-intents-20261016.json)。
 
