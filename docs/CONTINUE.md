@@ -10,6 +10,8 @@
 
 2026-10-19 J2 完成本地提交 **`b7dcd14`**（未推送，待操作级授权）：新增严格只读 `HttpKtdSnapshotClient`，绑定操作者、项目/站点/机库/无人机/任务、快照版本、5秒内遥测、在线/空中、完整位姿、`permissions`/`capabilities`/`action_availability`、控制 owner 与租约，命令授权窗不得超过快照有效期或租约；新增只保护 `/api/v1/flight-control` 的可信网关头（Bearer 凭据通过后才信任项目/操作者头）。`./mvnw -B verify` **33/33**；隔离实例用本地假快照 18093 + Java 18091 验证合法请求 `submitted`、错误网关 `401`、快照版本不匹配 `403 SNAPSHOT_BINDING_MISMATCH`，实例已停止。仍无 MQTT、设备、Postgres；J3/J4 未做，真实写入仍需单独授权。
 
+2026-10-19 J3 完成本地提交 **`d8454d2`**（未推送）：新增 `DjiCommandEncoder` 与严格 `DjiReceiptParser`。Encoder 按现有 `DJUtil` 语义构造相机/录像/云台 `services` 报文和六向移动 `fly_to_point`，保留 20 米相对高度门禁与 2–10000 米目标高限制；Parser 覆盖 `services_reply` 与 `fly_to_point_progress`，成功/进行中携带非零 result 映射 `conflict`，拒绝重复键、尾随内容、时间越界和非法标识。冻结 fixture `src/test/resources/flightcontrol/dji-receipts-v1.json`（10 案例 + provenance）。`./mvnw -B verify` **41/41**；命令/回执往返按 `bid/tid` 与 `fly_to_id` 关联。仍不发布 MQTT、不控制设备；`gatewaySn`/`payloadIndex` 及厂商/负载航权等待留给 J4。
+
 2026-10-17最新Agent产品 **`e0ef1e744b13fd723b12962ea7414b060df2bcf2`** 已推送核验：原loop/session/card/pending/SQLite journal接通独立vendor请求确认链，默认关闭且方法allowlist空；原59动作、prompt v1.1与movement门禁不变。最终唯一离线 **619/619**、socket守护及diff通过；29个新方法覆盖完整服务、默认关闭、错方法/键鼠串用、取消、时效、幂等并发/重启/未知不重发及原Java13案例。正式自有回环HTTP46次Agent/51次假Java、3次vendor POST、6次脚本模型决定、8份严格18字段报告，25份source前后hash稳定，真实平台/模型/设备0。见[完整请求链证据](evidence/cockpit-vendor-request-20261017.json)及[正式smoke](../artifacts/vendor-control-smoke-20261017-final/report.json)。
 
 Java最新本地 **`e623312c173fd698657a39fa22e4ad98c0630a80`** 仅追加真实HTTP fixture导出测试/证据，生产仍为 `af034e1`；11模块232/232、10份源码/测试及23份XML由root逐项核对，未重复跑Maven、未重试推送或部署。原样13案例/2快照/56份HTTP正文已复制 [fixture](../fixtures/ktd-vendor-http-v1.json) 和相邻provenance（SHA `c73c7be7…`）。独立POST/分型GET复用原service/journal与鉴权，Agent现已接入确认；所有生产控制默认开关和持续航权/链路未知门禁继续保持。

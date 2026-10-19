@@ -184,7 +184,7 @@ com.zhuoyi.aiplatform.flightcontrol
 | --- | --- | --- |
 | J1 | 平台内 `flightcontrol` 模块骨架、契约、状态机、内存 transport | **已完成**：本地 Maven 20/20；无 MQTT/设备 |
 | J2 | 只读快照客户端、资源/遥测/owner 绑定、可信网关头 | **已完成**：全量 33/33；隔离实例用本地假快照验证 |
-| J3 | DJI 相机/录像/云台/移动报文与回执解析 | fixture 回放；严格校验状态与矛盾 |
+| J3 | DJI 相机/录像/云台/移动报文与回执解析 | **已完成**：全量 41/41；冻结 fixture 回放与命令/回执往返 |
 | J4 | 真实 MQTT transport，默认关闭 | 隔离环境 + 明确授权后才做真机验证 |
 
 不建议一次复刻全部 59 个动作，也不建议直接复制 ktd_backend 的控制器/操作器整文件。先把“相机 + 移动 + 云台复位”做通，再接航线和其余动作。
@@ -231,8 +231,32 @@ com.zhuoyi.aiplatform.flightcontrol
   - 实例已停止，端口释放；仍无 MQTT、无设备、无 Postgres。
 - 明确未做：Postgres 命令日志、厂商航权/负载航权等待、DJI 报文构造与回执解析、真实 MQTT。当前启用标志仍只是软件演练；快照端点使用 ktd_backend 候选实现，共享环境尚未部署。
 
+### 3.8 J3 落地记录（2026-10-19）
+
+- 本地提交：`d8454d2`（未推送）。
+- `DjiCommandEncoder`：纯报文构造，不发布。
+  - 相机：`camera_photo_take`、`camera_recording_start`、`camera_recording_stop`，data 只带 `payload_index`；
+  - 云台：`gimbal_reset`，data 带 `payload_index`、`reset_mode=0`；
+  - 移动：`fly_to_point`，按当前经纬度、altitude、yaw 计算目标点，`max_speed=5`；
+  - 报文形状：`method/tid/bid/gateway/data/timestamp/need_reply`，topic `thing/product/{gateway}/services`；
+  - 保留 20 米相对高度门禁：低于 20 米返回 `DJI_FLYTO_IMPLICIT_CLIMB`，目标低于 20 米返回 `DJI_LOW_TARGET_UNVERIFIED`；
+  - 目标椭球高限制 2–10000 米。
+- `DjiReceiptParser`：严格解析。
+  - `services_reply`：相机/云台/`fly_to_point`，`result=0` → `accepted`，非零 → `failed`；
+  - `events/fly_to_point_progress`：`wayline_progress/in_progress`、`wayline_ok/completed`、`wayline_failed/failed`、`wayline_cancel/cancelled`，成功/进行中携带非零 result → `conflict`；
+  - 拒绝重复键、尾随内容、topic/gateway 不一致、时间越界、缺失或非法 bid/tid、负返回码。
+- 冻结 fixture：[dji-receipts-v1.json](../src/test/resources/flightcontrol/dji-receipts-v1.json) 及相邻 provenance；10 个合成案例，来源为现有 ktd_backend `DJUtil`/`DJMethod`/`DJTopic`/`DeviceCommandReceipt`。
+- 验证：
+  - `./mvnw -B verify`：**41/41**，构建通过；`git diff --check` 通过；
+  - J3 新增 8 项：encoder 4、parser 2、命令/回执往返 2；
+  - 往返测试证明相机回执按 `bid/tid`、移动进度按 `fly_to_id` 关联。
+- 明确未做：
+  - 报文尚未接入 `FlightControlTransport`，没有发布 MQTT、没有设备动作；
+  - `gatewaySn` 与 `payloadIndex` 当前由调用方提供，快照契约尚未返回这两个事实；J4 必须从权威资源取得，不能靠机型猜测；
+  - 厂商航权/负载航权等待、真实连接绑定和发送屏障仍在 J4。
+
 ## 四、下一步
 
 1. 前端计划卡已完成，可在模拟器计划模式下直接验证。
-2. **J1 已推送；J2 已完成并本地提交**，待确认后再推送。
-3. J3 做 DJI 相机/录像/云台/移动报文与回执解析；J4 才考虑真实 MQTT。真实写入仍需单独授权。
+2. **J1、J2 已推送；J3 已完成并本地提交**，待确认后再推送。
+3. J4 需要把 encoder/parser 接入真实 transport，并补齐 gateway/payload 资源事实、厂商航权与负载航权等待；真实写入仍需单独授权。
