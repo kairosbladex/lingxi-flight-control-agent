@@ -183,7 +183,7 @@ com.zhuoyi.aiplatform.flightcontrol
 | 阶段 | 内容 | 可验证结果 |
 | --- | --- | --- |
 | J1 | 平台内 `flightcontrol` 模块骨架、契约、状态机、内存 transport | **已完成**：本地 Maven 20/20；无 MQTT/设备 |
-| J2 | 只读快照客户端与资源/遥测/owner 映射 | 用 ktd_backend 只读接口或固定夹具验证 |
+| J2 | 只读快照客户端、资源/遥测/owner 绑定、可信网关头 | **已完成**：全量 33/33；隔离实例用本地假快照验证 |
 | J3 | DJI 相机/录像/云台/移动报文与回执解析 | fixture 回放；严格校验状态与矛盾 |
 | J4 | 真实 MQTT transport，默认关闭 | 隔离环境 + 明确授权后才做真机验证 |
 
@@ -192,7 +192,7 @@ com.zhuoyi.aiplatform.flightcontrol
 ### 3.6 J1 落地记录（2026-10-19）
 
 - 仓库/分支：`zhuoyi-ai-platfrom` 的 `feature/agent-flight-control`，从已核验 `origin/prod@e40d672` 创建。
-- 本地提交：`e4e37e8`（未推送，按该仓 `AGENTS.md` 需操作级授权）。
+- 本地提交：`e4e37e8`（已推送，远端 SHA 已核验）。
 - 新增 `com.zhuoyi.aiplatform.flightcontrol`：
   - `CommandRequest` / `ReceiptResponse` v1 契约；
   - `FlightControlAction` 白名单（6 向移动、拍照、开始/停止录像、云台复位）；
@@ -208,8 +208,31 @@ com.zhuoyi.aiplatform.flightcontrol
   - 两个实例均已停止，端口释放；无 MQTT、无设备、无 Postgres。
 - 明确未做：真实 MQTT transport、Postgres 持久化、可信网关头、快照版本绑定、厂商航权/负载航权等待。`snapshot_version` 当前只校验格式，启用标志只代表软件演练。
 
+### 3.7 J2 落地记录（2026-10-19）
+
+- 本地提交：`b7dcd14`（未推送，待操作级授权）。
+- 新增只读快照绑定：
+  - `FlightControlSnapshotClient` 端口 + `HttpKtdSnapshotClient`，调用现有 `GET {base}/lingxi/agent/platform/snapshot`；
+  - 严格校验 `schema_version`、`snapshot_version`、操作者、项目/站点/机库/无人机/任务绑定；
+  - `observed_at` 取 telemetry 的 `sampled_at/received_at` 较早者，要求 ≤5 秒且不晚于当前；
+  - 逐动作校验 `permissions`、`capabilities`、`action_availability`；
+  - 移动另外要求在线、空中、完整位姿、`UAV_MOVE_DISTANCE=true`，DJI 需要 `altitude_m/height_m`，PZ 需要 `height_m`；
+  - 控制 owner 必须等于当前操作者，租约必须存在且未过期；
+  - 命令授权窗 `expires_at` 不得超过快照有效期或控制租约。
+- 可信网关头：`FlightControlGatewayFilter` 只保护 `/api/v1/flight-control`；校验 `Authorization: Bearer`，项目/操作者头只在该凭据通过后才被信任。未配置网关凭据时返回 `503 LX-GATEWAY-AUTH-NOT-CONFIGURED`。
+- 配置：
+  - `ZHUOYI_GATEWAY_BEARER_TOKEN`
+  - `ZHUOYI_FLIGHT_CONTROL_SNAPSHOT_BASE_URL`
+  - `ZHUOYI_FLIGHT_CONTROL_SNAPSHOT_BEARER_TOKEN`
+  - `ZHUOYI_FLIGHT_CONTROL_SNAPSHOT_ALLOW_INSECURE_HTTP`（仅内网/回环，默认 false）
+- 验证：
+  - `./mvnw -B verify`：**33/33**，构建通过；`git diff --check` 通过。
+  - 隔离实例：本地假快照 18093 + Java 18091；合法网关与快照 → `submitted`；错误网关凭据 → `401`；快照版本不匹配 → `403 SNAPSHOT_BINDING_MISMATCH`。
+  - 实例已停止，端口释放；仍无 MQTT、无设备、无 Postgres。
+- 明确未做：Postgres 命令日志、厂商航权/负载航权等待、DJI 报文构造与回执解析、真实 MQTT。当前启用标志仍只是软件演练；快照端点使用 ktd_backend 候选实现，共享环境尚未部署。
+
 ## 四、下一步
 
 1. 前端计划卡已完成，可在模拟器计划模式下直接验证。
-2. **J1 已完成并本地提交**；待确认后再推送或进入 J2。
-3. J2 接只读快照客户端与资源/遥测/owner 映射；J3 做报文/回执；J4 才考虑真实 MQTT。真实写入仍需单独授权。
+2. **J1 已推送；J2 已完成并本地提交**，待确认后再推送。
+3. J3 做 DJI 相机/录像/云台/移动报文与回执解析；J4 才考虑真实 MQTT。真实写入仍需单独授权。
