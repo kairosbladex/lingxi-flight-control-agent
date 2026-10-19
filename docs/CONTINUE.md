@@ -4,6 +4,8 @@
 
 最新[气泡聊天证据](evidence/chat-bubble-20261017.json)：root独立复跑后端619/619、前端140/140及构建、1个HTTP综合回归、27气泡/22实际Agent-Java适配链/115兼容场景。新 `FlightChatWidget.vue` 首开加载，隐藏不重置、不重发；局部样式可独立嵌入，IME/Escape、移动短视口和长会话隐藏期间返回后的最新消息均验证。最终自有假Java链为12 Agent HTTP/6脚本模型/22快照GET/1回执GET/1控制POST，确认前及取消后0POST，手动回执不重发。fixture仅固定合成配置/自有端口，最新源hash `21bc3a88…`；原Javaconverter SHA `19f13c59…` 未变。所有最终报告与10张PNG随UI提交保存，115旧入口JSON另保存，其大图仍在原临时run目录。无新真实模型评测、共享部署、业务写入或设备动作，真实控制默认关闭。
 
+2026-10-19新增**可选的整份计划执行模式**（仅模拟器，默认关闭）：`tools/cockpit_server.py --enable-plan-execution` 时，模型把复合指令拆成最多5步，前端一张计划卡、用户一次确认，系统按顺序逐步骤 `preview → confirm`；任一步失败/异常/控制权或状态版本变化即停止，不自动重试。新增 `src/lingxi_flight_control/plan.py` 与 `tests/test_cockpit_plan_execution.py`，离线 **632/632**。真实模型 `qwen3.5:9b` 探测：“往前飞10米，并帮我拍张照”生成2步计划卡，一次确认后模拟器执行前进10米+拍照（`photo_count=1`、位置变化、revision=2），0设备/平台请求。平台模式构造时拒绝启用；Java 拍照/录像尚无完成回执，真实顺序执行仍需 Java 侧补齐。工具面与话术见[飞控工具与话术清单](flight-control-tool-catalog.md)。
+
 2026-10-17最新Agent产品 **`e0ef1e744b13fd723b12962ea7414b060df2bcf2`** 已推送核验：原loop/session/card/pending/SQLite journal接通独立vendor请求确认链，默认关闭且方法allowlist空；原59动作、prompt v1.1与movement门禁不变。最终唯一离线 **619/619**、socket守护及diff通过；29个新方法覆盖完整服务、默认关闭、错方法/键鼠串用、取消、时效、幂等并发/重启/未知不重发及原Java13案例。正式自有回环HTTP46次Agent/51次假Java、3次vendor POST、6次脚本模型决定、8份严格18字段报告，25份source前后hash稳定，真实平台/模型/设备0。见[完整请求链证据](evidence/cockpit-vendor-request-20261017.json)及[正式smoke](../artifacts/vendor-control-smoke-20261017-final/report.json)。
 
 Java最新本地 **`e623312c173fd698657a39fa22e4ad98c0630a80`** 仅追加真实HTTP fixture导出测试/证据，生产仍为 `af034e1`；11模块232/232、10份源码/测试及23份XML由root逐项核对，未重复跑Maven、未重试推送或部署。原样13案例/2快照/56份HTTP正文已复制 [fixture](../fixtures/ktd-vendor-http-v1.json) 和相邻provenance（SHA `c73c7be7…`）。独立POST/分型GET复用原service/journal与鉴权，Agent现已接入确认；所有生产控制默认开关和持续航权/链路未知门禁继续保持。

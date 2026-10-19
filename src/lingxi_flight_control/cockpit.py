@@ -22,9 +22,10 @@ from urllib.parse import parse_qs, urlsplit
 from .agent import BoundedAgentLoop, ToolRegistry, contains_unsafe_content
 from .executor import coerce_executor
 from .full_control import (
-    ACTION_SPECS, FlightControlAction, FlightControlActionRequest, RuntimeBinding,
-    _CONTROL_FREE_ACTIONS, parameter_json_schema,
+    ACTION_SPECS, FlightControlAction, FlightControlActionRequest, FlightControlStatus,
+    RuntimeBinding, _CONTROL_FREE_ACTIONS, parameter_json_schema,
 )
+from .plan import build_plan_registry, plan_binding_hash, plan_clarify_detector
 from .models import DecisionKind, LoopStatus, ModelDecision, ToolDefinition, ToolParameter, ToolSchema
 from .ktd_platform import KtdPlatformError
 from .ollama_decider import ModelOutputTruncatedError, ModelTimeoutError, PromptBudgetExceeded
@@ -408,6 +409,10 @@ class _ApiError(ValueError):
         self.code, self.http, self.status = code, http, status
 
 
+class _PlanRejected(ValueError):
+    """计划不符合本地门禁；返回澄清，不产生确认卡。"""
+
+
 @dataclass
 class _WaitingCommand:
     command_id: str
@@ -419,6 +424,16 @@ class _WaitingCommand:
 
 
 @dataclass
+class _PendingPlan:
+    """已展示给用户、尚未确认的整份计划。"""
+
+    plan_id: str
+    confirmation_binding: str
+    expires_at: float
+    steps: list[dict]
+
+
+@dataclass
 class _Conversation:
     epoch: int = 0
     turns: int = 0
@@ -426,6 +441,7 @@ class _Conversation:
     active_intent: str = ''
     clarification: bool = False
     card: dict | None = None
+    plan: _PendingPlan | None = None
     last_used: float = 0
     requests: dict = field(default_factory=dict)
     receipts: dict = field(default_factory=dict)
@@ -444,7 +460,9 @@ class CockpitService:
     def __init__(self, binding: RuntimeBinding, executor, decider_factory, *,
                  clock=time.time, store=None, gateway_token=None, max_turns=30,
                  max_model_steps=3, timeout_sec=65, session_ttl_sec=1800,
-                 max_sessions=64, task_id=None, visuals_provider=None):
+                 max_sessions=64, task_id=None, visuals_provider=None,
+                 enable_plan_execution=False, plan_decider_factory=None,
+                 max_plan_steps=5, plan_ttl_sec=120):
         binding.validate()
         self.binding = binding
         self.executor = coerce_executor(executor)
@@ -458,12 +476,30 @@ class CockpitService:
         for value in (max_turns, max_model_steps, timeout_sec, session_ttl_sec, max_sessions):
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
                 raise ValueError('budgets must be positive and finite')
+        if type(enable_plan_execution) is not bool:
+            raise ValueError('enable_plan_execution must be a boolean')
+        if enable_plan_execution:
+            # 本轮只开放模拟器闭环：平台模式缺少可验证的完成回执，不能顺序自动执行。
+            if self.execution_mode != 'simulator':
+                raise ValueError('plan execution is simulator-only until completion receipts are verified')
+            if not callable(plan_decider_factory):
+                raise ValueError('plan execution requires a plan decider factory')
+            if (isinstance(max_plan_steps, bool) or not isinstance(max_plan_steps, int)
+                    or not 1 <= max_plan_steps <= 8):
+                raise ValueError('max_plan_steps must be an integer between 1 and 8')
+            if (isinstance(plan_ttl_sec, bool) or not isinstance(plan_ttl_sec, (int, float))
+                    or not math.isfinite(float(plan_ttl_sec)) or not 1 <= float(plan_ttl_sec) <= 600):
+                raise ValueError('plan_ttl_sec must be between 1 and 600 seconds')
         self._clock, self._factory = clock, decider_factory
         self._store = store or MemoryCheckpointStore(clock=clock, ttl_sec=session_ttl_sec)
         self._gateway = gateway_token
         self._max_turns, self._max_steps = int(max_turns), int(max_model_steps)
         self._timeout, self._ttl, self._max_sessions = timeout_sec, session_ttl_sec, int(max_sessions)
         self._task_id = task_id
+        self._plan_enabled = enable_plan_execution
+        self._plan_factory = plan_decider_factory
+        self._max_plan_steps = int(max_plan_steps)
+        self._plan_ttl = float(plan_ttl_sec)
         if visuals_provider is not None and not callable(visuals_provider):
             raise ValueError('visuals provider must be callable')
         self._visuals_provider = visuals_provider
@@ -520,8 +556,11 @@ class CockpitService:
 
     def _invalidate(self, session):
         if session.card:
-            self.executor.cancel(**self._confirmation(session.card))
+            # 整份计划在确认前没有在执行器里挂单，逐步骤预览发生在确认时。
+            if session.card.get('kind') != 'flight_plan':
+                self.executor.cancel(**self._confirmation(session.card))
             session.card = None
+        session.plan = None
         session.waiting = None
         session.epoch += 1
 
@@ -756,7 +795,9 @@ class CockpitService:
         return self._base(context={'context_id': f'{self.binding.project_id}:{self.binding.drone_id}',
             'project_id': self.binding.project_id, 'hangar_id': self.binding.hangar_id,
             'drone_id': self.binding.drone_id, 'task_id': self._task_id,
-            'context_version': self.binding.context_version}, state=self._state(), tools=tools)
+            'context_version': self.binding.context_version,
+            'plan_execution': {'enabled': self._plan_enabled, 'max_steps': self._max_plan_steps}},
+            state=self._state(), tools=tools)
 
     def _history(self, session_id):
         try:
@@ -860,6 +901,25 @@ class CockpitService:
         started = time.monotonic()
         try:
             safety_call = None if any(mark in text for mark in '?？') else SafetyFastPath().recognize(text)
+            if self._plan_enabled and safety_call is None:
+                response, pending = self._plan_turn(session, epoch, started, model_input,
+                                                   grounding_text, request_id)
+                with self._lock:
+                    if session.epoch != epoch:
+                        response = self._base(status='stale_context',
+                            message='本次理解已取消，迟到结果未采用。', request_id=request_id)
+                    else:
+                        self._version(payload)
+                        if pending is not None:
+                            session.card = deepcopy(response['card'])
+                            session.plan = pending
+                        session.clarification = response['status'] == 'clarification'
+                        self._save_history(session_id, [
+                            {'role': 'user', 'text': text},
+                            {'role': 'assistant', 'status': response['status'], 'text': response['message']},
+                        ])
+                    session.requests[request_id] = (fingerprint, response)
+                    return response
             model_failure_code = None
             try:
                 decider = None if safety_call else self._factory()
@@ -913,6 +973,202 @@ class CockpitService:
                 if session.requests.get(request_id, (None, None))[1] is None:
                     session.requests[request_id] = (fingerprint, self._base(status='error',
                         error_code='MODEL_ERROR', message='本次理解失败，未执行动作。', request_id=request_id))
+
+    # ---- 复合指令：整份计划 -------------------------------------------------
+
+    def _plan_turn(self, session, epoch, started, model_input, grounding_text, request_id):
+        """让模型规划整份计划，返回 (响应, 待确认计划)。
+
+        只在模拟器闭环中启用。规划阶段只记录模型提议，不执行任何动作；
+        用户一次确认后由 ``_finish_plan`` 按顺序逐步骤 preview/confirm。
+        """
+        try:
+            decider = self._plan_factory()
+        except Exception as exc:
+            code = _model_failure_code(exc)
+            return self._base(status='error', error_code=code,
+                              message=_MODEL_FAILURE_MESSAGES[code],
+                              request_id=request_id, state=self._state()), None
+        registry, recorder = build_plan_registry()
+        owner = self
+        plan_failure = None
+
+        class BudgetedPlanDecider:
+            def check_budget(self):
+                nonlocal plan_failure
+                if session.epoch != epoch:
+                    raise ValueError('run cancelled')
+                if time.monotonic() - started > owner._timeout:
+                    plan_failure = 'RUN_BUDGET_EXCEEDED'
+                    raise ValueError(_MODEL_FAILURE_MESSAGES[plan_failure])
+
+            def decide(self, user_message, checkpoint, tools):
+                nonlocal plan_failure
+                self.check_budget()
+                if plan_failure:
+                    raise ValueError(_MODEL_FAILURE_MESSAGES[plan_failure])
+                try:
+                    decision = decider.decide(user_message, checkpoint, tools)
+                except Exception as exc:
+                    plan_failure = _model_failure_code(exc)
+                    raise ValueError(_MODEL_FAILURE_MESSAGES[plan_failure]) from None
+                self.check_budget()
+                return decision
+
+        try:
+            result = BoundedAgentLoop(BudgetedPlanDecider(), registry,
+                                      max_steps=self._max_plan_steps + 1).run(model_input)
+        except Exception as exc:
+            code = plan_failure or _model_failure_code(exc)
+            return self._base(status='error', error_code=code,
+                              message=_MODEL_FAILURE_MESSAGES[code],
+                              request_id=request_id, state=self._state()), None
+        if len(recorder.calls) > self._max_plan_steps:
+            return self._base(status='clarification',
+                              message=f'这条指令需要超过{self._max_plan_steps}步才能完成，请拆成几条更明确的指令。',
+                              request_id=request_id, state=self._state()), None
+        if result.status == LoopStatus.CLARIFICATION:
+            # 规划完成语可能被通用澄清启发式误判（例如“请确认执行”）。
+            # 已有步骤且不是真正索要缺失信息时，按计划完成处理。
+            if not recorder.calls or plan_clarify_detector(result.message):
+                return self._base(status='clarification', message=result.message,
+                                  request_id=request_id, state=self._state()), None
+        elif result.status == LoopStatus.FINAL:
+            if not recorder.calls:
+                return self._base(status='final',
+                                  message=result.message or '本轮没有需要执行的动作。',
+                                  request_id=request_id, state=self._state()), None
+        else:
+            code = plan_failure or ('RUN_BUDGET_EXCEEDED'
+                if result.status == LoopStatus.MAX_STEPS_EXCEEDED else 'MODEL_ERROR')
+            return self._base(status='error', error_code=code,
+                              message=_MODEL_FAILURE_MESSAGES[code],
+                              request_id=request_id, state=self._state()), None
+        try:
+            steps = self._validate_plan_steps(recorder.calls, grounding_text, session)
+        except _PlanRejected as exc:
+            return self._base(status='clarification', message=str(exc),
+                              request_id=request_id, state=self._state()), None
+        raw_state = self.executor.read_state()
+        control_error = self._plan_control_precheck(steps, raw_state.get('control_owner'))
+        if control_error is not None:
+            return self._base(status='rejected', error_code='CONTROL_NOT_OWNED',
+                              message=control_error, request_id=request_id, state=self._state()), None
+        return self._plan_card(session, steps, request_id, raw_state)
+
+    def _validate_plan_steps(self, calls, text, session):
+        if not calls:
+            raise _PlanRejected('没有识别到可执行的步骤，请重新说明。')
+        if len(calls) > self._max_plan_steps:
+            raise _PlanRejected(f'这条指令需要超过{self._max_plan_steps}步才能完成，请拆成几条更明确的指令。')
+        _, forbidden = _separate_motion_constraints(text)
+        steps = []
+        for name, arguments in calls:
+            try:
+                action = FlightControlAction(name)
+            except (TypeError, ValueError):
+                raise _PlanRejected('计划包含不支持的动作，请重新说明。') from None
+            if action == FlightControlAction.READ_STATE:
+                raise _PlanRejected('计划中不能包含状态读取；请直接说明要执行的动作。')
+            if not isinstance(arguments, dict):
+                raise _PlanRejected('计划中的动作参数不合法，请重新说明。')
+            try:
+                FlightControlActionRequest('plan-check', 'plan-check', action,
+                                           dict(arguments), self.binding.context_version).validate()
+            except (TypeError, ValueError):
+                raise _PlanRejected('计划中的动作参数不合法，请重新说明。') from None
+            if action.value.startswith('move_'):
+                try:
+                    distance = float(arguments['distance_m'])
+                except (KeyError, TypeError, ValueError):
+                    raise _PlanRejected('位移距离必须明确且在0到20米之间。') from None
+                if not 0 < distance <= 20:
+                    raise _PlanRejected('单步位移必须在0到20米之间，请重新说明。')
+            if action in forbidden:
+                raise _PlanRejected('计划中有动作与保持位置或航向的限制冲突，请重新说明。')
+            if not _control_request_agrees(action.value, text):
+                raise _PlanRejected('计划中包含没有明确请求的控制权操作，请重新说明。')
+            if not _motion_agrees(action.value, arguments, text, None, session.motion_source):
+                raise _PlanRejected('计划中的动作与明确的方向或数值不一致，请重新说明。')
+            if not grounded_parameters(action.value, arguments, text):
+                raise _PlanRejected('计划中的参数在指令里没有明确依据，请重新说明数值和单位。')
+            steps.append({'action': action.value, 'parameters': dict(arguments)})
+        if session.ordered_steps is not None:
+            motion_steps = [(step['action'], step['parameters']) for step in steps
+                            if step['action'] in _MOTION_PREFIXES]
+            if motion_steps != session.ordered_steps:
+                raise _PlanRejected('计划与明确说明的动作顺序不一致，请重新说明。')
+        return steps
+
+    def _plan_control_precheck(self, steps, control_owner):
+        """按计划顺序静态推演控制权，避免展示一张注定被拒绝的计划卡。"""
+        control_free = {action.value for action in _CONTROL_FREE_ACTIONS}
+        owner = control_owner
+        for step in steps:
+            name = step['action']
+            if name == FlightControlAction.CONTROL_ACQUIRE.value:
+                owner = self.binding.actor_id
+            elif name == FlightControlAction.CONTROL_RELEASE.value:
+                owner = None
+            elif name not in control_free and owner != self.binding.actor_id:
+                return '请先获取控制权，再执行这份计划。'
+        return None
+
+    def _plan_card(self, session, steps, request_id, raw_state):
+        plan_id = uuid4().hex
+        expires_at = self._clock() + self._plan_ttl
+        state_revision = raw_state.get('revision') if isinstance(raw_state, dict) else None
+        binding_hash = plan_binding_hash(self.binding, steps, state_revision)
+        internal_steps = []
+        for index, step in enumerate(steps):
+            command = f'{plan_id}:{index}'
+            internal_steps.append({'action': step['action'],
+                                   'parameters': dict(step['parameters']),
+                                   'command_id': command,
+                                   'idempotency_key': command})
+        pending = _PendingPlan(plan_id, binding_hash, expires_at, internal_steps)
+        card = {
+            'kind': 'flight_plan',
+            'confirmation_id': plan_id,
+            'confirmation_binding': binding_hash,
+            'command_id': plan_id,
+            'idempotency_key': plan_id,
+            'context_version': self.binding.context_version,
+            'expires_at': expires_at,
+            'execution_mode': self.execution_mode,
+            'steps': deepcopy(steps),
+            # 兼容仍按键值渲染单卡的前端；完整序列以 steps 为准。
+            'action': steps[0]['action'],
+            'parameters': deepcopy(steps[0]['parameters']),
+        }
+        sequence = '；'.join(
+            f"第{index + 1}步：{self._describe_plan_step(step)}"
+            for index, step in enumerate(steps))
+        response = self._base(
+            status='preview_required',
+            message=(f'请核对整份飞行计划（共{len(steps)}步）：{sequence}。'
+                     '确认后按顺序执行，任一步失败即停止，不会自动重试。'),
+            request_id=request_id, card=deepcopy(card),
+            state=self._public_state(raw_state))
+        return response, pending
+
+    @staticmethod
+    def _describe_plan_step(step):
+        spec = ACTION_SPECS[FlightControlAction(step['action'])]
+        details = '，'.join(f'{key}={value}' for key, value in step['parameters'].items())
+        return spec.description + (f'（{details}）' if details else '')
+
+    def _save_history(self, session_id, entries):
+        try:
+            record = self._store.load(session_id)
+            history = record.checkpoint.context.get('conversation', [])
+            history.extend(entries)
+            record.checkpoint.context['conversation'] = history[-12:]
+            self._store.save(session_id, record.checkpoint)
+        except (SessionExpired, SessionNotFound):
+            return
+        except Exception:
+            return
 
     def _proposal(self, result, grounding_text, request_id, session, *, model_failure_code=None,
                   parameter_reply=None):
@@ -987,6 +1243,10 @@ class CockpitService:
             if not card or self._confirmation(card) != payload:
                 return self._base(status='rejected', error_code='CONFIRMATION_MISMATCH',
                                   message='确认卡不存在、已被替换或不属于当前会话。', state=self._state())
+            if card.get('kind') == 'flight_plan':
+                response = self._finish_plan(session_id, session, payload, cancel)
+                session.receipts[(fingerprint, cancel)] = response
+                return response
             if not cancel:
                 vendor = card.get('kind') == 'vendor_control_request'
                 action = None if vendor else FlightControlAction(card['action'])
@@ -1032,3 +1292,111 @@ class CockpitService:
                 response['warning_code'] = 'CHECKPOINT_SAVE_FAILED'
                 session.active_intent, session.clarification = '', False
             return response
+
+    def _finish_plan(self, session_id, session, payload, cancel):
+        """整份计划确认：逐步骤 preview/confirm，任何一步异常即停止。"""
+        card = session.card
+        plan = session.plan
+        if not card or plan is None or self._confirmation(card) != payload:
+            return self._base(status='rejected', error_code='CONFIRMATION_MISMATCH',
+                              kind='flight_plan', plan_status='rejected',
+                              message='计划确认卡不存在、已被替换或不属于当前会话。',
+                              state=self._state())
+        if self._clock() >= plan.expires_at:
+            session.card = None
+            session.plan = None
+            session.active_intent, session.clarification = '', False
+            return self._base(status='expired', error_code='CONFIRMATION_EXPIRED',
+                              kind='flight_plan', plan_status='expired',
+                              message='计划确认卡已经过期，未执行任何步骤。',
+                              state=self._state())
+        if cancel:
+            session.card = None
+            session.plan = None
+            session.active_intent, session.clarification = '', False
+            return self._base(status='cancelled', kind='flight_plan', plan_status='cancelled',
+                              message='整份飞行计划已取消，未执行任何步骤。', state=self._state())
+        raw_state = self.executor.read_state()
+        current_revision = raw_state.get('revision') if isinstance(raw_state, dict) else None
+        current_binding = plan_binding_hash(
+            self.binding,
+            [{'action': step['action'], 'parameters': step['parameters']} for step in plan.steps],
+            current_revision)
+        if current_binding != payload['confirmation_binding']:
+            session.card = None
+            session.plan = None
+            session.active_intent, session.clarification = '', False
+            return self._base(status='rejected', error_code='CONFIRMATION_MISMATCH',
+                              kind='flight_plan', plan_status='rejected',
+                              message='计划绑定或设备状态已变化，请重新生成计划。',
+                              state=self._state())
+        results, stopped = [], None
+        for index, step in enumerate(plan.steps):
+            action = FlightControlAction(step['action'])
+            if action not in _CONTROL_FREE_ACTIONS:
+                raw = self.executor.read_state()
+                if raw.get('control_owner') != self.binding.actor_id:
+                    stopped = (index + 1, 'CONTROL_NOT_OWNED', '控制权已变化')
+                    break
+            request = FlightControlActionRequest(
+                step['command_id'], step['idempotency_key'], action,
+                dict(step['parameters']), self.binding.context_version)
+            try:
+                preview = self.executor.preview(request)
+                if preview.status is not FlightControlStatus.PREVIEW_REQUIRED:
+                    results.append(self._plan_step_result(index, step, preview))
+                    stopped = (index + 1, preview.error_code or 'PLAN_STEP_REJECTED',
+                               preview.message or '该步骤未被接受')
+                    break
+                receipt = self.executor.confirm(
+                    preview.confirmation_id, command_id=request.command_id,
+                    idempotency_key=request.idempotency_key,
+                    confirmation_binding=preview.confirmation_binding,
+                    context_version=self.binding.context_version)
+            except Exception:
+                # 不把异常文本回给浏览器或模型；已完成的步骤仍如实保留。
+                results.append({'step': index + 1, 'action': step['action'],
+                                'parameters': deepcopy(step['parameters']),
+                                'status': 'error', 'error_code': 'PLAN_STEP_EXCEPTION',
+                                'message': '执行器异常，计划已停止'})
+                stopped = (index + 1, 'PLAN_STEP_EXCEPTION', '执行器异常')
+                break
+            results.append(self._plan_step_result(index, step, receipt))
+            if receipt.status not in {FlightControlStatus.ACCEPTED, FlightControlStatus.DUPLICATE}:
+                stopped = (index + 1, receipt.error_code or 'PLAN_STEP_FAILED',
+                           receipt.message or '该步骤执行失败')
+                break
+        session.card = None
+        session.plan = None
+        session.active_intent, session.clarification = '', False
+        session.ordered_steps = None
+        session.motion_source = None
+        session.completed_steps.clear()
+        completed = stopped is None
+        response = self._base(
+            status='accepted' if completed else 'rejected',
+            kind='flight_plan',
+            plan_id=plan.plan_id,
+            plan_status='completed' if completed else 'stopped',
+            steps=results,
+            failed_step=None if completed else stopped[0],
+            error_code=None if completed else stopped[1],
+            message=('计划已按顺序全部执行。' if completed else
+                     f'计划在第{stopped[0]}步停止：{stopped[2]}；后续步骤未执行。'),
+            state=self._state())
+        self._save_history(session_id, [
+            {'role': 'tool', 'action': result['action'],
+             'parameters': result['parameters'], 'status': result['status'],
+             'device_effect': 'not_verified'} for result in results
+        ] + [{'role': 'assistant', 'kind': 'flight_plan',
+              'status': response['plan_status'], 'text': response['message']}])
+        return response
+
+    @staticmethod
+    def _plan_step_result(index, step, receipt):
+        status = (receipt.status.value if isinstance(receipt.status, FlightControlStatus)
+                  else receipt.status)
+        return {'step': index + 1, 'action': step['action'],
+                'parameters': deepcopy(step['parameters']), 'status': status,
+                'error_code': getattr(receipt, 'error_code', None),
+                'message': getattr(receipt, 'message', '')}
