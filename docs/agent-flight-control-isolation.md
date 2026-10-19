@@ -187,7 +187,8 @@ com.zhuoyi.aiplatform.flightcontrol
 | J3 | DJI 相机/录像/云台/移动报文与回执解析 | **已完成**：全量 41/41；冻结 fixture 回放与命令/回执往返 |
 | J4 | 真实 MQTT transport，默认关闭 | **已完成离线适配**：全量 49/49；录制发布器，不连接 Broker |
 | J5a | 接入服务/HTTP + Postgres 日志 | **已完成离线闭环**：全量 57/57；默认内存 store/transport |
-| J5b | 真实 Broker、权威绑定、航权链 | 需单独授权；真实设备验证另计 |
+| J5b-1 | 快照 gateway/payload 绑定 | **已完成**：全量 60/60；快照缺失时 fail-closed |
+| J5b-2 | 真实 Broker、回执入口、航权链 | 需单独授权；真实设备验证另计 |
 
 不建议一次复刻全部 59 个动作，也不建议直接复制 ktd_backend 的控制器/操作器整文件。先把“相机 + 移动 + 云台复位”做通，再接航线和其余动作。
 
@@ -309,8 +310,23 @@ com.zhuoyi.aiplatform.flightcontrol
   - 没有厂商/负载航权等待；
   - 真实 Postgres、真实 Broker、真实设备均未验证。
 
+### 3.11 J5b-1 落地记录（2026-10-19）
+
+- 本地提交：`02eea83`（未推送）。
+- `FlightControlSnapshot` 增加可选 `gatewaySn` / `payloadIndex`；`HttpKtdSnapshotClient` 从快照顶层可选字段 `gateway_sn`/`payload_index` 严格解析，缺失保持 null。
+- 新增 `SnapshotDjiDeviceBindingProvider`：从快照解析绑定；任一字段缺失返回 `503 DEVICE_BINDING_UNAVAILABLE`，不按机型猜测、不回退旧值。
+- `DjiDeviceBindingProvider.resolve` 改为接收快照；服务在 transport 需要绑定时调用；默认 Spring bean 改为快照 provider。
+- 验证：
+  - `./mvnw -B verify`：**60/60**，构建通过；`git diff --check` 通过；
+  - 隔离实例（假快照带 `gateway_sn`/`payload_index` + DJI transport）：绑定解析通过，随后默认 journal fail-closed 返回 `DJI_JOURNAL_UNAVAILABLE`，命令落 `failed`，回执可查询；
+  - 假快照不带这两个字段：`503 DEVICE_BINDING_UNAVAILABLE`，命令未创建。
+- 明确未做：
+  - 当前 ktd_backend 快照端点尚未返回 `gateway_sn`/`payload_index`，所以真实快照仍会 fail-closed；
+  - 没有真实 Broker、Broker 回执入口、厂商/负载航权等待；
+  - 真实 Postgres 未实测。
+
 ## 四、下一步
 
 1. 前端计划卡已完成，可在模拟器计划模式下直接验证。
-2. **J1–J4 已推送（远端 `1abacb8`）；J5a 本地提交 `332bc5d`**，待确认后再推送。
-3. J5b 需要：真实发布器与连接绑定、权威 gateway/payload provider、Broker 回执入口、厂商/负载航权等待、真实 Postgres 验证。J5b 涉及真实链路，必须单独授权。
+2. **J1–J5a 已推送（远端 `332bc5d`）；J5b-1 本地提交 `02eea83`**，待确认后再推送。
+3. J5b-2 需要：真实发布器与连接绑定、Broker 回执入口、厂商/负载航权等待、ktd 快照返回 `gateway_sn`/`payload_index`（或等价权威资源接口）、真实 Postgres 验证。J5b-2 涉及真实链路，必须单独授权。
