@@ -193,7 +193,7 @@ class CockpitPlanExecutionTests(unittest.TestCase):
         self.assertNotIn('card', proposal)
         self.assertEqual(self.simulator.state.longitude, 113)
 
-    def test_plan_execution_stays_simulator_only(self):
+    def test_plan_execution_requires_verified_completion_receipts(self):
         class FakePlatformExecutor:
             execution_mode = 'platform'
 
@@ -217,7 +217,7 @@ class CockpitPlanExecutionTests(unittest.TestCase):
                 self.binding, FakePlatformExecutor(), lambda: self.fallback,
                 gateway_token='x' * 32, enable_plan_execution=True,
                 plan_decider_factory=lambda: self.planner)
-        self.assertIn('simulator-only', str(raised.exception))
+        self.assertIn('verified completion receipts', str(raised.exception))
 
 
 if __name__ == '__main__':

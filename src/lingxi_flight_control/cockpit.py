@@ -479,9 +479,10 @@ class CockpitService:
         if type(enable_plan_execution) is not bool:
             raise ValueError('enable_plan_execution must be a boolean')
         if enable_plan_execution:
-            # 本轮只开放模拟器闭环：平台模式缺少可验证的完成回执，不能顺序自动执行。
-            if self.execution_mode != 'simulator':
-                raise ValueError('plan execution is simulator-only until completion receipts are verified')
+            # 模拟器天然同步完成；平台执行器必须显式声明已完成回执验证。
+            if not (self.execution_mode == 'simulator'
+                    or getattr(self.executor, 'supports_plan_execution', False)):
+                raise ValueError('plan execution requires verified completion receipts')
             if not callable(plan_decider_factory):
                 raise ValueError('plan execution requires a plan decider factory')
             if (isinstance(max_plan_steps, bool) or not isinstance(max_plan_steps, int)
