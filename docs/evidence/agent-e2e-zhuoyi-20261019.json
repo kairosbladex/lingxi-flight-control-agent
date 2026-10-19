@@ -1,0 +1,70 @@
+{
+  "schema_version": "agent-full-flow-evidence/v1",
+  "created_at": "2026-10-19T14:12:00Z",
+  "components": {
+    "agent_commit": "5ba8f3e94935edeaaee2d71a82526eaaef87db40",
+    "java_commit": "9ea666081c8f8dcc10fc7246050f8006109fa760",
+    "agent_branch": "feature/natural-language-cockpit",
+    "java_branch": "feature/agent-flight-control",
+    "model": "qwen3.5:9b",
+    "java_profile": "fixture",
+    "java_store": "memory",
+    "java_dji_transport": "enabled with fixture device simulator"
+  },
+  "request": {
+    "agent_http": "POST /api/flight-control/agent/messages",
+    "text": "往前飞10米，并帮我拍张照",
+    "execution_mode": "platform"
+  },
+  "plan": {
+    "status": "preview_required",
+    "card_kind": "flight_plan",
+    "steps": [
+      {"action": "move_forward", "parameters": {"distance_m": 10}},
+      {"action": "camera_photo", "parameters": {}}
+    ],
+    "confirmation_count": 1
+  },
+  "confirmation": {
+    "status": "accepted",
+    "plan_status": "completed",
+    "failed_step": null,
+    "error_code": null,
+    "steps": [
+      {"step": 1, "action": "move_forward", "status": "accepted", "error_code": null,
+       "message": "平台回执：completed；设备效果未验证"},
+      {"step": 2, "action": "camera_photo", "status": "accepted", "error_code": null,
+       "message": "平台回执：accepted；设备效果未验证"}
+    ]
+  },
+  "java_receipts": {
+    "46385a63e950493980bc749eb26d0dcf:0": {
+      "status": "completed",
+      "action": "move_forward",
+      "device_effect": "not_verified",
+      "continuation_allowed": true,
+      "error_code": null
+    },
+    "46385a63e950493980bc749eb26d0dcf:1": {
+      "status": "accepted",
+      "action": "camera_photo",
+      "device_effect": "not_verified",
+      "continuation_allowed": true,
+      "error_code": null
+    }
+  },
+  "verification": {
+    "agent_offline_tests": "637/637",
+    "java_verify_tests": "62/62",
+    "isolated_readiness": {"java_state": 200, "agent_healthz": 200},
+    "java_to_device_requests": 0,
+    "broker_connections": 0,
+    "real_device_actions": 0
+  },
+  "limitations": [
+    "The Java service ran with the fixture profile: synthetic snapshot, in-memory journal and a software device simulator.",
+    "No MQTT broker, real aircraft, KTD platform write or real PostgreSQL was contacted.",
+    "The sub-second completed/accepted receipts are fixture behavior, not evidence of device execution or flight accuracy.",
+    "The run proves the Agent plan/confirm/command/receipt/next-step software loop, not real flight."
+  ]
+}

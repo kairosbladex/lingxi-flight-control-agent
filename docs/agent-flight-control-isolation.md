@@ -188,6 +188,7 @@ com.zhuoyi.aiplatform.flightcontrol
 | J4 | 真实 MQTT transport，默认关闭 | **已完成离线适配**：全量 49/49；录制发布器，不连接 Broker |
 | J5a | 接入服务/HTTP + Postgres 日志 | **已完成离线闭环**：全量 57/57；默认内存 store/transport |
 | J5b-1 | 快照 gateway/payload 绑定 | **已完成**：全量 60/60；快照缺失时 fail-closed |
+| E2E | Agent 全流程 fixture 闭环 | **已打通**：Agent 637/637、Java 62/62；一次确认完成移动+拍照 |
 | J5b-2 | 真实 Broker、回执入口、航权链 | 需单独授权；真实设备验证另计 |
 
 不建议一次复刻全部 59 个动作，也不建议直接复制 ktd_backend 的控制器/操作器整文件。先把“相机 + 移动 + 云台复位”做通，再接航线和其余动作。
@@ -325,8 +326,28 @@ com.zhuoyi.aiplatform.flightcontrol
   - 没有真实 Broker、Broker 回执入口、厂商/负载航权等待；
   - 真实 Postgres 未实测。
 
+### 3.12 Agent 全流程 E2E（fixture 后端，2026-10-19）
+
+- 本地提交：
+  - Agent：`5ba8f3e94935edeaaee2d71a82526eaaef87db40`
+  - Java：`9ea666081c8f8dcc10fc7246050f8006109fa760`
+- 组件：
+  - Agent `ZhuoyiPlatformExecutor` + `tools/zhuoyi_cockpit_server.py --port 8795`；
+  - Java `fixture` profile：合成快照、内存 journal、设备模拟发布器，端口 18091；
+  - 真实模型 `qwen3.5:9b` 生成整份计划；Agent 一次确认；每步提交 Java 并轮询到终态。
+- 实测：
+  - 输入“往前飞10米，并帮我拍张照” → 平台计划卡 2 步；
+  - 一次确认后 Agent 返回 `status=accepted`、`plan_status=completed`；
+  - 第 1 步 Java 回执 `completed`，第 2 步 `accepted`，均 `device_effect=not_verified`、`continuation_allowed=true`；
+  - Agent 离线 **637/637**，Java **62/62**；
+  - 证据：[agent-e2e-zhuoyi-20261019.json](evidence/agent-e2e-zhuoyi-20261019.json)。
+- 边界：
+  - Java 使用 fixture 快照/设备模拟器；亚秒级 `completed/accepted` 是 fixture 行为，不是设备执行证明；
+  - 没有 MQTT Broker、真实无人机、KTD 平台写接口或真实 PostgreSQL；
+  - 全流程验证的是 Agent 计划→确认→提交→回执→下一步的软件闭环，不是真实飞行。
+
 ## 四、下一步
 
-1. 前端计划卡已完成，可在模拟器计划模式下直接验证。
-2. **J1–J5a 已推送（远端 `332bc5d`）；J5b-1 本地提交 `02eea83`**，待确认后再推送。
-3. J5b-2 需要：真实发布器与连接绑定、Broker 回执入口、厂商/负载航权等待、ktd 快照返回 `gateway_sn`/`payload_index`（或等价权威资源接口）、真实 Postgres 验证。J5b-2 涉及真实链路，必须单独授权。
+1. 前端计划卡、Agent 计划模式、Java fixture 后端已形成可复现的软件全流程。
+2. **J1–J5a 已推送（远端 `332bc5d`）；J5b-1、fixture E2E 与 Agent executor 为本地提交**，待确认后推送。
+3. J5b-2 才是真实链路：真实 `DjiMessagePublisher`/连接绑定、Broker 回执入口、厂商/负载航权等待、ktd 快照返回 `gateway_sn`/`payload_index`、真实 PostgreSQL 与真机验收。必须单独授权并提供外部条件。

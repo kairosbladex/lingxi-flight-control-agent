@@ -18,6 +18,8 @@
 
 2026-10-19 J5a 已推送远端 `332bc5d`。J5b-1 完成本地提交 **`02eea83`**（未推送）：`FlightControlSnapshot` 增加可选 `gatewaySn`/`payloadIndex`，`HttpKtdSnapshotClient` 解析快照顶层 `gateway_sn`/`payload_index`；新增 `SnapshotDjiDeviceBindingProvider`，任一字段缺失即 `503 DEVICE_BINDING_UNAVAILABLE`，默认 Spring bean 改为该 provider。`./mvnw -B verify` **60/60**；隔离实例验证：假快照带两字段 + DJI transport 时绑定通过、随后默认 journal `DJI_JOURNAL_UNAVAILABLE` 并落 `failed`；缺字段时在创建命令前拒绝。当前真实 ktd 快照尚未返回这两个字段，仍无真实 Broker/回执入口/航权链；J5b-2 需单独授权。
 
+2026-10-19 **Agent 全流程软件闭环已打通**（fixture 后端）：Agent **`5ba8f3e`** + Java **`9ea6660`**（均为本地提交）。真实模型 `qwen3.5:9b` 将“往前飞10米，并帮我拍张照”生成 2 步平台计划，一次确认后 Agent 返回 `plan_status=completed`；Java fixture 回执第 1 步 `completed`、第 2 步 `accepted`，均 `device_effect=not_verified`。Agent 离线 **637/637**、Java **62/62**；证据[agent-e2e-zhuoyi-20261019.json](evidence/agent-e2e-zhuoyi-20261019.json)。Java 使用 fixture 快照/设备模拟器，未连 Broker、真实设备或真实 PostgreSQL；亚秒级回执不代表设备执行。J5b-2 真实链路仍需外部条件与单独授权。
+
 2026-10-17最新Agent产品 **`e0ef1e744b13fd723b12962ea7414b060df2bcf2`** 已推送核验：原loop/session/card/pending/SQLite journal接通独立vendor请求确认链，默认关闭且方法allowlist空；原59动作、prompt v1.1与movement门禁不变。最终唯一离线 **619/619**、socket守护及diff通过；29个新方法覆盖完整服务、默认关闭、错方法/键鼠串用、取消、时效、幂等并发/重启/未知不重发及原Java13案例。正式自有回环HTTP46次Agent/51次假Java、3次vendor POST、6次脚本模型决定、8份严格18字段报告，25份source前后hash稳定，真实平台/模型/设备0。见[完整请求链证据](evidence/cockpit-vendor-request-20261017.json)及[正式smoke](../artifacts/vendor-control-smoke-20261017-final/report.json)。
 
 Java最新本地 **`e623312c173fd698657a39fa22e4ad98c0630a80`** 仅追加真实HTTP fixture导出测试/证据，生产仍为 `af034e1`；11模块232/232、10份源码/测试及23份XML由root逐项核对，未重复跑Maven、未重试推送或部署。原样13案例/2快照/56份HTTP正文已复制 [fixture](../fixtures/ktd-vendor-http-v1.json) 和相邻provenance（SHA `c73c7be7…`）。独立POST/分型GET复用原service/journal与鉴权，Agent现已接入确认；所有生产控制默认开关和持续航权/链路未知门禁继续保持。
