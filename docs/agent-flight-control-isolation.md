@@ -186,6 +186,8 @@ com.zhuoyi.aiplatform.flightcontrol
 | J2 | 只读快照客户端、资源/遥测/owner 绑定、可信网关头 | **已完成**：全量 33/33；隔离实例用本地假快照验证 |
 | J3 | DJI 相机/录像/云台/移动报文与回执解析 | **已完成**：全量 41/41；冻结 fixture 回放与命令/回执往返 |
 | J4 | 真实 MQTT transport，默认关闭 | **已完成离线适配**：全量 49/49；录制发布器，不连接 Broker |
+| J5a | 接入服务/HTTP + Postgres 日志 | **已完成离线闭环**：全量 57/57；默认内存 store/transport |
+| J5b | 真实 Broker、权威绑定、航权链 | 需单独授权；真实设备验证另计 |
 
 不建议一次复刻全部 59 个动作，也不建议直接复制 ktd_backend 的控制器/操作器整文件。先把“相机 + 移动 + 云台复位”做通，再接航线和其余动作。
 
@@ -278,8 +280,37 @@ com.zhuoyi.aiplatform.flightcontrol
   - 厂商航权/负载航权等待、真实连接绑定、Postgres 持久日志均未做；
   - 真实发布器、Broker 地址/凭据和真机验证需要单独的、覆盖具体动作的授权。
 
+### 3.10 J5a 落地记录（2026-10-19）
+
+- 本地提交：`332bc5d`（未推送）。
+- 服务接入：
+  - 新增 `DjiFlightControlTransportAdapter`，让 `FlightControlService` 在需要时走 DJI transport；
+  - `DispatchCommand` 增加 `FlightControlSnapshot` 与 `DjiDeviceBinding`；
+  - 新增 `DjiDeviceBindingProvider`，默认 `UnconfiguredDjiDeviceBindingProvider` fail-closed 返回 `DEVICE_BINDING_UNAVAILABLE`；
+  - 只有 `transport.requiresDeviceBinding()` 为 true 时才解析 gateway/payload 绑定；内存 transport 不要求。
+- 失败落库：
+  - `DISPATCH_OUTCOME_UNKNOWN` → 命令 `unknown`；
+  - 其他 pre-send/journal 异常 → `failed`，保存错误码；
+  - 仍不自动重试；回执查询可看到 failed/unknown。
+- Postgres 日志：
+  - `PostgresFlightControlStore`（Spring `JdbcTemplate`）；
+  - 手工 DDL `src/main/resources/db/flightcontrol/flight_control_command.sql`，应用不自动建表/迁移；
+  - 配置 `zhuoyi.flight-control.store=postgres` + `jdbc-url/username/password`；
+  - H2 PostgreSQL 模式测试覆盖 create/find/idempotency/version guard/nullable 字段；
+  - **真实 PostgreSQL 未实测**，只验证 SQL 兼容形状。
+- 验证：
+  - `./mvnw -B verify`：**57/57**，构建通过；`git diff --check` 通过；
+  - J5a 新增 8 项：服务+DJI adapter 4、Postgres store 4；
+  - 隔离实例：18091（DJI transport 关闭）返回 `submitted`；18092（DJI transport 开启但无权威绑定）返回 `503 DEVICE_BINDING_UNAVAILABLE`；两实例已停止。
+- 明确未做：
+  - 没有真实 `DjiMessagePublisher`（Broker/凭据/连接绑定）；
+  - 没有真实 `DjiDeviceBindingProvider`（gateway/payload 权威事实）；
+  - 没有从 Broker 接收回执并调用 `acceptReceipt` 的入口；
+  - 没有厂商/负载航权等待；
+  - 真实 Postgres、真实 Broker、真实设备均未验证。
+
 ## 四、下一步
 
 1. 前端计划卡已完成，可在模拟器计划模式下直接验证。
-2. **J1–J3 已推送（远端 `d8454d2`）；J4 本地提交 `1abacb8`**，待确认后再推送。
-3. J5 需要：真实 `DjiMessagePublisher` 适配器（Broker/连接绑定）、Postgres 日志、把 transport 接入 `FlightControlService`/HTTP、补齐 `gatewaySn`/`payloadIndex` 权威事实和厂商/负载航权等待。J5 涉及真实链路，必须单独授权。
+2. **J1–J4 已推送（远端 `1abacb8`）；J5a 本地提交 `332bc5d`**，待确认后再推送。
+3. J5b 需要：真实发布器与连接绑定、权威 gateway/payload provider、Broker 回执入口、厂商/负载航权等待、真实 Postgres 验证。J5b 涉及真实链路，必须单独授权。
