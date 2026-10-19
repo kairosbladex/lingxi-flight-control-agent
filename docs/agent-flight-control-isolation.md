@@ -185,7 +185,7 @@ com.zhuoyi.aiplatform.flightcontrol
 | J1 | 平台内 `flightcontrol` 模块骨架、契约、状态机、内存 transport | **已完成**：本地 Maven 20/20；无 MQTT/设备 |
 | J2 | 只读快照客户端、资源/遥测/owner 绑定、可信网关头 | **已完成**：全量 33/33；隔离实例用本地假快照验证 |
 | J3 | DJI 相机/录像/云台/移动报文与回执解析 | **已完成**：全量 41/41；冻结 fixture 回放与命令/回执往返 |
-| J4 | 真实 MQTT transport，默认关闭 | 隔离环境 + 明确授权后才做真机验证 |
+| J4 | 真实 MQTT transport，默认关闭 | **已完成离线适配**：全量 49/49；录制发布器，不连接 Broker |
 
 不建议一次复刻全部 59 个动作，也不建议直接复制 ktd_backend 的控制器/操作器整文件。先把“相机 + 移动 + 云台复位”做通，再接航线和其余动作。
 
@@ -255,8 +255,31 @@ com.zhuoyi.aiplatform.flightcontrol
   - `gatewaySn` 与 `payloadIndex` 当前由调用方提供，快照契约尚未返回这两个事实；J4 必须从权威资源取得，不能靠机型猜测；
   - 厂商航权/负载航权等待、真实连接绑定和发送屏障仍在 J4。
 
+### 3.9 J4 落地记录（2026-10-19）
+
+- 本地提交：`1abacb8`（未推送）。
+- 新增端口与默认实现：
+  - `DjiMessagePublisher`：只声明 `publish(topic, payload)`，不包含任何 Broker 地址、凭据或连接；
+  - `DjiCommandJournal`：`prepared/published/unknown` 三阶段持久屏障；
+  - `UnconfiguredDjiMessagePublisher` / `UnconfiguredDjiCommandJournal`：fail-closed，分别返回 `DJI_TRANSPORT_UNAVAILABLE`、`DJI_JOURNAL_UNAVAILABLE`。
+- `DjiFlightControlTransport`：
+  - 顺序严格为 `encode → journal.prepared → 绑定 bid/tid/fly_to_id → publish → journal.published`；
+  - 发布异常或 published 日志异常统一保留 `DISPATCH_OUTCOME_UNKNOWN`，不自动重试；
+  - prepared 日志失败时不发布；
+  - `acceptReceipt` 复用 `DjiReceiptParser`，按 `bid/tid/fly_to_id` 关联回执，失败回执携带 `DJI_RESULT_<code>`。
+- 配置：`zhuoyi.flight-control.dji-transport.enabled`，默认 `false`。
+- 验证：
+  - `./mvnw -B verify`：**49/49**，构建通过；`git diff --check` 通过；
+  - J4 新增 8 项测试：日志顺序、发布失败 unknown、prepared 失败不发布、published 失败 unknown、未配置 publisher、禁用 transport、未知回执忽略、失败码映射；
+  - 仅使用 `RecordingDjiMessagePublisher`，**没有连接任何真实 Broker**。
+- 明确未做：
+  - `DjiFlightControlTransport` 尚未接入 `FlightControlService`，也没有 HTTP 入口；
+  - `gatewaySn` / `payloadIndex` 仍由调用方提供，快照契约没有这两个事实；
+  - 厂商航权/负载航权等待、真实连接绑定、Postgres 持久日志均未做；
+  - 真实发布器、Broker 地址/凭据和真机验证需要单独的、覆盖具体动作的授权。
+
 ## 四、下一步
 
 1. 前端计划卡已完成，可在模拟器计划模式下直接验证。
-2. **J1、J2 已推送；J3 已完成并本地提交**，待确认后再推送。
-3. J4 需要把 encoder/parser 接入真实 transport，并补齐 gateway/payload 资源事实、厂商航权与负载航权等待；真实写入仍需单独授权。
+2. **J1–J3 已推送（远端 `d8454d2`）；J4 本地提交 `1abacb8`**，待确认后再推送。
+3. J5 需要：真实 `DjiMessagePublisher` 适配器（Broker/连接绑定）、Postgres 日志、把 transport 接入 `FlightControlService`/HTTP、补齐 `gatewaySn`/`payloadIndex` 权威事实和厂商/负载航权等待。J5 涉及真实链路，必须单独授权。
