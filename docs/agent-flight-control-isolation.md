@@ -182,15 +182,34 @@ com.zhuoyi.aiplatform.flightcontrol
 
 | 阶段 | 内容 | 可验证结果 |
 | --- | --- | --- |
-| J1 | 平台内 `flightcontrol` 模块骨架、契约、状态机、内存 transport | 本地 Maven 测试；无 MQTT/设备 |
+| J1 | 平台内 `flightcontrol` 模块骨架、契约、状态机、内存 transport | **已完成**：本地 Maven 20/20；无 MQTT/设备 |
 | J2 | 只读快照客户端与资源/遥测/owner 映射 | 用 ktd_backend 只读接口或固定夹具验证 |
 | J3 | DJI 相机/录像/云台/移动报文与回执解析 | fixture 回放；严格校验状态与矛盾 |
 | J4 | 真实 MQTT transport，默认关闭 | 隔离环境 + 明确授权后才做真机验证 |
 
 不建议一次复刻全部 59 个动作，也不建议直接复制 ktd_backend 的控制器/操作器整文件。先把“相机 + 移动 + 云台复位”做通，再接航线和其余动作。
 
+### 3.6 J1 落地记录（2026-10-19）
+
+- 仓库/分支：`zhuoyi-ai-platfrom` 的 `feature/agent-flight-control`，从已核验 `origin/prod@e40d672` 创建。
+- 本地提交：`e4e37e8`（未推送，按该仓 `AGENTS.md` 需操作级授权）。
+- 新增 `com.zhuoyi.aiplatform.flightcontrol`：
+  - `CommandRequest` / `ReceiptResponse` v1 契约；
+  - `FlightControlAction` 白名单（6 向移动、拍照、开始/停止录像、云台复位）；
+  - 单向状态机与终态规则；
+  - 幂等内存命令日志、离线 `InMemoryFlightControlTransport`；
+  - `POST /api/v1/flight-control/commands`、`GET /api/v1/flight-control/receipt`；
+  - `zhuoyi.flight-control.enabled` 默认 `false`，TTL 默认 120 秒。
+- 验证：
+  - `./mvnw -B verify`：**20/20**，构建通过；`git diff --check` 通过。
+  - 隔离实例 18091（启用）：`camera_photo` 返回 `submitted`、真实 `bid/tid`、`device_effect=not_verified`、`continuation_allowed=false`；回执查询一致。
+  - 隔离实例 18092（默认禁用）：返回 `503 FLIGHT_CONTROL_DISABLED`。
+  - 非法动作 `takeoff`：返回 `400 INVALID_COMMAND_REQUEST`。
+  - 两个实例均已停止，端口释放；无 MQTT、无设备、无 Postgres。
+- 明确未做：真实 MQTT transport、Postgres 持久化、可信网关头、快照版本绑定、厂商航权/负载航权等待。`snapshot_version` 当前只校验格式，启用标志只代表软件演练。
+
 ## 四、下一步
 
 1. 前端计划卡已完成，可在模拟器计划模式下直接验证。
-2. Java 侧先做 J1（平台模块骨架 + 契约 + 状态机 + 内存 transport），不碰 ktd_backend。
-3. J1 通过后再决定是否接只读快照和真实 MQTT；真实写入仍需单独授权。
+2. **J1 已完成并本地提交**；待确认后再推送或进入 J2。
+3. J2 接只读快照客户端与资源/遥测/owner 映射；J3 做报文/回执；J4 才考虑真实 MQTT。真实写入仍需单独授权。
