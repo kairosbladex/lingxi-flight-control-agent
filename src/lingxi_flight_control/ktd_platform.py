@@ -98,6 +98,8 @@ class KtdSnapshot:
     state: Mapping[str, Any]
     control_lease_expires_at: float | None = None
     action_availability: Mapping[str, Any] | None = None
+    # authoritative = 服务端权威快照；legacy-read-api = 仅用旧只读接口拼装的测试授权。
+    authorization_quality: str = "authoritative"
 
 
 @dataclass(frozen=True)
@@ -420,6 +422,46 @@ class KtdHttpTransport:
         except Exception:
             raise KtdPlatformError('VISUALS_TRANSPORT_ERROR') from None
 
+    def read_legacy(self, resource: str, *, project_id: str, drone_id: str | None = None,
+                    query: Mapping[str, str] | None = None) -> KtdHttpResponse:
+        """读取旧只读接口；仅用于服务端 route A 测试授权。
+
+        ``resource`` 只接受固定白名单；调用方不能提交任意路径。这些接口不发送控制
+        指令、不主动写业务表，但个别旧展示接口可能触发其自身的缓存过期清理；旧接口
+        不提供设备采样/接收时间或控制权租约，返回的事实由调用方标注为 legacy。
+        """
+        paths = {
+            "user_info": "/user/info",
+            "sites": "/uavSite/list",
+            "owners": "/uavControlPower/list",
+            "hangar_state": "/portal/task/hangar-view/state",
+        }
+        if resource == "permissions":
+            if (not isinstance(drone_id, str)
+                    or re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", drone_id) is None):
+                raise KtdPlatformError("INVALID_LEGACY_RESOURCE")
+            path = "/screen/control/permissions/3/" + drone_id
+        elif resource in paths:
+            path = paths[resource]
+        else:
+            raise KtdPlatformError("INVALID_LEGACY_RESOURCE")
+        if not _identifier(project_id):
+            raise KtdPlatformError("INVALID_REQUEST_CONTEXT")
+        if query is None:
+            query = {}
+        if (not isinstance(query, Mapping)
+                or any(not isinstance(key, str) or not isinstance(value, str)
+                       for key, value in query.items())):
+            raise KtdPlatformError("INVALID_LEGACY_RESOURCE")
+        suffix = "?" + urlencode(query) if query else ""
+        request = Request(self._base_url + path + suffix, method="GET",
+                          headers={"Authorization": "Bearer " + self._token,
+                                   "projectId": project_id})
+        try:
+            return self._read_response(request, strict_json=True)
+        except Exception:
+            raise KtdPlatformError("LEGACY_STATE_TRANSPORT_ERROR") from None
+
     def _read_response(self, request: Request, *, strict_json: bool = False) -> KtdHttpResponse:
         try:
             response = self._opener.open(request, timeout=self._timeout)
@@ -456,12 +498,15 @@ class KtdPlatformExecutor:
                  journal: SqliteCommandJournal, enabled: bool = False,
                  clock: Callable[[], float] = time.time, ttl_sec: float = 30,
                  snapshot_max_age_sec: float = 5, track_commands: bool = False,
-                 enable_vendor_requests: bool = False, allowed_vendor_methods: tuple[str, ...] = ()):
+                 enable_vendor_requests: bool = False, allowed_vendor_methods: tuple[str, ...] = (),
+                 legacy_read_api: bool = False, allow_unverified_pose: bool = False):
         binding.validate()
         if (not all(_identifier(value) for key, value in binding.to_dict().items() if key != "context_version")
                 or not _identifier(site_id) or (task_id is not None and not _identifier(task_id))
                 or type(enabled) is not bool or type(track_commands) is not bool or not _finite(ttl_sec, 0.1, 120)
-                or not _finite(snapshot_max_age_sec, 0.1, 30)):
+                or not _finite(snapshot_max_age_sec, 0.1, 30)
+                or type(legacy_read_api) is not bool or type(allow_unverified_pose) is not bool
+                or (allow_unverified_pose and not legacy_read_api)):
             raise ValueError("invalid platform binding or budget")
         if getattr(journal, "durable", None) is not True:
             raise ValueError("a durable command journal is required")
@@ -478,6 +523,8 @@ class KtdPlatformExecutor:
         self._track_commands = track_commands
         self._enable_vendor_requests = enable_vendor_requests
         self._allowed_vendor_methods = tuple(allowed_vendor_methods)
+        self._legacy_read_api = legacy_read_api
+        self._allow_unverified_pose = allow_unverified_pose
         self._pending: dict[str, _Pending] = {}
         self._lock = threading.RLock()
 
@@ -504,6 +551,9 @@ class KtdPlatformExecutor:
         expected.update(site_id=self.site_id, task_id=self.task_id)
         if any(getattr(snapshot, key) != value for key, value in expected.items()):
             raise KtdPlatformError("RESOURCE_BINDING_MISMATCH")
+        expected_quality = "legacy-read-api" if self._legacy_read_api else "authoritative"
+        if snapshot.authorization_quality != expected_quality:
+            raise KtdPlatformError("AUTHORIZATION_QUALITY_MISMATCH")
         if (type(snapshot.context_version) is not int or not _valid_snapshot_version(snapshot.version)
                 or not _finite(snapshot.observed_at, 0, self._clock())
                 or self._clock() - snapshot.observed_at > self._max_age):
@@ -578,8 +628,12 @@ class KtdPlatformExecutor:
                   "available": snapshot is not None}
         if snapshot is not None:
             result.update({key: copy.deepcopy(value) for key, value in snapshot.state.items() if key in _STATE_FIELDS})
+            # legacy 快照的租约是合成值，不向界面/回执伪装成权威租约。
+            lease = (snapshot.control_lease_expires_at
+                     if snapshot.authorization_quality == "authoritative" else None)
             result.update(snapshot_version=snapshot.version, observed_at=snapshot.observed_at,
-                          control_owner=snapshot.control_owner, control_lease_expires_at=snapshot.control_lease_expires_at)
+                          control_owner=snapshot.control_owner, control_lease_expires_at=lease,
+                          authorization_quality=snapshot.authorization_quality)
             if snapshot.action_availability is not None:
                 result['action_availability'] = copy.deepcopy(dict(snapshot.action_availability))
         return result
@@ -602,6 +656,10 @@ class KtdPlatformExecutor:
     def _snapshot_hash(snapshot: KtdSnapshot) -> str:
         values = asdict(snapshot)
         values.pop("observed_at")
+        if values.get("authorization_quality") != "authoritative":
+            # legacy 只读接口没有真实租约，合成租约不能进入确认绑定；
+            # owner、在线状态等可核验事实仍然参与哈希，变化即拒绝旧确认卡。
+            values.pop("control_lease_expires_at", None)
         values["permissions"] = sorted(values["permissions"])
         return _hash(values)
 
@@ -635,6 +693,16 @@ class KtdPlatformExecutor:
                 raise KtdPlatformError("DISTANCE_MODE_UNAVAILABLE")
             if not _finite(request.parameters["distance_m"], 0.01, 20):
                 raise KtdPlatformError("DISTANCE_OUT_OF_RANGE")
+            if self._legacy_read_api:
+                # 旧只读接口没有机头坐标和高度，无法在 Agent 侧重算目标点或
+                # 证明 20 米隐含爬升边界；这里只允许测试环境显式打开的路径，
+                # 由 Java 原控制接口用服务端实时姿态计算目标。
+                if not self._allow_unverified_pose:
+                    raise KtdPlatformError("LEGACY_POSE_UNVERIFIED_DISABLED")
+                if snapshot.state.get("airborne") is not True:
+                    raise KtdPlatformError("FLIGHT_STATE_UNAVAILABLE")
+                body.update(type=_MOVE_TYPES[action], mode=2, param=request.parameters["distance_m"])
+                return KtdCommand("/screen/uav/operation/control", body)
             height_key = "height_m" if snapshot.profile == "PZ_HANGAR" else "altitude_m"
             if (snapshot.state.get("airborne") is not True
                     or any(not _finite(snapshot.state.get(key), low, high) for key, low, high in
