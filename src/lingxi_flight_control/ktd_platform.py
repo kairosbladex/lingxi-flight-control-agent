@@ -26,10 +26,28 @@ from .models import ExecutionContext
 
 _MOVE_TYPES = {"move_forward": 202, "move_backward": 203, "move_left": 204,
                "move_right": 205, "move_up": 201, "move_down": -201}
+_TURN_TYPES = {"turn_left": -206, "turn_right": 206}
+#: gimbal action -> (type, controlMode, param, stepPercentage)
+#: 相对俯仰用 5/3 的步进百分比得到一次 5°（KTD 默认 3°），并避开其连续发送线程；
+#: 相对偏航保持 1 次 5° 后由 Agent 显式发送停止。
+_GIMBAL_TYPES = {
+    "gimbal_up": (401, 2, 1, 5.0 / 3.0),
+    "gimbal_down": (401, 2, 2, 5.0 / 3.0),
+    "gimbal_left": (402, 2, 2, 1.0),
+    "gimbal_right": (402, 2, 1, 1.0),
+    "gimbal_45": (404, 1, -45, None),
+    "gimbal_90": (404, 1, -90, None),
+    "gimbal_reset": (403, None, None, None),
+}
+_RELATIVE_GIMBAL = frozenset({"gimbal_up", "gimbal_down", "gimbal_left", "gimbal_right"})
+_STICK_AXES = {"forward": 202, "backward": 203, "left": 204, "right": 205,
+               "up": 201, "down": -201, "yaw_right": 206, "yaw_left": -206}
 _ROUTE_TYPES = {"route_pause": 110, "route_resume": 112, "emergency_stop": 113,
                 "return_home": 114, "cancel_return_home": -114}
 _CAMERA_TYPES = {"camera_photo": 100, "camera_start_recording": 101, "camera_stop_recording": 102}
-SUPPORTED_ACTIONS = frozenset(_MOVE_TYPES) | frozenset(_ROUTE_TYPES) | frozenset(_CAMERA_TYPES) | {"gimbal_reset", "read_state"}
+SUPPORTED_ACTIONS = (frozenset(_MOVE_TYPES) | frozenset(_TURN_TYPES)
+                     | frozenset(_GIMBAL_TYPES) | frozenset(_ROUTE_TYPES)
+                     | frozenset(_CAMERA_TYPES) | {"read_state"})
 _PATHS = frozenset({"/screen/uav/operation/control", "/screen/uav/route/control",
                     "/screen/uav/camera/control", "/screen/uav/gimbal/control"})
 _STATE_FIELDS = frozenset({"online", "airborne", "longitude", "latitude", "altitude_m",
@@ -308,16 +326,29 @@ class KtdHttpTransport:
         self._timeout = timeout_sec
         # opener 仅为服务端网络边界注入点；模型与客户端不能指定。
         self._opener = opener if opener is not None else build_opener(ProxyHandler({}), _NoRedirect())
+        # /screen/uav/operation/control 用 timestamp 头做同机库指令排序；同一毫秒内
+        # 连续下发必须严格递增，否则旧接口会把后一条当作“其它指令已执行”拒绝。
+        self._timestamp_lock = threading.Lock()
+        self._last_timestamp = 0
+
+    def _next_timestamp(self) -> int:
+        with self._timestamp_lock:
+            now = int(time.time() * 1000)
+            self._last_timestamp = max(self._last_timestamp + 1, now)
+            return self._last_timestamp
 
     def submit(self, command: KtdCommand, context: KtdRequestContext) -> KtdHttpResponse:
         if command.path not in _PATHS or context.actor_id != self.actor_id:
             raise KtdPlatformError("TRANSPORT_SCOPE_MISMATCH")
         if not all(_identifier(value) for value in (context.project_id, context.trace_id, context.idempotency_key)):
             raise KtdPlatformError("INVALID_REQUEST_CONTEXT")
+        headers = {"Authorization": "Bearer " + self._token, "Content-Type": "application/json",
+                   "projectId": context.project_id, "X-Trace-Id": context.trace_id,
+                   "X-Idempotency-Key": context.idempotency_key}
+        if command.path == "/screen/uav/operation/control":
+            headers["timestamp"] = str(self._next_timestamp())
         request = Request(self._base_url + command.path, data=_json(command.body).encode(), method="POST",
-                          headers={"Authorization": "Bearer " + self._token, "Content-Type": "application/json",
-                                   "projectId": context.project_id, "X-Trace-Id": context.trace_id,
-                                   "X-Idempotency-Key": context.idempotency_key})
+                          headers=headers)
         return self._read_response(request, strict_json='tracking' in command.body)
 
     def read_snapshot(self, binding: RuntimeBinding, *, site_id: str,
@@ -435,6 +466,7 @@ class KtdHttpTransport:
             "sites": "/uavSite/list",
             "owners": "/uavControlPower/list",
             "hangar_state": "/portal/task/hangar-view/state",
+            "pose": "/test/getUdpData",
         }
         if resource == "permissions":
             if (not isinstance(drone_id, str)
@@ -499,7 +531,12 @@ class KtdPlatformExecutor:
                  clock: Callable[[], float] = time.time, ttl_sec: float = 30,
                  snapshot_max_age_sec: float = 5, track_commands: bool = False,
                  enable_vendor_requests: bool = False, allowed_vendor_methods: tuple[str, ...] = (),
-                 legacy_read_api: bool = False, allow_unverified_pose: bool = False):
+                 legacy_read_api: bool = False, allow_unverified_pose: bool = False,
+                 pose_reader: Callable[[], Mapping[str, Any] | None] | None = None,
+                 sleep: Callable[[float], None] = time.sleep,
+                 turn_tolerance_deg: float = 3.0, turn_max_sec: float = 30.0,
+                 turn_max_pulses: int = 80, turn_gain: float = 1.5,
+                 stick_max_sec: float = 5.0):
         binding.validate()
         if (not all(_identifier(value) for key, value in binding.to_dict().items() if key != "context_version")
                 or not _identifier(site_id) or (task_id is not None and not _identifier(task_id))
@@ -508,6 +545,13 @@ class KtdPlatformExecutor:
                 or type(legacy_read_api) is not bool or type(allow_unverified_pose) is not bool
                 or (allow_unverified_pose and not legacy_read_api)):
             raise ValueError("invalid platform binding or budget")
+        if (not _finite(turn_tolerance_deg, 0.1, 45) or not _finite(turn_max_sec, 1, 120)
+                or isinstance(turn_max_pulses, bool) or not isinstance(turn_max_pulses, int)
+                or not 1 <= turn_max_pulses <= 500 or not _finite(turn_gain, 0.1, 10)
+                or not _finite(stick_max_sec, 0.2, 30)
+                or not callable(sleep)
+                or (pose_reader is not None and not callable(pose_reader))):
+            raise ValueError("invalid attitude control budget")
         if getattr(journal, "durable", None) is not True:
             raise ValueError("a durable command journal is required")
         if isinstance(transport, KtdHttpTransport) and transport.actor_id != binding.actor_id:
@@ -525,6 +569,16 @@ class KtdPlatformExecutor:
         self._allowed_vendor_methods = tuple(allowed_vendor_methods)
         self._legacy_read_api = legacy_read_api
         self._allow_unverified_pose = allow_unverified_pose
+        self._pose_reader = pose_reader
+        if self._pose_reader is None:
+            candidate = getattr(snapshot_provider, "pose", None)
+            self._pose_reader = candidate if callable(candidate) else None
+        self._sleep = sleep
+        self._turn_tolerance = float(turn_tolerance_deg)
+        self._turn_max_sec = float(turn_max_sec)
+        self._turn_max_pulses = turn_max_pulses
+        self._turn_gain = float(turn_gain)
+        self._stick_max_sec = float(stick_max_sec)
         self._pending: dict[str, _Pending] = {}
         self._lock = threading.RLock()
 
@@ -614,7 +668,12 @@ class KtdPlatformExecutor:
             try:
                 self._validate_snapshot(snapshot, action)
                 if action != "read_state":
-                    parameters = {"distance_m": 0.01} if action in _MOVE_TYPES else {}
+                    if action in _MOVE_TYPES:
+                        parameters = {"distance_m": 0.01}
+                    elif action in _TURN_TYPES:
+                        parameters = {"angle_deg": 1}
+                    else:
+                        parameters = {}
                     request = FlightControlActionRequest("capability-check", "capability-check", action,
                                                          parameters, self.binding.context_version)
                     self._compile(request, snapshot)
@@ -658,8 +717,13 @@ class KtdPlatformExecutor:
         values.pop("observed_at")
         if values.get("authorization_quality") != "authoritative":
             # legacy 只读接口没有真实租约，合成租约不能进入确认绑定；
-            # owner、在线状态等可核验事实仍然参与哈希，变化即拒绝旧确认卡。
+            # 姿态是实时遥测，确认前会漂移，也不能把预览瞬间的经纬度/航向锁进绑定。
+            # owner、在线/飞行状态等可核验事实仍然参与哈希，变化即拒绝旧确认卡。
             values.pop("control_lease_expires_at", None)
+            state = dict(values.get("state") or {})
+            for key in ("longitude", "latitude", "altitude_m", "height_m", "yaw_deg"):
+                state.pop(key, None)
+            values["state"] = state
         values["permissions"] = sorted(values["permissions"])
         return _hash(values)
 
@@ -725,6 +789,31 @@ class KtdPlatformExecutor:
             return KtdCommand("/screen/uav/operation/control", body)
         if snapshot.profile != "DJI_HANGAR":
             raise KtdPlatformError("PROFILE_UNSUPPORTED")
+        if action in _TURN_TYPES:
+            # 新Java飞控服务尚未声明转向能力；只在旧控制接口的 legacy 路径执行。
+            if self._track_commands:
+                raise KtdPlatformError("TRACKING_UNSUPPORTED")
+            if not _finite(request.parameters.get("angle_deg"), 0.1, 360):
+                raise KtdPlatformError("ANGLE_OUT_OF_RANGE")
+            if snapshot.state.get("airborne") is not True:
+                raise KtdPlatformError("FLIGHT_STATE_UNAVAILABLE")
+            if not _finite(snapshot.state.get("yaw_deg"), -360, 360):
+                raise KtdPlatformError("POSE_UNAVAILABLE")
+            # 首个脉冲；确认后的闭环会按航向误差继续脉冲，并在结束时回中、停止记录。
+            body.update(type=_TURN_TYPES[action], mode=3, param=10)
+            return KtdCommand("/screen/uav/operation/control", body)
+        if action in _GIMBAL_TYPES:
+            if self._track_commands and action != "gimbal_reset":
+                raise KtdPlatformError("TRACKING_UNSUPPORTED")
+            gimbal_type, control_mode, param, step = _GIMBAL_TYPES[action]
+            body["type"] = gimbal_type
+            if control_mode is not None:
+                body["controlMode"] = control_mode
+            if param is not None:
+                body["param"] = param
+            if step is not None:
+                body["stepPercentage"] = step
+            return KtdCommand("/screen/uav/gimbal/control", body)
         if action in _ROUTE_TYPES:
             if action in ("route_pause", "route_resume", "cancel_return_home") and self.task_id is None:
                 raise KtdPlatformError("JAVA_TASK_REQUIRED")
@@ -737,10 +826,199 @@ class KtdPlatformExecutor:
         if action in _CAMERA_TYPES:
             body["type"] = _CAMERA_TYPES[action]
             return KtdCommand("/screen/uav/camera/control", body)
-        if action == "gimbal_reset":
-            body["type"] = 403
-            return KtdCommand("/screen/uav/gimbal/control", body)
         raise KtdPlatformError("ACTION_UNSUPPORTED")
+
+    # ---- 姿态控制：旧控制接口 + 姿态回读闭环 -----------------------------
+
+    @staticmethod
+    def _normalize_heading(value: float) -> float:
+        return value % 360.0
+
+    @staticmethod
+    def _signed_error(target: float, current: float) -> float:
+        return (target - current + 180.0) % 360.0 - 180.0
+
+    def _read_pose(self) -> Mapping[str, Any] | None:
+        """优先用注入的姿态回读；没有时退回最近一次快照里的姿态。"""
+        try:
+            if self._pose_reader is not None:
+                pose = self._pose_reader()
+            else:
+                snapshot = self._load_snapshot()
+                pose = {**dict(snapshot.state), "observed_at": snapshot.observed_at}
+        except Exception:
+            return None
+        if not isinstance(pose, Mapping):
+            return None
+        yaw_value = pose.get("yaw_deg")
+        if not _finite(yaw_value, -360, 360):
+            return None
+        yaw = float(yaw_value)
+        observed = pose.get("observed_at")
+        if not _finite(observed, 0, self._clock() + 1):
+            observed = None
+        return {"yaw_deg": float(yaw), "observed_at": observed,
+                "longitude": pose.get("longitude"), "latitude": pose.get("latitude"),
+                "altitude_m": pose.get("altitude_m"), "height_m": pose.get("height_m")}
+
+    def _control_body(self, *, type_: int, mode: int, param: float) -> dict[str, Any]:
+        body = {"terminalId": self.binding.drone_id, "siteId": self.site_id,
+                "type": type_, "mode": mode, "param": param}
+        if self.task_id is not None:
+            body["taskId"] = self.task_id
+        return body
+
+    def _submit_body(self, path: str, body: Mapping[str, Any], *, trace_id: str,
+                     idempotency_key: str, counter: int) -> bool:
+        context = KtdRequestContext(self.binding.actor_id, self.binding.project_id, trace_id,
+                                    _hash({"key": idempotency_key, "n": counter}))
+        try:
+            response = self._transport.submit(KtdCommand(path, dict(body)), context)
+        except Exception:
+            return False
+        return (isinstance(response, KtdHttpResponse) and response.status_code == 200
+                and isinstance(response.payload, Mapping)
+                and type(response.payload.get("code")) is int
+                and response.payload.get("code") == 200)
+
+    def _send_operation(self, body: Mapping[str, Any], *, trace_id: str,
+                        idempotency_key: str, counter: int) -> bool:
+        return self._submit_body("/screen/uav/operation/control", body, trace_id=trace_id,
+                                 idempotency_key=idempotency_key, counter=counter)
+
+    def _neutralize(self, *, trace_id: str, idempotency_key: str, counter: int) -> None:
+        """回中后删除 Java 侧的运动指令记录；两步都 best-effort。"""
+        self._send_operation(self._control_body(type_=206, mode=3, param=0),
+                             trace_id=trace_id, idempotency_key=idempotency_key,
+                             counter=counter)
+        self._send_operation(self._control_body(type_=207, mode=3, param=0),
+                             trace_id=trace_id, idempotency_key=idempotency_key,
+                             counter=counter + 1)
+
+    def _run_turn(self, request, snapshot, *, trace_id: str) -> tuple[str, str]:
+        action = FlightControlAction(request.action).value
+        angle = float(request.parameters["angle_deg"])
+        sign = 1.0 if action == "turn_right" else -1.0
+        start_yaw = self._normalize_heading(float(snapshot.state["yaw_deg"]))
+        target = self._normalize_heading(start_yaw + sign * angle)
+        started, counter = self._clock(), 0
+        previous_error = previous_yaw = None
+        stagnant = 0
+        try:
+            for pulse in range(self._turn_max_pulses):
+                pose = self._read_pose()
+                if pose is None:
+                    return "POSE_UNAVAILABLE", "无法回读姿态，已停止转向"
+                if (pose["observed_at"] is not None
+                        and self._clock() - pose["observed_at"] > min(self._max_age, 5.0)):
+                    return "POSE_STALE", "姿态回读过期，已停止转向"
+                error = self._signed_error(target, pose["yaw_deg"])
+                absolute = abs(error)
+                if previous_error is not None:
+                    # 方向约定错误或姿态读数不跟随都会让误差变大；宁可停，不继续盲转。
+                    if absolute > previous_error + 5.0:
+                        return "TURN_DIVERGING", "航向误差增大，已停止转向"
+                    if abs(pose["yaw_deg"] - previous_yaw) < 0.2:
+                        stagnant += 1
+                        if stagnant >= 6:
+                            return "TURN_NOT_RESPONDING", "航向未变化，已停止转向"
+                    else:
+                        stagnant = 0
+                previous_error, previous_yaw = absolute, pose["yaw_deg"]
+                if absolute <= self._turn_tolerance:
+                    return "OK", f"航向 {pose['yaw_deg']:.1f}°，目标 {target:.1f}°"
+                if self._clock() - started > self._turn_max_sec:
+                    return ("TURN_TIMEOUT",
+                            f"已转向 {pose['yaw_deg']:.1f}°，未到达目标 {target:.1f}°")
+                percent = min(50.0, max(8.0, absolute * self._turn_gain))
+                type_ = 206 if error > 0 else -206
+                if not self._send_operation(self._control_body(type_=type_, mode=3, param=percent),
+                                            trace_id=trace_id,
+                                            idempotency_key=request.idempotency_key,
+                                            counter=counter):
+                    return "PLATFORM_REJECTED", "平台拒绝了转向脉冲"
+                counter += 1
+                self._sleep(0.3)
+                if not self._send_operation(self._control_body(type_=206, mode=3, param=0),
+                                            trace_id=trace_id,
+                                            idempotency_key=request.idempotency_key,
+                                            counter=counter):
+                    return "PLATFORM_REJECTED", "平台拒绝了回中指令"
+                counter += 1
+                self._sleep(0.15)
+                if pulse % 4 == 3:
+                    current = self._load_snapshot()
+                    if current.control_owner != self.binding.actor_id:
+                        return "CONTROL_NOT_OWNED", "控制权已变化，已停止转向"
+            return "TURN_TOLERANCE_NOT_REACHED", "转向脉冲次数已耗尽"
+        finally:
+            self._neutralize(trace_id=trace_id, idempotency_key=request.idempotency_key,
+                             counter=counter + 1)
+
+    def _finish_gimbal(self, request, *, trace_id: str) -> bool:
+        """相对云台控制可能启动 Java 侧连续发送线程；这里显式发停止。"""
+        action = FlightControlAction(request.action).value
+        gimbal_type, control_mode, _param, _step = _GIMBAL_TYPES[action]
+        if control_mode != 2:
+            return True
+        self._sleep(0.3)
+        body = {"terminalId": self.binding.drone_id, "siteId": self.site_id,
+                "type": gimbal_type, "controlMode": 2, "param": 0}
+        if self.task_id is not None:
+            body["taskId"] = self.task_id
+        return self._submit_body("/screen/uav/gimbal/control", body, trace_id=trace_id,
+                                 idempotency_key=request.idempotency_key, counter=1)
+
+    def stick(self, axis: str, percent: float, duration_sec: float, *,
+              idempotency_key: str | None = None) -> dict[str, Any]:
+        """有界摇杆脉冲；不是模型工具，只供测试环境操作者或脚本直接调用。
+
+        旧接口一次只能携带一个轴，因此这里按单轴下发；结束时总会回中并删除指令记录。
+        """
+        if axis not in _STICK_AXES:
+            return {"status": "rejected", "error_code": "INVALID_STICK_AXIS"}
+        if not _finite(percent, 1, 100) or not _finite(duration_sec, 0.2, self._stick_max_sec):
+            return {"status": "rejected", "error_code": "INVALID_STICK_PARAMETERS"}
+        if not self._enabled:
+            return {"status": "rejected", "error_code": "PLATFORM_DISABLED"}
+        try:
+            snapshot = self._load_snapshot()
+            self._validate_snapshot(snapshot, "read_state")
+            if snapshot.control_owner != self.binding.actor_id:
+                return {"status": "rejected", "error_code": "CONTROL_NOT_OWNED"}
+            if (snapshot.state.get("online") is not True
+                    or snapshot.state.get("airborne") is not True):
+                return {"status": "rejected", "error_code": "FLIGHT_STATE_UNAVAILABLE"}
+            start = self._read_pose()
+            if start is None:
+                return {"status": "rejected", "error_code": "POSE_UNAVAILABLE"}
+        except KtdPlatformError as error:
+            return {"status": "rejected", "error_code": str(error)}
+        key = idempotency_key or uuid4().hex
+        trace_id = uuid4().hex
+        type_ = _STICK_AXES[axis]
+        deadline, counter = self._clock() + float(duration_sec), 0
+        status, error_code = "accepted", None
+        try:
+            while True:
+                if not self._send_operation(self._control_body(type_=type_, mode=3,
+                                                               param=float(percent)),
+                                            trace_id=trace_id, idempotency_key=key,
+                                            counter=counter):
+                    status, error_code = "unknown", "PLATFORM_REJECTED"
+                    break
+                counter += 1
+                remaining = deadline - self._clock()
+                if remaining <= 0:
+                    break
+                self._sleep(min(0.8, remaining))
+                if counter >= int(duration_sec / 0.5) + 2:
+                    break
+        finally:
+            self._neutralize(trace_id=trace_id, idempotency_key=key, counter=counter + 1)
+        return {"status": status, "error_code": error_code, "axis": axis,
+                "percent": float(percent), "duration_sec": float(duration_sec),
+                "start_pose": start, "end_pose": self._read_pose()}
 
     def _compile_vendor_request(self, request, snapshot, trace_id, deadline) -> KtdCommand:
         if not _finite(deadline, 0, float('inf')) or deadline <= self._clock():
@@ -965,9 +1243,48 @@ class KtdPlatformExecutor:
                                 trace_id=pending.receipt.trace_id, now=self._clock())
                             if report['status'] in {'dispatching', 'unknown', 'conflict', 'expired'}:
                                 status = 'unknown'
-                        result = self._receipt(request, status,
-                            message="平台已受理，设备动作是否完成尚未验证" if status == 'submitted' else '平台结果未知，请查询回执，勿重复提交',
-                            **({'vendor_report': report} if vendor else {'device_report': report}), **fields)
+                        action_value = (request.action.value
+                                        if isinstance(request.action, FlightControlAction)
+                                        else str(request.action))
+                        message = ("平台已受理，设备动作是否完成尚未验证" if status == 'submitted'
+                                   else '平台结果未知，请查询回执，勿重复提交')
+                        error_code = None
+                        if not vendor and status == 'submitted':
+                            if action_value in _TURN_TYPES:
+                                outcome, detail = self._run_turn(
+                                    request, snapshot, trace_id=pending.receipt.trace_id)
+                                if outcome == "OK":
+                                    status, message = ("accepted",
+                                                       f"转向完成：{detail}；设备效果以姿态回读为准")
+                                elif outcome in {"TURN_TOLERANCE_NOT_REACHED", "TURN_TIMEOUT",
+                                                 "TURN_DIVERGING", "TURN_NOT_RESPONDING"}:
+                                    status, error_code = "rejected", outcome
+                                    message = f"转向停止：{detail}"
+                                else:
+                                    status, error_code = "unknown", outcome
+                                    message = "转向结果未知，禁止自动重试"
+                            elif action_value in _RELATIVE_GIMBAL:
+                                if not self._finish_gimbal(
+                                        request, trace_id=pending.receipt.trace_id):
+                                    status, error_code = "unknown", "GIMBAL_STOP_FAILED"
+                                    message = "云台停止指令未确认，禁止重复提交"
+                                else:
+                                    message = "云台相对步进已下发并发送停止；设备效果未验证"
+                        report_fields = ({'vendor_report': report} if vendor
+                                         else {'device_report': report})
+                        if status == "accepted":
+                            result = self._receipt(request, FlightControlStatus.ACCEPTED,
+                                                   message=message, **report_fields, **fields)
+                        elif status == "rejected":
+                            result = self._receipt(request, FlightControlStatus.REJECTED,
+                                                   error_code=error_code, message=message,
+                                                   **report_fields, **fields)
+                        elif status == "unknown":
+                            result = self._receipt(request, "unknown", error_code=error_code,
+                                                   message=message, **report_fields, **fields)
+                        else:
+                            result = self._receipt(request, status, message=message,
+                                                   **report_fields, **fields)
                     elif (200 <= response.status_code < 500 and not 300 <= response.status_code < 400
                           and type(code) is int and 400 <= code < 500):
                         result = self._receipt(request, FlightControlStatus.REJECTED, error_code="PLATFORM_REJECTED",

@@ -180,11 +180,15 @@ class PlatformExecutorTests(unittest.TestCase):
                 self.assertEqual(command.body["type"], code)
 
     def test_unimplemented_actions_are_explicitly_unsupported(self):
-        for action, parameters in (("turn_left", {"angle_deg": 90}), ("land", {}),
+        for action, parameters in (("land", {}),
                                    ("takeoff", {"altitude_m": 20}), ("control_acquire", {}),
                                    ("set_move_speed", {"value": 2})):
             with self.subTest(action=action):
                 self.assertEqual(self.executor().preview(self.request(action, parameters)).error_code, "ACTION_UNSUPPORTED")
+        # 转向和云台已实现，但必须由权威快照逐动作授权；本测试的快照没有授予。
+        self.assertEqual(
+            self.executor().preview(self.request("turn_left", {"angle_deg": 90})).error_code,
+            "ACTION_NOT_PERMITTED")
         self.assertEqual(self.transport.calls, [])
 
     def test_confirmation_binding_strictly_rejects_wrong_and_boolean_versions(self):

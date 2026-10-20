@@ -2,7 +2,7 @@
 
 当前目标以2026-10-17用户最新指令为准：默认右下角气泡，点击打开传统聊天窗口，复用自然语言理解、澄清、确认及原Java适配链。此软件切片已实现并完成离线交付；UI `ecc7798e2f3da81c007bfa7031c7f1cc61fd0507` 已推送核验。完整驾驶舱仅为 `?mode=cockpit` 兼容入口，设备详情/天气和全驾驶舱对齐停止扩展。不要因下文历史目标继续扩大UI。
 
-2026-10-20新增 **Route A：不改 ktd_backend 的测试控制链路**（默认关闭，未连测试环境）。Agent 直连 ktd 现有 `/screen/uav/...` 旧控制接口，授权由现有五个只读接口拼装并标注 `legacy-read-api`；只开放 DJI 机库的 6 向位移、拍照、开始/停止录像、云台复位。写请求需同时打开 `--enable-platform-control` 与 `--enable-legacy-control`，位移还需 `--allow-legacy-pose-unverified`（旧接口无姿态，目标点由 Java 服务端计算，Agent 不再执行 20 米隐含爬升门禁）。新增 `ktd_legacy.py` 与 `tests/test_ktd_legacy.py` 22 项，完整离线 **659/659**；无 ktd 代码改动、无 MQTT/db 直连、无真实设备请求。边界、配置与测试环境前置见[Route A 说明](legacy-ktd-control.md)。
+2026-10-20新增 **Route A：不改 ktd_backend 的测试控制链路**（默认关闭，未连测试环境）。Agent 直连 ktd 现有 `/screen/uav/...` 旧控制接口，授权由现有只读接口拼装并标注 `legacy-read-api`；开放 DJI 机库的 6 向位移、拍照、开始/停止录像、7 个云台动作和左右转向。转向使用杆量短脉冲 + `/test/getUdpData` 航向回读闭环，默认 3° 容差、30 秒/80 脉冲上限，误差反向增大或航向不跟随会立即停止，结束时回中并删除运动记录；摇杆持续姿态以 `KtdPlatformExecutor.stick()` 脚本原语提供，不改变 59 项动作契约，不是模型工具。写请求需同时打开 `--enable-platform-control` 与 `--enable-legacy-control`，位移还需 `--allow-legacy-pose-unverified`（旧接口无姿态，目标点由 Java 服务端计算，Agent 不执行 20 米隐含爬升门禁）；转向/云台不需要该开关，但转向要求姿态调试接口可用。新增 `ktd_legacy.py`、`tests/test_ktd_legacy.py` 32 项，完整离线 **669/669**；无 ktd 代码改动、无 MQTT/db 直连、无真实设备请求。边界、配置与测试环境前置见[Route A 说明](legacy-ktd-control.md)。
 
 最新[气泡聊天证据](evidence/chat-bubble-20261017.json)：root独立复跑后端619/619、前端140/140及构建、1个HTTP综合回归、27气泡/22实际Agent-Java适配链/115兼容场景。新 `FlightChatWidget.vue` 首开加载，隐藏不重置、不重发；局部样式可独立嵌入，IME/Escape、移动短视口和长会话隐藏期间返回后的最新消息均验证。最终自有假Java链为12 Agent HTTP/6脚本模型/22快照GET/1回执GET/1控制POST，确认前及取消后0POST，手动回执不重发。fixture仅固定合成配置/自有端口，最新源hash `21bc3a88…`；原Javaconverter SHA `19f13c59…` 未变。所有最终报告与10张PNG随UI提交保存，115旧入口JSON另保存，其大图仍在原临时run目录。无新真实模型评测、共享部署、业务写入或设备动作，真实控制默认关闭。
 

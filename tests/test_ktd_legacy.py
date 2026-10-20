@@ -10,10 +10,10 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from lingxi_flight_control.full_control import FlightControlActionRequest, FlightControlStatus, RuntimeBinding
-from lingxi_flight_control.ktd_legacy import LegacyKtdSnapshotProvider
+from lingxi_flight_control.ktd_legacy import LegacyKtdSnapshotProvider, _pose_time
 from lingxi_flight_control.ktd_platform import (
-    KtdHttpResponse, KtdHttpTransport, KtdPlatformError, KtdPlatformExecutor, KtdSnapshot,
-    SqliteCommandJournal,
+    KtdCommand, KtdHttpResponse, KtdHttpTransport, KtdPlatformError, KtdPlatformExecutor,
+    KtdRequestContext, KtdSnapshot, SqliteCommandJournal,
 )
 from lingxi_flight_control.platform_runtime import PlatformRuntimeConfig, build_platform_cockpit
 
@@ -25,30 +25,53 @@ def ok(data):
 class FakeLegacyTransport:
     actor_id = "actor-1"
 
-    def __init__(self):
+    def __init__(self, now=lambda: 1000.0):
         self.calls = []
         self.submitted = []
+        self.now = now
+        self.yaw = 0.0
+        self.invert_yaw = False
         self.responses = {
             "user_info": ok({"id": "user-1", "empId": "actor-1",
                              "permission": ["taskManage:Issued"]}),
-            "sites": ok([{"id": "site-1", "uavId": "drone-1", "hangarId": "hangar-1"}]),
+            "sites": ok([{"id": "site-1", "uavId": "drone-1", "hangarId": "hangar-1",
+                          "uavSn": "uav-sn-1"}]),
             "owners": ok([{"employeeId": "actor-1"}]),
             "permissions": ok({"isHangar": True,
                                "hangarInfo": {"brand": "207601", "model": "DJI3"},
                                "uav": {"UAV_MOVE_DISTANCE": False, "UAV_MOVE_SPEED": True}}),
-            "hangar_state": ok({"uavId": "drone-1", "uavState": "5",
+            "hangar_state": ok({"uavId": "drone-1", "uavSn": "uav-sn-1", "uavState": "5",
                                 "inFlight": True, "landing": False}),
+            "pose": ok(self.pose_payload()),
         }
+
+    def pose_payload(self):
+        return {"longitude": 113.0, "latitude": 23.0, "altitude": 50.0,
+                "height": 30.0, "yaw": self.yaw, "uavState": "5",
+                "timeStamp": self.now()}
 
     def read_legacy(self, resource, *, project_id, drone_id=None, query=None):
         self.calls.append((resource, project_id, drone_id, dict(query or {})))
         value = self.responses[resource]
         if isinstance(value, Exception):
             raise value
+        if resource == "pose":
+            if not isinstance(value, KtdHttpResponse) or value.status_code != 200:
+                return value
+            return ok(self.pose_payload())
         return value
 
     def submit(self, command, context):
         self.submitted.append((command, context))
+        if (command.path == "/screen/uav/operation/control"
+                and command.body.get("mode") == 3):
+            type_ = command.body.get("type")
+            param = command.body.get("param", 0)
+            if type_ in (206, -206) and param:
+                delta = float(param) / 2.0
+                if self.invert_yaw:
+                    delta = -delta
+                self.yaw = (self.yaw + (delta if type_ == 206 else -delta)) % 360.0
         return KtdHttpResponse(200, {"code": 200})
 
 
@@ -71,14 +94,18 @@ class LegacySnapshotProviderTests(unittest.TestCase):
         self.assertIn("read_state", snapshot.permissions)
         self.assertIn("move_forward", snapshot.permissions)
         self.assertIn("camera_photo", snapshot.permissions)
+        self.assertIn("turn_left", snapshot.permissions)
+        self.assertIn("gimbal_up", snapshot.permissions)
         self.assertNotIn("route_pause", snapshot.permissions)
         self.assertIs(snapshot.capabilities["UAV_MOVE_DISTANCE"], True)
         self.assertIs(snapshot.state["online"], True)
         self.assertIs(snapshot.state["airborne"], True)
         self.assertEqual(snapshot.state["flight_status"], "5")
+        self.assertEqual(snapshot.state["yaw_deg"], 0.0)
+        self.assertEqual(snapshot.state["longitude"], 113.0)
         self.assertRegex(snapshot.version, r"^[0-9a-f]{64}$")
         self.assertEqual([call[0] for call in self.transport.calls],
-                         ["user_info", "sites", "owners", "permissions", "hangar_state"])
+                         ["user_info", "sites", "owners", "permissions", "hangar_state", "pose"])
 
     def test_operator_must_match_login_identity(self):
         self.transport.responses["user_info"] = ok({"empId": "actor-2", "permission": []})
@@ -131,6 +158,21 @@ class LegacySnapshotProviderTests(unittest.TestCase):
                 self.assertIs(snapshot.state["online"], online)
                 self.assertIs(snapshot.state["airborne"], airborne)
 
+    def test_pose_failure_removes_turn_permissions_but_keeps_gimbal(self):
+        self.transport.responses["pose"] = KtdHttpResponse(500, {"code": 500})
+        snapshot = self.provider()
+        self.assertNotIn("turn_left", snapshot.permissions)
+        self.assertNotIn("turn_right", snapshot.permissions)
+        self.assertIn("gimbal_up", snapshot.permissions)
+        self.assertIsNone(snapshot.state["yaw_deg"])
+        self.assertEqual(snapshot.observed_at, self.now)
+
+    def test_pose_timestamp_accepts_seconds_and_milliseconds(self):
+        self.assertEqual(_pose_time({"timeStamp": 1700000000000}, 1700000000.0), 1700000000.0)
+        self.assertEqual(_pose_time({"timeStamp": 1700000000}, 1700000000.0), 1700000000.0)
+        self.assertIsNone(_pose_time({"timeStamp": 1700000010}, 1700000000.0))
+        self.assertIsNone(_pose_time({}, 1700000000.0))
+
     def test_upstream_errors_are_reduced_to_stable_codes(self):
         self.transport.responses["sites"] = KtdHttpResponse(500, {"code": 500})
         with self.assertRaises(KtdPlatformError) as raised:
@@ -174,7 +216,8 @@ class LegacyExecutorTests(unittest.TestCase):
             transport=self.transport, snapshot_provider=provider or self.provider,
             journal=SqliteCommandJournal(self.journal_path), enabled=enabled,
             clock=lambda: self.now, legacy_read_api=True,
-            allow_unverified_pose=pose, track_commands=False)
+            allow_unverified_pose=pose, track_commands=False,
+            sleep=lambda seconds: None)
 
     def request(self, action="move_forward", parameters=None, key="request-1"):
         return FlightControlActionRequest(
@@ -218,7 +261,9 @@ class LegacyExecutorTests(unittest.TestCase):
         self.assertEqual(self.transport.submitted, [])
         self.assertEqual(executor.available_actions(), frozenset(
             {"read_state", "camera_photo", "camera_start_recording",
-             "camera_stop_recording", "gimbal_reset"}))
+             "camera_stop_recording", "gimbal_reset", "gimbal_up", "gimbal_down",
+             "gimbal_left", "gimbal_right", "gimbal_45", "gimbal_90",
+             "turn_left", "turn_right"}))
 
     def test_movement_uses_existing_java_endpoint_with_pose_unverified(self):
         executor = self.executor(pose=True)
@@ -238,6 +283,22 @@ class LegacyExecutorTests(unittest.TestCase):
         receipt = self.confirm(executor, card)
         self.assertEqual(receipt.to_dict()["status"], "submitted")
         self.assertEqual(len(self.transport.submitted), 1)
+
+    def test_move_confirmation_survives_normal_pose_drift(self):
+        executor = self.executor(pose=True)
+        card = executor.preview(self.request())
+        self.transport.yaw = 2.0
+        receipt = self.confirm(executor, card)
+        self.assertEqual(receipt.to_dict()["status"], "submitted")
+
+    def test_turn_confirmation_survives_normal_heading_drift(self):
+        executor = self.executor()
+        card = executor.preview(self.request("turn_right", {"angle_deg": 90}, key="turn-drift"))
+        self.transport.yaw = 1.0
+        receipt = self.confirm(executor, card)
+        self.assertIs(receipt.status, FlightControlStatus.ACCEPTED)
+        self.assertGreaterEqual(self.transport.yaw, 88.0)
+        self.assertLessEqual(self.transport.yaw, 94.0)
 
     def test_owner_loss_after_preview_rejects_before_send(self):
         executor = self.executor(pose=True)
@@ -266,6 +327,66 @@ class LegacyExecutorTests(unittest.TestCase):
         self.assertEqual(snapshot["authorization_quality"], "legacy-read-api")
         self.assertEqual(snapshot["control_owner"], "actor-1")
         self.assertEqual(self.transport.submitted, [])
+
+    def test_turn_uses_closed_loop_and_neutralizes(self):
+        executor = self.executor()
+        card = executor.preview(self.request("turn_right", {"angle_deg": 90}, key="turn-1"))
+        self.assertIs(card.status, FlightControlStatus.PREVIEW_REQUIRED)
+        receipt = self.confirm(executor, card)
+        self.assertIs(receipt.status, FlightControlStatus.ACCEPTED)
+        self.assertFalse(receipt.device_effect_verified)
+        self.assertGreaterEqual(self.transport.yaw, 87.0)
+        self.assertLessEqual(self.transport.yaw, 93.0)
+        bodies = [command.body for command, _context in self.transport.submitted]
+        self.assertTrue(any(body.get("type") == 206 and body.get("mode") == 3
+                            and body.get("param") > 0 for body in bodies))
+        self.assertTrue(any(body.get("type") == 206 and body.get("mode") == 3
+                            and body.get("param") == 0 for body in bodies))
+        self.assertTrue(any(body.get("type") == 207 for body in bodies))
+
+    def test_turn_without_pose_is_not_permitted(self):
+        self.transport.responses["pose"] = KtdHttpResponse(500, {"code": 500})
+        executor = self.executor()
+        card = executor.preview(self.request("turn_left", {"angle_deg": 30}, key="turn-2"))
+        self.assertEqual(card.error_code, "ACTION_NOT_PERMITTED")
+        self.assertEqual(self.transport.submitted, [])
+
+    def test_turn_aborts_when_feedback_moves_away_from_target(self):
+        self.transport.invert_yaw = True
+        executor = self.executor()
+        card = executor.preview(self.request("turn_right", {"angle_deg": 90}, key="turn-3"))
+        receipt = self.confirm(executor, card)
+        self.assertIs(receipt.status, FlightControlStatus.REJECTED)
+        self.assertEqual(receipt.error_code, "TURN_DIVERGING")
+        bodies = [command.body for command, _context in self.transport.submitted]
+        self.assertTrue(any(body.get("type") == 207 for body in bodies))
+
+    def test_gimbal_relative_sends_step_then_stop(self):
+        executor = self.executor()
+        card = executor.preview(self.request("gimbal_up", {}, key="gimbal-1"))
+        self.assertIs(card.status, FlightControlStatus.PREVIEW_REQUIRED)
+        receipt = self.confirm(executor, card)
+        self.assertEqual(receipt.to_dict()["status"], "submitted")
+        bodies = [command.body for command, _context in self.transport.submitted]
+        self.assertEqual(bodies[0]["type"], 401)
+        self.assertEqual(bodies[0]["controlMode"], 2)
+        self.assertEqual(bodies[0]["param"], 1)
+        self.assertAlmostEqual(bodies[0]["stepPercentage"], 5.0 / 3.0)
+        self.assertEqual(bodies[-1]["type"], 401)
+        self.assertEqual(bodies[-1]["controlMode"], 2)
+        self.assertEqual(bodies[-1]["param"], 0)
+
+    def test_stick_is_bounded_and_always_neutralizes(self):
+        executor = self.executor()
+        result = executor.stick("yaw_right", 20, 1.0)
+        self.assertEqual(result["status"], "accepted")
+        self.assertGreater(result["end_pose"]["yaw_deg"], result["start_pose"]["yaw_deg"])
+        bodies = [command.body for command, _context in self.transport.submitted]
+        self.assertTrue(any(body.get("type") == 207 for body in bodies))
+        self.assertEqual(executor.stick("yaw_right", 20, 99)["error_code"],
+                         "INVALID_STICK_PARAMETERS")
+        self.assertEqual(executor.stick("unknown", 20, 1)["error_code"],
+                         "INVALID_STICK_AXIS")
 
 
 class LegacyTransportTests(unittest.TestCase):
@@ -297,6 +418,18 @@ class LegacyTransportTests(unittest.TestCase):
         self.transport.read_legacy("permissions", project_id="project-1", drone_id="drone-1")
         self.assertEqual(self.requests[1][0],
                          "https://platform.test/api/screen/control/permissions/3/drone-1")
+        self.transport.read_legacy("pose", project_id="project-1", query={"sn": "uav-sn-1"})
+        self.assertEqual(self.requests[2][0],
+                         "https://platform.test/api/test/getUdpData?sn=uav-sn-1")
+
+    def test_operation_control_timestamp_is_strictly_increasing(self):
+        context = KtdRequestContext("actor-1", "project-1", "trace-1", "idem-1")
+        for _ in range(2):
+            self.transport.submit(KtdCommand("/screen/uav/operation/control", {"type": 207}),
+                                  context)
+        stamps = [int(headers["Timestamp"]) for _url, headers in self.requests]
+        self.assertEqual(len(stamps), 2)
+        self.assertGreater(stamps[1], stamps[0])
 
     def test_unknown_resource_and_bad_identifier_never_reach_network(self):
         for call in (lambda: self.transport.read_legacy("arbitrary", project_id="project-1"),
