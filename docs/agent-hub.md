@@ -137,3 +137,38 @@ python3 tools/agent_hub_server.py --port 8800 \
 lsof -nP -iTCP:8794 -iTCP:5055 -iTCP:8800 -sTCP:LISTEN
 # 按 PID 停止上述三个进程；再清理 /tmp/lingxi-hub-e2e
 ```
+
+## 演示部署：ai-lingxi（2026-10-20）
+
+用户要求发布到 5008 服务器看效果。**没有改 5008 共享服务、没有占用它的端口**，而是
+在同机另起独立目录和端口：
+
+| 项 | 值 |
+| --- | --- |
+| 服务器 | `ai-lingxi`（`192.168.130.238`） |
+| 部署目录 | `/home/user/lingxi-agent-hub/`（`hub/`、`flight-agent-ui/`、`flight-agent-src/`、`logs/`） |
+| 访问地址 | <http://192.168.130.238:18800/agent-hub/> |
+| 聚合入口 | `lingxi-hub-proxy.service`（systemd user 临时单元，`192.168.130.238:18800`，MemoryMax 512M） |
+| 飞控模拟器 | `lingxi-hub-flight.service`（`127.0.0.1:18794`，MemoryMax 1G，Python 3.12） |
+| 任务下发上游 | 现有 5008（`127.0.0.1:5008`，PID 2843980 未变、NRestarts=0） |
+| 现有飞控预览网关 | `8794`（operator token 鉴权）未改动、未复用 |
+
+部署方式：`rsync` 上传宿主页、飞控前端构建产物（约 17MB）和本仓 `src/`（约 0.6MB），
+用 `systemd-run --user --unit=... --collect` 启动，带 `MemoryMax`/`MemorySwapMax=0`/
+`CPUQuota`。实测两个进程分别约 15MB / 13MB 内存，5008 健康 200、未重启。
+
+停止与回滚（不删源码，只停进程）：
+
+```bash
+ssh ai-lingxi 'systemctl --user stop lingxi-hub-proxy.service lingxi-hub-flight.service'
+# 需要彻底清理时再删除 /home/user/lingxi-agent-hub/
+```
+
+注意：
+
+- 飞控模型默认 `qwen3.5:9b`，服务器上同时有 5008 保活的 `qwen2.5:3b`；首次发消息会占用
+  共享 Ollama，可能驱逐其他模型。本轮只做了页面与只读接口验收，**没有主动触发模型调用**。
+- 5008 服务本身开启 `CHAT_AGENT_READONLY_MODE=on`，任务下发对话的写路径仍受 5008
+  原有配置约束，聚合页没有放宽任何权限。
+- 这是演示实例，不是 5008 正式发布链的一部分；5008 的 Python 服务仍走
+  `开发分支 → dev-wxl → test → candidates` 的原有发布流程。
