@@ -7,7 +7,8 @@ Runtime binding 同时绑定 actor、项目、机库、无人机、任务批次�
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from copy import deepcopy
 from datetime import datetime, timezone
 from enum import Enum
 import hashlib
@@ -28,6 +29,11 @@ from .models import (
 from .safety import SafetyFastPath, normalize
 from .simulator import MemoryFlightSimulator
 from .geometry import relative_target
+from .flight_policy import (
+    ADJUSTABLE, CONTROL_MESSAGE, MAPPING_MESSAGE, POLICY_VERSION, MICRO_ACTIONS,
+    TEMPORARY_ACTIONS, INTERRUPTING_ACTIONS, RESUME_ACTIONS, PolicyError,
+    check_flight_policy, check_path, mapping_interruption, normalize_parameters,
+)
 
 if TYPE_CHECKING:  # 运行时避免与 executor 成环（executor 依赖本模块的类型）
     from .executor import RuntimeExecutor
@@ -123,15 +129,12 @@ _MOVES = {
     FlightControlAction.MOVE_UP, FlightControlAction.MOVE_DOWN,
 }
 
-#: 这些动作不需要先持有控制权。急停只停止运动、不会引入新的风险，
-#: 而且恰恰是「控制权不在自己手上」时最需要它——要求先握手会延误处置。
-#: 返航/降落会驱动自主飞行，与他人操控可能冲突，因此仍要求持有控制权。
+# V1.3: only ownership management is exempt; even emergency stop needs control.
 _CONTROL_FREE_ACTIONS = frozenset({
     FlightControlAction.CONTROL_ACQUIRE,
     FlightControlAction.REMOTE_REQUEST,
     FlightControlAction.REMOTE_APPROVE,
     FlightControlAction.REMOTE_REJECT,
-    FlightControlAction.EMERGENCY_STOP,
 })
 
 
@@ -228,6 +231,15 @@ class FlightControlState:
     route_status: str = "idle"
     route_id: str | None = None
     breakpoint_index: int | None = None
+    task_type: str = "inspection"
+    mapping_invalidated: bool = False
+    auto_stitching: bool = False
+    temporary_task_id: str | None = None
+    low_battery_return: bool = False
+    device_limits: dict[str, Any] = field(default_factory=lambda: {
+        **{action: {"min": low, "max": high} for action, (_, low, high) in ADJUSTABLE.items()},
+        "gimbal_pitch_deg": {"min": -90, "max": 90},
+    })
     parameters: dict[str, float] = field(default_factory=lambda: {
         "move_speed_mps": 5.0,
         "roll_speed_dps": 30.0,
@@ -276,6 +288,12 @@ class FlightControlState:
             "route_status": self.route_status,
             "route_id": self.route_id,
             "breakpoint_index": self.breakpoint_index,
+            "task_type": self.task_type,
+            "mapping_invalidated": self.mapping_invalidated,
+            "auto_stitching": self.auto_stitching,
+            "temporary_task_id": self.temporary_task_id,
+            "low_battery_return": self.low_battery_return,
+            "device_limits": deepcopy(self.device_limits),
             "parameters": dict(self.parameters),
             "camera": dict(self.camera),
             "infrared": dict(self.infrared),
@@ -299,6 +317,9 @@ class FlightControlReceipt:
     error_code: str | None = None
     message: str = ""
     expires_at: str | None = None
+    parameters: Mapping[str, Any] = field(default_factory=dict)
+    adjustments: list[dict[str, Any]] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -314,6 +335,10 @@ class FlightControlReceipt:
             "error_code": self.error_code,
             "message": self.message,
             "expires_at": self.expires_at,
+            "parameters": deepcopy(dict(self.parameters)),
+            "adjustments": deepcopy(self.adjustments),
+            "warnings": list(self.warnings),
+            "policy_version": POLICY_VERSION,
         }
 
 
@@ -326,6 +351,9 @@ class _Pending:
     expires_at: float
     status: FlightControlStatus = FlightControlStatus.PREVIEW_REQUIRED
     route_context: tuple[int, str | None, str, int | None] | None = None
+    policy_context: str = ""
+    adjustments: list[dict[str, Any]] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 _ROUTE_REQUIRED_STATES = {
@@ -469,6 +497,7 @@ def _status_receipt(status: FlightControlStatus, request: FlightControlActionReq
         error_code=error_code,
         message=message,
         expires_at=None if expires_at is None else datetime.fromtimestamp(expires_at, timezone.utc).isoformat(),
+        parameters=deepcopy(dict(request.parameters)),
     )
 
 
@@ -485,7 +514,8 @@ def _context_for(binding: RuntimeBinding) -> ExecutionContext:
 class MemoryFlightControlSimulator(MemoryFlightSimulator):
     """纯内存完整控制面；不会触碰旧的真实控制接口。"""
 
-    def __init__(self, binding: RuntimeBinding, *, clock=None, ttl_sec: float = 120.0):
+    def __init__(self, binding: RuntimeBinding, *, clock=None, ttl_sec: float = 120.0,
+                 path_checker=None):
         binding.validate()
         # Keep the original MemoryFlightSimulator API available while adding
         # the complete action/state model around the same in-memory boundary.
@@ -497,6 +527,7 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         self._pending: dict[str, _Pending] = {}
         self._by_key: dict[str, FlightControlReceipt] = {}
         self._route_revision = 0
+        self._path_checker = path_checker
 
     def runtime_context(self) -> ExecutionContext:
         """始终由当前绑定派生。
@@ -536,6 +567,18 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
                 self.state.route_status, self.state.breakpoint_index)
 
     def _route_precondition_error(self, action: FlightControlAction) -> tuple[str, str] | None:
+        if action.value in RESUME_ACTIONS and self.state.mapping_invalidated:
+            return "MAPPING_NOT_RESUMABLE", "原测绘任务已失效，不可恢复航线。"
+        if action == FlightControlAction.CONTINUE_FROM_BREAKPOINT:
+            if not self.state.route_id or self.state.breakpoint_index is None:
+                return "BREAKPOINT_UNAVAILABLE", "没有有效的原始任务断点。"
+            if self.state.route_status not in {"paused", "point_flight", "point_orbit", "temporary_completed"}:
+                return "ROUTE_STATE_MISMATCH", "当前状态不能恢复原始任务断点。"
+            return None
+        if (action == FlightControlAction.ROUTE_RESUME and self.state.route_id
+                and self.state.breakpoint_index is not None
+                and self.state.route_status == 'temporary_completed'):
+            return None
         expected = _ROUTE_REQUIRED_STATES.get(action)
         if expected is None:
             return None
@@ -559,6 +602,12 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         return None
 
     def preview(self, request: FlightControlActionRequest) -> FlightControlReceipt:
+        try:
+            parameters, adjustments = normalize_parameters(request.action, request.parameters, self.state.to_dict())
+            request = replace(request, parameters=parameters)
+        except PolicyError as error:
+            return _status_receipt(FlightControlStatus.REJECTED, request, self.binding, self.state,
+                                   error_code=error.code, message=str(error))
         request.validate()
         if request.context_version is not None and request.context_version != self.binding.context_version:
             return _status_receipt(FlightControlStatus.STALE_CONTEXT, request, self.binding, self.state,
@@ -586,23 +635,80 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             return receipt
         if action not in _CONTROL_FREE_ACTIONS and self.state.control_owner != self.binding.actor_id:
             return _status_receipt(FlightControlStatus.REJECTED, request, self.binding, self.state,
-                                   error_code="CONTROL_NOT_OWNED", message="请先获取模拟控制权")
+                                   error_code="CONTROL_NOT_OWNED", message=CONTROL_MESSAGE)
+        try:
+            check_flight_policy(action.value, self.state.to_dict())
+            warning = check_path(self._path_checker, self.binding, action.value, parameters, self.state.to_dict())
+        except PolicyError as error:
+            return _status_receipt(FlightControlStatus.REJECTED, request, self.binding, self.state,
+                                   error_code=error.code, message=str(error))
         error = self._precise_gimbal_error(request) or self._route_precondition_error(action)
         if error is not None:
             return _status_receipt(FlightControlStatus.REJECTED, request, self.binding, self.state,
                                    error_code=error[0], message=error[1])
-        route_context = self._route_context() if action in _ROUTE_REQUIRED_STATES else None
+        route_context = self._route_context() if action in _ROUTE_REQUIRED_STATES or action.value in MICRO_ACTIONS | TEMPORARY_ACTIONS | RESUME_ACTIONS else None
         confirmation_id = uuid4().hex
         binding_data = {"binding": self.binding.to_dict(), "request": request.to_dict()}
         if route_context is not None:
             binding_data["route_context"] = route_context
         binding_hash = _json_hash(binding_data)
         pending = _Pending(request, self.binding, confirmation_id, binding_hash,
-                           float(self._clock()) + self._ttl_sec, route_context=route_context)
+                           float(self._clock()) + self._ttl_sec, route_context=route_context,
+                           policy_context=self._policy_context(action), adjustments=adjustments,
+                           warnings=([warning] if warning else []) +
+                           ([MAPPING_MESSAGE] if mapping_interruption(action.value, self.state.to_dict()) else []))
         self._pending[confirmation_id] = pending
-        return _status_receipt(FlightControlStatus.PREVIEW_REQUIRED, request, self.binding, self.state,
+        receipt = _status_receipt(FlightControlStatus.PREVIEW_REQUIRED, request, self.binding, self.state,
                                confirmation_id=confirmation_id, confirmation_binding=binding_hash,
                                message="动作已预览，等待确认", expires_at=pending.expires_at)
+        return replace(receipt, adjustments=adjustments, warnings=pending.warnings)
+
+    def _policy_context(self, action):
+        state = self.state.to_dict()
+        keys = ["task_type", "mapping_invalidated", "low_battery_return"]
+        if action in ADJUSTABLE:
+            keys += ["device_limits"]
+        if action in {"gimbal_up", "gimbal_down"}:
+            keys += ["gimbal_pitch_deg"]
+        if action in INTERRUPTING_ACTIONS:
+            keys += ["route_status", "auto_stitching"]
+        return _json_hash({key: state[key] for key in keys})
+
+    def apply_task_event(self, event, *, task_batch_id, temporary_task_id=None):
+        """Simulator-only platform event seam; never exposed as an LLM tool."""
+        if task_batch_id != self.binding.task_batch_id:
+            raise ValueError("task binding mismatch")
+        s = self.state
+        if event == "temporary_completed":
+            if not temporary_task_id or temporary_task_id != s.temporary_task_id:
+                raise ValueError("stale temporary task event")
+            s.temporary_task_id = None
+            s.route_status = "ended" if s.mapping_invalidated else "temporary_completed"
+            if s.mapping_invalidated:
+                s.task_status = "ended"
+        elif event == "low_battery_return":
+            if s.route_id and not s.mapping_invalidated and s.route_status != "ended" and s.breakpoint_index is None:
+                s.breakpoint_index = 0
+            s.temporary_task_id = None
+            s.low_battery_return = True
+            s.task_status = "returning_home"
+        elif event == "recharged_online":
+            if not s.low_battery_return:
+                raise ValueError("no low battery return to resume")
+            s.low_battery_return = False
+            s.temporary_task_id = None
+            resumable = s.route_id and s.breakpoint_index is not None and not s.mapping_invalidated
+            s.route_status = "running" if resumable else "ended"
+            s.task_status = "route_executing" if resumable else "ended"
+        elif event == "all_tasks_ended":
+            s.breakpoint_index = None
+            s.temporary_task_id = None
+            s.route_status = s.task_status = "ended"
+        else:
+            raise ValueError("unsupported task event")
+        self._route_revision += 1
+        s.revision += 1
+        return s.to_dict()
 
     def confirm(self, confirmation_id: str, *, command_id: str, idempotency_key: str,
                 confirmation_binding: str, context_version: int) -> FlightControlReceipt:
@@ -631,7 +737,11 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
                                    confirmation_id=confirmation_id, confirmation_binding=pending.confirmation_binding,
                                    error_code="CONFIRMATION_EXPIRED", message="确认卡已经过期")
         action = FlightControlAction(request.action)
-        if action in _ROUTE_REQUIRED_STATES:
+        if action not in _CONTROL_FREE_ACTIONS and self.state.control_owner != self.binding.actor_id:
+            self._pending.pop(confirmation_id, None)
+            return _status_receipt(FlightControlStatus.REJECTED, request, self.binding, self.state,
+                                   error_code="CONTROL_NOT_OWNED", message=CONTROL_MESSAGE)
+        if pending.route_context is not None:
             if self.state.control_owner != self.binding.actor_id:
                 error = ("CONTROL_NOT_OWNED", "模拟控制权已变化，请重新检查")
             elif pending.route_context != self._route_context():
@@ -644,6 +754,15 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
                                        confirmation_id=confirmation_id,
                                        confirmation_binding=pending.confirmation_binding,
                                        error_code=error[0], message=error[1])
+        try:
+            check_flight_policy(action.value, self.state.to_dict())
+            if pending.policy_context != self._policy_context(action):
+                raise PolicyError("POLICY_STATE_CHANGED", "设备参数或任务状态已变化，请重新生成确认卡。")
+            warning = check_path(self._path_checker, self.binding, action.value, request.parameters, self.state.to_dict())
+        except PolicyError as policy_error:
+            self._pending.pop(confirmation_id, None)
+            return _status_receipt(FlightControlStatus.REJECTED, request, self.binding, self.state,
+                                   error_code=policy_error.code, message=str(policy_error))
         error = self._precise_gimbal_error(request)
         if error is not None:
             self._pending.pop(confirmation_id, None)
@@ -653,6 +772,8 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         result = _status_receipt(FlightControlStatus.ACCEPTED, request, self.binding, self.state,
                                  confirmation_id=confirmation_id, confirmation_binding=pending.confirmation_binding,
                                  message="模拟动作已执行")
+        result = replace(result, adjustments=pending.adjustments,
+                         warnings=list(dict.fromkeys(pending.warnings + ([warning] if warning else []))))
         pending.status = FlightControlStatus.ACCEPTED
         self._pending.pop(confirmation_id, None)
         self._by_key[idempotency_key] = result
@@ -688,6 +809,16 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         action = FlightControlAction(request.action)
         p = request.parameters
         s = self.state
+        if mapping_interruption(action.value, s.to_dict()):
+            s.mapping_invalidated = True
+            s.auto_stitching = False
+            s.breakpoint_index = None
+            if action.value in MICRO_ACTIONS:
+                s.route_status = "interrupted"
+        if action.value in TEMPORARY_ACTIONS:
+            if not s.mapping_invalidated and s.route_id and s.breakpoint_index is None:
+                s.breakpoint_index = 0
+            s.temporary_task_id = request.command_id
         if action == FlightControlAction.CONTROL_ACQUIRE:
             s.control_owner = self.binding.actor_id
         elif action == FlightControlAction.CONTROL_RELEASE:
@@ -736,15 +867,20 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             s.task_status = "landed" if action == FlightControlAction.LAND else "alternate_landed"
         elif action == FlightControlAction.RETURN_HOME:
             s.task_status = "returning_home"
+            s.temporary_task_id = None
         elif action == FlightControlAction.CANCEL_RETURN_HOME:
             s.task_status = "flying"
         elif action == FlightControlAction.ROUTE_PAUSE:
             s.route_status = "paused"
+            if not s.mapping_invalidated and s.breakpoint_index is None:
+                s.breakpoint_index = 0
         elif action == FlightControlAction.ROUTE_RESUME:
             s.route_status = "running"
+            s.temporary_task_id = None
         elif action == FlightControlAction.CONTINUE_FROM_BREAKPOINT:
             s.route_status = "running"
             s.breakpoint_index = int(p.get("index", s.breakpoint_index or 0))
+            s.temporary_task_id = None
         elif action == FlightControlAction.POINT_FLIGHT:
             s.longitude, s.latitude, s.altitude_m = float(p["longitude"]), float(p["latitude"]), float(p["altitude_m"])
             s.route_status = "point_flight"
@@ -1101,6 +1237,15 @@ def build_full_control_tool_registry(
             if receipt.status is not FlightControlStatus.PREVIEW_REQUIRED:
                 # READ_STATE 直接返回；重复、过期、越权与执行器的拒绝也在这里如实返回。
                 return receipt.to_dict()
+            if receipt.adjustments or MAPPING_MESSAGE in receipt.warnings:
+                # The legacy loop confirmed the raw call, not these new effects.
+                runtime.cancel(receipt.confirmation_id, command_id=request.command_id,
+                    idempotency_key=request.idempotency_key,
+                    confirmation_binding=receipt.confirmation_binding, context_version=context_version)
+                return replace(receipt, status=FlightControlStatus.REJECTED,
+                    confirmation_id=None, confirmation_binding=None,
+                    error_code='POLICY_CONFIRMATION_REQUIRED',
+                    message='设备参数调整或测绘中断风险需在交互驾驶舱重新确认。').to_dict()
             return runtime.confirm(
                 receipt.confirmation_id,
                 command_id=request.command_id,

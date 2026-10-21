@@ -107,14 +107,13 @@ loop = BoundedAgentLoop(decider, build_full_control_tool_registry(simulator), ma
 安全动作命中时**完全不发模型调用**，执行完也不再回问模型，直接给确定性收尾语，
 因此整条链路与模型服务解耦。
 
-## 配套修复：急停不再要求控制权
+## V1.3 更新：急停仍要求控制权
 
-原实现要求所有动作先持有控制权，**急停也被 `CONTROL_NOT_OWNED` 拒绝**——
-而急停恰恰是「控制权不在自己手上」时最需要它。现已把 `emergency_stop` 加入
-`_CONTROL_FREE_ACTIONS`（连同 `CONTROL_ACQUIRE` / `REMOTE_*`）。
+2026-10-21 按产品 V1.3 移除旧的急停权限豁免。`emergency_stop` 不在
+`_CONTROL_FREE_ACTIONS` 中；预览及确认前都检查当前操作者的控制权。
 
-只豁免急停：它**只停止运动**，不会引入新的风险。`return_home` / `land` 会驱动自主飞行，
-与他人操控可能冲突，因此仍要求持有控制权。
+快路径只绕过模型推理，不绕过控制权、确认、测绘中断提示或执行器门禁。
+前文性能数字为历史模拟器证据，不代表当前平台或真实飞行验收。
 
 ## 已知边界
 

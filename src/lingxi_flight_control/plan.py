@@ -15,6 +15,7 @@ from typing import Any, Mapping
 from .agent import ToolRegistry
 from .full_control import ACTION_SPECS, FlightControlAction
 from .models import ToolDefinition, ToolSchema
+from .flight_policy import proposal_parameters
 
 #: 规划专用系统提示词。与单步提示词分开，避免“只建议第一步”的约束
 #: 让复合指令永远只得到一张卡。
@@ -25,7 +26,7 @@ state是服务器状态；confirmed_actions是先前回执，不是用户新增�
 
 规则：
 - 最多 {max_steps} 步；只拆分用户明确要求的动作，不添加、不省略、不替换。
-- 缺少方向、距离、角度、高度、目标等必填参数时，用中文问清；不能猜、用默认值、截断或拆分超限数值。
+- 缺少方向、距离、角度、高度、目标等必填参数时，用中文问清；不能猜、用默认值、截断或拆分超限数值。设备设置须提取原始数值，由确定性层按设备表调整；不替用户调整。急停同样需要控制权，测绘中断必须单独确认。
 - 否定、假设、条件、定时、能力询问、引用示例都不能产生步骤。
 - 相对前后左右以机头为参考；左转/右转改变航向，向左/右飞是平移。
 - 位移 0<距离<=20 米，角度 0<角度<=360 度；正确处理中文数词、小数和单位换算。
@@ -79,7 +80,7 @@ def build_plan_registry() -> tuple[ToolRegistry, PlanRecorder]:
     for action, spec in ACTION_SPECS.items():
         if action == FlightControlAction.READ_STATE:
             continue
-        parameters = dict(spec.parameters)
+        parameters = proposal_parameters(action.value, spec.parameters)
         if "distance_m" in parameters:
             # 与驾驶舱模型面和平台距离模式一致：0 < d <= 20 米。
             parameters["distance_m"] = replace(parameters["distance_m"], maximum=20)

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
+from dataclasses import replace
 import hashlib
 import json
 import math
@@ -28,6 +29,9 @@ from .full_control import (
     _CONTROL_FREE_ACTIONS,
 )
 from .models import ExecutionContext
+from .flight_policy import (CONTROL_MESSAGE, MAPPING_MESSAGE, PolicyError,
+                            check_flight_policy, check_path, mapping_interruption,
+                            normalize_parameters)
 
 STATE_SCHEMA = "lingxi-agent-flight-state/v1"
 COMMAND_SCHEMA = "lingxi-agent-flight-control/v1"
@@ -67,6 +71,7 @@ class ZhuoyiPlatformExecutor:
         preview_ttl_sec: float = 120.0,
         allow_insecure_http: bool = False,
         clock: Callable[[], float] = time.time,
+        path_checker=None,
     ):
         binding.validate()
         if not isinstance(base_url, str) or not base_url.strip():
@@ -95,6 +100,7 @@ class ZhuoyiPlatformExecutor:
         self._poll_interval = float(poll_interval)
         self._preview_ttl = float(preview_ttl_sec)
         self._clock = clock
+        self._path_checker = path_checker
         self._pending: dict[str, dict[str, Any]] = {}
         self._last_state: Mapping[str, Any] | None = None
 
@@ -117,6 +123,9 @@ class ZhuoyiPlatformExecutor:
                     "error_code": error or "AUTHORITATIVE_STATE_UNAVAILABLE"}
         owner = state.get("control_owner_employee_id")
         return {
+            **{key: state[key] for key in ('route_status', 'task_type', 'mapping_invalidated',
+                'auto_stitching', 'low_battery_return', 'device_limits', 'gimbal_pitch_deg',
+                'breakpoint_index', 'temporary_task_id') if key in state},
             "execution_mode": "platform",
             "available": True,
             "snapshot_version": state.get("snapshot_version"),
@@ -137,7 +146,6 @@ class ZhuoyiPlatformExecutor:
         }
 
     def preview(self, request: FlightControlActionRequest) -> FlightControlReceipt:
-        request.validate()
         if request.context_version is not None and request.context_version != self.binding.context_version:
             return self._receipt(FlightControlStatus.STALE_CONTEXT, request, {},
                                  error_code="STALE_CONTEXT", message="上下文版本已经变化")
@@ -147,12 +155,24 @@ class ZhuoyiPlatformExecutor:
             return self._receipt(FlightControlStatus.REJECTED, request, {},
                                  error_code=error or "AUTHORITATIVE_STATE_UNAVAILABLE",
                                  message="权威设备状态不可用")
+        try:
+            effective, adjustments = normalize_parameters(action.value, request.parameters, state)
+            request = replace(request, parameters=effective)
+            request.validate()
+        except PolicyError as error:
+            return self._receipt(FlightControlStatus.REJECTED, request, state,
+                                 error_code=error.code, message=str(error))
         if action == FlightControlAction.READ_STATE:
             return self._receipt(FlightControlStatus.ACCEPTED, request, state,
                                  message="读取平台状态")
         if action not in _CONTROL_FREE_ACTIONS and state.get("control_owner_employee_id") != self.binding.actor_id:
             return self._receipt(FlightControlStatus.REJECTED, request, state,
-                                 error_code="CONTROL_NOT_OWNED", message="请先获取平台控制权")
+                                 error_code="CONTROL_NOT_OWNED", message=CONTROL_MESSAGE)
+        try:
+            warning = self._policy(request, state)
+        except PolicyError as error:
+            return self._receipt(FlightControlStatus.REJECTED, request, state,
+                                 error_code=error.code, message=str(error))
         availability = (state.get("action_availability") or {}).get(action.value) or {}
         if not availability.get("available") or availability.get("reasons"):
             return self._receipt(FlightControlStatus.REJECTED, request, state,
@@ -172,12 +192,23 @@ class ZhuoyiPlatformExecutor:
             "confirmation_binding": confirmation_binding,
             "expires_at": expires_at,
             "state": state,
+            "adjustments": adjustments,
+            "warnings": [warning] if warning else [],
         }
-        return self._receipt(FlightControlStatus.PREVIEW_REQUIRED, request, state,
+        receipt = self._receipt(FlightControlStatus.PREVIEW_REQUIRED, request, state,
                              confirmation_id=confirmation_id,
                              confirmation_binding=confirmation_binding,
                              expires_at=datetime.fromtimestamp(expires_at, timezone.utc).isoformat(),
                              message="平台动作已预览，等待确认")
+        return replace(receipt, parameters=dict(request.parameters), adjustments=adjustments,
+                       warnings=[warning] if warning else [])
+
+    def _policy(self, request, state):
+        check_flight_policy(request.action, state)
+        if mapping_interruption(request.action, state):
+            raise PolicyError('MAPPING_INTERRUPTION_UNAVAILABLE',
+                              MAPPING_MESSAGE + '平台尚未提供作废测绘任务的原子契约，本次不下发。')
+        return check_path(self._path_checker, self.binding, request.action, request.parameters, state)
 
     def confirm(self, confirmation_id: str, *, command_id: str, idempotency_key: str,
                 confirmation_binding: str, context_version: int) -> FlightControlReceipt:
@@ -200,6 +231,21 @@ class ZhuoyiPlatformExecutor:
                                  confirmation_id=confirmation_id,
                                  confirmation_binding=pending["confirmation_binding"],
                                  error_code="CONFIRMATION_EXPIRED", message="确认卡已经过期")
+        state, error = self._state()
+        try:
+            if state is None:
+                raise PolicyError(error or 'AUTHORITATIVE_STATE_UNAVAILABLE', '权威设备状态不可用。')
+            if request.action not in _CONTROL_FREE_ACTIONS and state.get('control_owner_employee_id') != self.binding.actor_id:
+                raise PolicyError('CONTROL_NOT_OWNED', CONTROL_MESSAGE)
+            if state.get('snapshot_version') != pending['snapshot_version']:
+                raise PolicyError('AUTHORITATIVE_STATE_CHANGED', '权威状态已变化，请重新预览。')
+            effective, _ = normalize_parameters(request.action, request.parameters, state)
+            if effective != request.parameters:
+                raise PolicyError('DEVICE_LIMITS_CHANGED', '设备参数表已变化，请重新预览。')
+            warning = self._policy(request, state)
+        except PolicyError as error:
+            return self._receipt(FlightControlStatus.REJECTED, request, state or {},
+                                 error_code=error.code, message=str(error))
         body = {
             "schema_version": COMMAND_SCHEMA,
             "command_id": request.command_id,
@@ -232,11 +278,13 @@ class ZhuoyiPlatformExecutor:
                                  confirmation_binding=pending["confirmation_binding"],
                                  error_code="RECEIPT_PENDING",
                                  message="平台已受理但未取得终态，禁止重复确认")
-        return self._receipt(mapped, request, self.read_state(),
+        result = self._receipt(mapped, request, self.read_state(),
                              confirmation_id=confirmation_id,
                              confirmation_binding=pending["confirmation_binding"],
                              error_code=receipt.get("error_code") or (None if mapped in {FlightControlStatus.ACCEPTED, FlightControlStatus.DUPLICATE} else java_status),
                              message=f"平台回执：{java_status}；设备效果未验证")
+        return replace(result, parameters=dict(request.parameters), adjustments=pending['adjustments'],
+                       warnings=list(dict.fromkeys(pending['warnings'] + ([warning] if warning else []))))
 
     def cancel(self, confirmation_id: str, *, command_id: str, idempotency_key: str,
                confirmation_binding: str, context_version: int) -> FlightControlReceipt:
@@ -312,6 +360,7 @@ class ZhuoyiPlatformExecutor:
             error_code=error_code,
             message=message,
             expires_at=expires_at,
+            parameters=dict(request.parameters),
         )
 
     def _binding_hash(self, request: FlightControlActionRequest, snapshot_version: str) -> str:

@@ -1,0 +1,57 @@
+{
+  "date": "2026-10-21",
+  "timezone": "Asia/Singapore",
+  "policy_version": "flight-control-v1.3",
+  "baseline_sha": "67a4f8ff1f0470ae60e7521cb16e00451f8c648d",
+  "branch": "feature/product-v13-flight-policy",
+  "source_doc_sha256": "9c35dc14fb1ae4b75418b76d41a2f6bb43777986b3e7ef937f0da9d17e88dff1",
+  "source_hashes": {
+    "src/lingxi_flight_control/cockpit.py": "c9117746ddacb62826cc1d68012650501a016c8e1036cb11e455bc4abc78e8e5",
+    "src/lingxi_flight_control/flight_policy.py": "c8d29fc821eaabf9fae44287f16e5994906edf556a8afd3d87eca24ba31b1f6e",
+    "src/lingxi_flight_control/full_control.py": "202106209a3f75af48f4204ad4ee646efd792f0e3e708592d60422199b0599b2",
+    "src/lingxi_flight_control/ktd_platform.py": "a8ecdc571b4422f9654477681590d7af854cf080e5c6b18c3a35bcf01215b27b",
+    "src/lingxi_flight_control/plan.py": "c7eb863d4d599b42da85f7b807117e76f4ae51b2ea1d6117025a1293daf442e6",
+    "src/lingxi_flight_control/safety.py": "87a04427f89374a19661faa51fb54793619f8a11e732c1bb0103cb9cee785bb2",
+    "src/lingxi_flight_control/zhuoyi_platform.py": "9e16bb22a3b1a88d627d0ce0fa22f1094655a951410f4ab8e7d67b7a28254654",
+    "tests/test_precise_gimbal_intent.py": "fdc8390fc2a6416c613343e2764252cb93d38662a63cb206eec504f9487ee72e",
+    "tests/test_product_v13.py": "12703a9eff4da203169c0052aec16682a155db1918deda701670a9c042ed1feb",
+    "tests/test_safety.py": "6921ab7391e84ac48d30d224e1a44cc66de5816f8675242a7e58e9e6a390b127",
+    "tools/bench/product_v13_smoke.py": "8e5a516ecaa78a3306f960abf7124a8e43a2789facbcca94bb2f216cee36dd2d"
+  },
+  "baseline_tests": 759,
+  "final_tests": 787,
+  "test_result": "OK",
+  "test_command": "bash tools/ci/offline_tests.sh",
+  "offline_socket_guard": "passed",
+  "wheel_sha256": "41b3898d8eeea558ba21b452301fd904562d1ae933b5cf9ea8495ea583eceb90",
+  "http_smoke": {
+    "passed": 4,
+    "checks": [
+      "zoom-adjustment-confirm-replay",
+      "emergency-stop-ownership",
+      "running-route-hover-pause",
+      "mapping-interruption-explicit-confirmation"
+    ],
+    "port": 49590,
+    "listener_closed": true,
+    "peak_rss_mb": 39.25,
+    "model": "scripted-intent-not-live-model",
+    "execution_mode": "simulator",
+    "external_requests": 0,
+    "device_effect": "not_verified"
+  },
+  "unverified": [
+    "live-model-quality",
+    "frontend",
+    "shared-deployment",
+    "physical-device",
+    "platform-policy-metadata",
+    "real-geofence",
+    "concurrent-execution",
+    "annotation-ai-lifecycle",
+    "payload-text-volume-brightness",
+    "end-task-command"
+  ],
+  "shared_writes": 0,
+  "new_worktrees": 0
+}

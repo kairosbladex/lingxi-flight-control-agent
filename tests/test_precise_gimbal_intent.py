@@ -4,7 +4,7 @@ from lingxi_flight_control.full_control import FlightControlActionRequest, Runti
 
 
 class PreciseGimbalIntentTests(unittest.TestCase):
-    def test_simulator_uses_requested_angle_and_does_not_clip(self):
+    def test_simulator_preserves_angle_or_explicitly_previews_v13_adjustment(self):
         sim=MemoryFlightControlSimulator(RuntimeBinding('actor','project','hangar','drone','batch',1))
         sim.state.control_owner='actor'
         sim.state.gimbal_pitch_deg=-20
@@ -16,7 +16,9 @@ class PreciseGimbalIntentTests(unittest.TestCase):
         self.assertEqual(sim.state.gimbal_pitch_deg,-30)
         sim.state.gimbal_pitch_deg=-85
         bad=sim.preview(FlightControlActionRequest('next','next','gimbal_down',{'angle_deg':10},1))
-        self.assertEqual(bad.error_code,'GIMBAL_TARGET_OUT_OF_RANGE')
+        self.assertEqual(bad.status.value,'preview_required')
+        self.assertEqual(bad.parameters, {'angle_deg': 5})
+        self.assertEqual(bad.adjustments[0]['requested'], 10)
         self.assertEqual(sim.state.gimbal_pitch_deg,-85)
 
     def test_relative_direction_and_number_must_match(self):

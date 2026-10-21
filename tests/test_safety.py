@@ -174,6 +174,7 @@ class LatencyAndAvailabilityTests(unittest.TestCase):
     def test_emergency_stop_executes_with_the_model_unreachable(self):
         """模型服务挂掉时急停仍必须可用——这是快路径存在的第二个理由。"""
         simulator = MemoryFlightControlSimulator(binding())
+        simulator.state.control_owner = simulator.binding.actor_id
         registry = build_full_control_tool_registry(simulator)
         decider = SafetyFastPathDecider(ExplodingDecider())
         loop = BoundedAgentLoop(decider, registry, max_steps=6)
@@ -188,17 +189,18 @@ class LatencyAndAvailabilityTests(unittest.TestCase):
         receipt = result.checkpoint.observations[0]["result"]
         self.assertEqual(receipt["status"], FlightControlStatus.ACCEPTED.value)
 
-    def test_emergency_stop_does_not_require_control_ownership(self):
-        """急停恰恰是「控制权不在自己手上」时最需要，不能要求先握手。"""
+    def test_emergency_stop_requires_control_ownership_v13(self):
+        """V1.3 explicitly removes the former emergency-stop exemption."""
         simulator = MemoryFlightControlSimulator(binding())
         registry = build_full_control_tool_registry(simulator)
         self.assertIsNone(simulator.state.control_owner)
         loop = BoundedAgentLoop(SafetyFastPathDecider(ExplodingDecider()), registry, max_steps=6)
         result = emergency_stop_until_settled(loop, "急停")
         self.assertIs(result.status, LoopStatus.FINAL)
-        self.assertEqual(simulator.state.task_status, "emergency_stopped")
+        self.assertEqual(simulator.state.task_status, "idle")
         self.assertEqual(result.checkpoint.observations[0]["result"]["status"],
-                         FlightControlStatus.ACCEPTED.value)
+                         FlightControlStatus.REJECTED.value)
+        self.assertEqual(result.checkpoint.observations[0]["result"]["error_code"], "CONTROL_NOT_OWNED")
 
     def test_return_home_still_requires_control_ownership(self):
         # 返航会驱动自主飞行，与他人操控可能冲突，保持要求控制权。

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 import copy
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -23,6 +23,9 @@ from uuid import uuid4
 from .full_control import ACTION_SPECS, FlightControlAction, FlightControlActionRequest, FlightControlStatus, RuntimeBinding
 from .models import ExecutionContext
 from .java_tools import TOOLS as JAVA_TOOLS, JavaActionRequest, encode as encode_java_tool
+from .flight_policy import (ADJUSTABLE, CONTROL_MESSAGE, MAPPING_MESSAGE, POLICY_VERSION,
+                            PolicyError, check_flight_policy, check_path,
+                            mapping_interruption, normalize_parameters)
 
 
 _MOVE_TYPES = {"move_forward": 202, "move_backward": 203, "move_left": 204,
@@ -164,6 +167,9 @@ class KtdReceipt:
     device_report: Mapping[str, Any] | None = None
     kind: str | None = None
     vendor_report: Mapping[str, Any] | None = None
+    adjustments: list[dict[str, Any]] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    policy_version: str = POLICY_VERSION
 
     def to_dict(self) -> dict[str, Any]:
         result = asdict(self)
@@ -553,7 +559,7 @@ class KtdPlatformExecutor:
                  sleep: Callable[[float], None] = time.sleep,
                  turn_tolerance_deg: float = 3.0, turn_max_sec: float = 30.0,
                  turn_max_pulses: int = 80, turn_gain: float = 1.5,
-                 stick_max_sec: float = 5.0):
+                 stick_max_sec: float = 5.0, path_checker=None):
         binding.validate()
         if (not all(_identifier(value) for key, value in binding.to_dict().items() if key != "context_version")
                 or not _identifier(site_id) or (task_id is not None and not _identifier(task_id))
@@ -598,6 +604,7 @@ class KtdPlatformExecutor:
         self._turn_gain = float(turn_gain)
         self._stick_max_sec = float(stick_max_sec)
         self._pending: dict[str, _Pending] = {}
+        self._path_checker = path_checker
         self._lock = threading.RLock()
 
     @property
@@ -718,6 +725,9 @@ class KtdPlatformExecutor:
                   "available": snapshot is not None}
         if snapshot is not None:
             result.update({key: copy.deepcopy(value) for key, value in snapshot.state.items() if key in _STATE_FIELDS})
+            result.update({key: copy.deepcopy(snapshot.state[key]) for key in (
+                'task_type', 'mapping_invalidated', 'auto_stitching', 'low_battery_return',
+                'device_limits', 'gimbal_pitch_deg', 'breakpoint_index', 'temporary_task_id') if key in snapshot.state})
             # legacy 快照的租约是合成值，不向界面/回执伪装成权威租约。
             lease = (snapshot.control_lease_expires_at
                      if snapshot.authorization_quality == "authoritative" else None)
@@ -774,10 +784,30 @@ class KtdPlatformExecutor:
                    "缺少可靠角度设定及停止闭环，本次未下发，不会替换成默认步进。"
                    if code == 'GIMBAL_EXACT_ANGLE_UNAVAILABLE' else
                    "请求未执行，请核对能力、权限和当前状态")
+        if code == 'CONTROL_NOT_OWNED':
+            message = CONTROL_MESSAGE
+        elif code == 'ROUTE_PAUSE_REQUIRED':
+            from .flight_policy import ROUTE_MESSAGE
+            message = ROUTE_MESSAGE
+        elif code == 'MAPPING_INTERRUPTION_UNAVAILABLE':
+            message = MAPPING_MESSAGE + '平台尚未提供关闭拼图及作废断点的原子契约，本次不下发。'
+        elif code == 'PATH_BLOCKED':
+            message = '指令已拦截，平台检测到路径存在障碍物、禁飞区或限高，未执行移动。'
+        elif code == 'DEVICE_LIMITS_UNAVAILABLE':
+            message = '未取得当前设备参数表，不能猜测设备极值。'
         return self._receipt(request, FlightControlStatus.REJECTED, error_code=code,
                              message=message)
 
     def _compile(self, request: FlightControlActionRequest, snapshot: KtdSnapshot) -> KtdCommand:
+        try:
+            check_flight_policy(request.action, snapshot.state)
+            if mapping_interruption(request.action, snapshot.state):
+                raise PolicyError('MAPPING_INTERRUPTION_UNAVAILABLE', MAPPING_MESSAGE)
+            effective, _ = normalize_parameters(request.action, request.parameters, snapshot.state)
+            if effective != request.parameters:
+                raise PolicyError('DEVICE_LIMITS_CHANGED', '设备极值已变化，请重新预览。')
+        except PolicyError as exc:
+            raise KtdPlatformError(exc.code) from None
         if isinstance(request, JavaActionRequest):
             if not self._java_tools_enabled or self._track_commands or snapshot.profile != 'DJI_HANGAR':
                 raise KtdPlatformError('JAVA_TOOL_UNAVAILABLE')
@@ -1166,9 +1196,16 @@ class KtdPlatformExecutor:
 
     def preview(self, request: FlightControlActionRequest) -> KtdReceipt:
         with self._lock:
+            adjustments = []
             try:
                 if not isinstance(request, FlightControlActionRequest):
                     raise ValueError("invalid request")
+                if request.action in ADJUSTABLE and request.action in SUPPORTED_ACTIONS:
+                    if not self._enabled:
+                        return self._reject(request, 'PLATFORM_DISABLED')
+                    policy_snapshot = self._snapshot(request.action)
+                    effective, adjustments = normalize_parameters(request.action, request.parameters, policy_snapshot.state)
+                    request = replace(request, parameters=effective)
                 request.validate()
                 if not _identifier(request.command_id) or not _identifier(request.idempotency_key):
                     raise ValueError("invalid identifiers")
@@ -1181,6 +1218,8 @@ class KtdPlatformExecutor:
                     spec = ACTION_SPECS[action]
                     if set(request.parameters) - set(spec.parameters) or any(key not in request.parameters for key in spec.required):
                         raise ValueError("invalid schema")
+            except (PolicyError, KtdPlatformError) as exc:
+                return self._reject(request, exc.code if isinstance(exc, PolicyError) else str(exc))
             except (ValueError, TypeError, AttributeError, OverflowError):
                 if not isinstance(request, FlightControlActionRequest):
                     request = FlightControlActionRequest("invalid", "invalid", "read_state")
@@ -1213,9 +1252,13 @@ class KtdPlatformExecutor:
                 receipt = self._receipt(request, FlightControlStatus.PREVIEW_REQUIRED, snapshot=snapshot,
                                         confirmation_id=confirmation_id, confirmation_binding=_hash({"request": fingerprint, "snapshot": snapshot_hash}),
                                         expires_at=datetime.fromtimestamp(deadline, timezone.utc).isoformat(), trace_id=trace_id,
-                                        message="待确认平台指令，设备效果尚未验证")
+                                        message="待确认平台指令，设备效果尚未验证", adjustments=adjustments)
+                warning = check_path(self._path_checker, self.binding, action_value, request.parameters, snapshot.state)
+                receipt = replace(receipt, warnings=[warning] if warning else [])
                 self._pending[confirmation_id] = _Pending(copy.deepcopy(request), receipt, snapshot_hash, command, deadline)
                 return receipt
+            except PolicyError as error:
+                return self._reject(request, error.code)
             except KtdPlatformError as error:
                 return self._reject(request, str(error))
             except Exception:
@@ -1266,12 +1309,20 @@ class KtdPlatformExecutor:
                 else:
                     snapshot = self._snapshot(request.action.value if isinstance(request.action, FlightControlAction) else request.action)
                     command = self._compile(request, snapshot)
+                    try:
+                        warning = check_path(self._path_checker, self.binding, request.action,
+                                             request.parameters, snapshot.state)
+                    except PolicyError as error:
+                        raise KtdPlatformError(error.code) from None
                 if self._snapshot_hash(snapshot) != pending.snapshot_hash or command != pending.command:
                     self._pending.pop(confirmation_id)
                     return self._reject(request, "AUTHORITATIVE_STATE_CHANGED")
                 fingerprint, scope = self._fingerprint(request), self._scope(idempotency_key)
                 fields = dict(snapshot=snapshot, confirmation_id=confirmation_id,
-                              confirmation_binding=confirmation_binding, trace_id=pending.receipt.trace_id)
+                              confirmation_binding=confirmation_binding, trace_id=pending.receipt.trace_id,
+                              adjustments=pending.receipt.adjustments,
+                              warnings=list(dict.fromkeys(pending.receipt.warnings +
+                                  ([warning] if not vendor and warning else []))))
                 if vendor:
                     fields['expires_at'] = pending.receipt.expires_at
                 unknown = self._receipt(request, "unknown", error_code="PLATFORM_OUTCOME_UNKNOWN",
