@@ -164,7 +164,7 @@ class LegacyKtdSnapshotProvider:
         pose = self.pose()
         can_write = bool(isinstance(user.get("permission"), list)
                          and "taskManage:Issued" in user["permission"])
-        writes = set(BASE_WRITE_ACTIONS) | set(GIMBAL_ACTIONS)
+        writes = self.write_actions()
         # 转向必须能回读航向；读不到姿态时不授予转向权限，而不是让模型猜。
         if pose is not None and pose.get("yaw_deg") is not None:
             writes |= set(TURN_ACTIONS)
@@ -219,6 +219,9 @@ class LegacyKtdSnapshotProvider:
             action_availability=availability,
             authorization_quality=LEGACY_QUALITY,
         )
+
+    def write_actions(self):
+        return set(BASE_WRITE_ACTIONS) | set(GIMBAL_ACTIONS)
 
     def _now(self):
         try:
@@ -278,9 +281,12 @@ class LegacyKtdSnapshotProvider:
         if not isinstance(data, Mapping) or data.get("isHangar") is not True:
             _reject("PROFILE_UNSUPPORTED")
         hangar = data.get("hangarInfo")
-        if not isinstance(hangar, Mapping) or hangar.get("brand") != DJI_HANGAR_BRAND:
+        if not isinstance(hangar, Mapping) or hangar.get("brand") not in self.supported_hangar_brands():
             _reject("PROFILE_UNSUPPORTED")
         return "DJI_HANGAR"
+
+    def supported_hangar_brands(self):
+        return frozenset({DJI_HANGAR_BRAND})
 
     def pose(self) -> Mapping | None:
         """读取旧调试接口的实时姿态；失败一律返回 None。

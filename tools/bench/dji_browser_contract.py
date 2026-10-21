@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""真实模型+合成Java契约；平台请求全部被OldJava拦截，绝不触达设备。"""
+import argparse
+import json
+from pathlib import Path
+import sys
+import threading
+from types import SimpleNamespace
+from urllib.request import Request, urlopen
+from lingxi_flight_control.standalone_preview import build_standalone_server
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tests'))
+from test_browser_gateway import BrowserGatewayTests
+from lingxi_flight_control import OllamaDecider
+from lingxi_flight_control.browser_gateway import BrowserGateway
+from lingxi_flight_control.cockpit import COCKPIT_SYSTEM_PROMPT
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--base-url', required=True)
+    parser.add_argument('--model', default='qwen3.5:9b')
+    args = parser.parse_args()
+    cases = [('往前飞10米', 'move_forward'), ('开始录像', 'camera_start_recording'),
+             ('停止录像', 'camera_stop_recording'), ('光学变焦设置为5倍', 'camera_zoom'),
+             ('切换到广角镜头', 'camera_wide'), ('暂停当前航线', 'route_pause'),
+             ('帮我拍张照', 'camera_photo')]
+    rows = []
+    for phrase, expected in cases:
+        fixture = BrowserGatewayTests()
+        fixture.setUp()
+        server = None
+        try:
+            fixture.gateway = BrowserGateway(fixture.gateway.config,
+                lambda: OllamaDecider(model=args.model, base_url=args.base_url,
+                    system_prompt=COCKPIT_SYSTEM_PROMPT, timeout=45, max_attempts=1,
+                    max_output_tokens=2048, keep_alive='30m'),
+                enable_control=True, opener=fixture.java, clock=lambda: 1000,
+                allowed_drone_sns=['uav-sn-1'])
+            server = build_standalone_server(fixture.gateway, '127.0.0.1', 0)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            def http_call(path, body):
+                request = Request(f'http://127.0.0.1:{server.server_port}/api/flight-control'+path,
+                    data=json.dumps(body).encode(), headers={**fixture.headers,'Content-Type':'application/json'})
+                with urlopen(request, timeout=60) as response:
+                    return SimpleNamespace(payload=json.load(response), status_code=response.status)
+            fixture.call = http_call
+            proposal = fixture.call('/agent/messages',
+                {'text': phrase, 'request_id': 'bench-1', 'context_version': 1})
+            card = proposal.payload.get('card') or {}
+            action = card.get('action')
+            row = {'expected': expected, 'action': action, 'status': proposal.payload.get('status'),
+                   'before_confirm_posts': len(fixture.java.posts), 'device_requests': 0}
+            if row['status'] == 'preview_required' and action == expected:
+                confirmed = fixture.call('/agent/confirm', fixture.confirmation(card))
+                row.update(result=confirmed.payload.get('status'),
+                           device_effect=confirmed.payload.get('device_effect'),
+                           fixture_posts=len(fixture.java.posts))
+            row['passed'] = row.get('result') == 'submitted' and row['before_confirm_posts'] == 0
+            rows.append(row)
+            print(json.dumps(row, ensure_ascii=False), flush=True)
+        finally:
+            if server is not None:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
+            fixture.doCleanups()
+    print(json.dumps({'passed': sum(row['passed'] for row in rows), 'total': len(rows),
+                      'evidence': 'real-model/synthetic-java/no-device'}))
+    return 0 if all(row['passed'] for row in rows) else 1
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

@@ -1,5 +1,7 @@
 # Python直连原ktd接口：当前交付
 
+后续纠正：下文`UAV_MOVE_DISTANCE=false`只表示平台页面模式，不能据此断言无人机不支持定距移动。原Java已有实现，Python修正开发见[DJI动作映射](ACCEPTANCE_DJI-ACTION-MAPPING.md)；该新版本尚未替换本页记录的线上版本。
+
 2026-10-21最新要求：只改Python/前端，不改Java。**以下当前记录替代文末历史Java候选方案，无需发布Java或执行其历史发布步骤。**
 
 - 10086已切换真实助手，经同源`/flight-control-api/`连接独立Python，复用原Java登录、站点、任务、权限及控制接口。Python `311c3f9`，UI `08fb3e5`，console入口 `0eaeff6`。修复嵌入组件样式丢失，真实页面可见。

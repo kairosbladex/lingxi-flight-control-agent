@@ -45,9 +45,11 @@ _STICK_AXES = {"forward": 202, "backward": 203, "left": 204, "right": 205,
 _ROUTE_TYPES = {"route_pause": 110, "route_resume": 112, "emergency_stop": 113,
                 "return_home": 114, "cancel_return_home": -114}
 _CAMERA_TYPES = {"camera_photo": 100, "camera_start_recording": 101, "camera_stop_recording": 102}
+_LENS_MODES = {"camera_electro_optical": 6, "camera_infrared": 2, "camera_wide": 5}
+_EXTRA_CAMERA = frozenset(_LENS_MODES) | {"camera_zoom", "camera_panorama", "infrared_set_limits"}
 SUPPORTED_ACTIONS = (frozenset(_MOVE_TYPES) | frozenset(_TURN_TYPES)
                      | frozenset(_GIMBAL_TYPES) | frozenset(_ROUTE_TYPES)
-                     | frozenset(_CAMERA_TYPES) | {"read_state"})
+                     | frozenset(_CAMERA_TYPES) | _EXTRA_CAMERA | {"read_state"})
 _PATHS = frozenset({"/screen/uav/operation/control", "/screen/uav/route/control",
                     "/screen/uav/camera/control", "/screen/uav/gimbal/control"})
 _STATE_FIELDS = frozenset({"online", "airborne", "longitude", "latitude", "altitude_m",
@@ -673,6 +675,10 @@ class KtdPlatformExecutor:
                         parameters = {"distance_m": 0.01}
                     elif action in _TURN_TYPES:
                         parameters = {"angle_deg": 1}
+                    elif action == 'camera_zoom':
+                        parameters = {'value': 1}
+                    elif action == 'infrared_set_limits':
+                        parameters = {'min_c': 0, 'max_c': 50}
                     else:
                         parameters = {}
                     request = FlightControlActionRequest("capability-check", "capability-check", action,
@@ -826,6 +832,23 @@ class KtdPlatformExecutor:
             return KtdCommand("/screen/uav/route/control", body)
         if action in _CAMERA_TYPES:
             body["type"] = _CAMERA_TYPES[action]
+            return KtdCommand("/screen/uav/camera/control", body)
+        if action in _EXTRA_CAMERA:
+            if action in _LENS_MODES:
+                body.update(type=105, cameraMode=_LENS_MODES[action])
+            elif action == "camera_zoom":
+                body.update(type=103, cameraMode=6, param=request.parameters["value"])
+            elif action == "camera_panorama":
+                if snapshot.state.get("legacy_pose_verified") is not True:
+                    raise KtdPlatformError("FLIGHT_POSE_UNAVAILABLE")
+                body.update(type=125)
+            elif action == "infrared_set_limits":
+                low, high = request.parameters["min_c"], request.parameters["max_c"]
+                # 原Java DTO以Integer读取，拒绝静默截断模型的小数温度。
+                if int(low) != low or int(high) != high:
+                    raise KtdPlatformError("INTEGER_TEMPERATURE_REQUIRED")
+                body.update(type=127, jsonParams=_json({"openIsotherm": True,
+                    "lowerLimit": int(low), "upperLimit": int(high)}))
             return KtdCommand("/screen/uav/camera/control", body)
         raise KtdPlatformError("ACTION_UNSUPPORTED")
 

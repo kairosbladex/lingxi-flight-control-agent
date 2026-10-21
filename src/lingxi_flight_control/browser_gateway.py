@@ -17,7 +17,17 @@ def require_task(transport, project, site, drone, task):
 
 
 class BrowserSnapshotProvider(LegacyKtdSnapshotProvider):
-    """原接口的明确能力和新鲜姿态才放行；不覆盖Java的距离模式false。"""
+    """以已核验DJI实现映射动作；页面操作模式不作为硬件能力证明。"""
+    def supported_hangar_brands(self):
+        # Java AbstractUavDevProvider明确将草莓机场交给DJHangarOperation。
+        # 不顺带开放其普宙分支，后者的高度/环绕语义不同。
+        return frozenset({'207601', '207616'})
+
+    def write_actions(self):
+        return super().write_actions() | {'route_pause', 'route_resume', 'emergency_stop',
+            'return_home', 'cancel_return_home', 'camera_electro_optical', 'camera_infrared',
+            'camera_wide', 'camera_zoom', 'camera_panorama', 'infrared_set_limits'}
+
     def _require_binding(self, user):
         super()._require_binding(user)
         if not self.task_id:
@@ -33,15 +43,18 @@ class BrowserSnapshotProvider(LegacyKtdSnapshotProvider):
         snapshot = super().__call__()
         raw = self.actual_capabilities
         uav, load = raw.get('uav') or {}, raw.get('load') or {}
-        actions = {'read_state'}
-        # 原平台不同载荷以不同布尔字段暴露能力；仅接受已核验的明确true。
-        if uav.get('UAV_MOVE_DISTANCE') is True:
-            actions.update(('move_forward', 'move_backward', 'move_left', 'move_right', 'move_up', 'move_down'))
+        # super已验证DJI机库profile、操作者、资源及任务。原Java的mode=2
+        # 实现独立于页面UAV_MOVE_DISTANCE开关，仍要求下面的新鲜完整位姿。
+        actions = {'read_state', 'route_pause', 'route_resume', 'emergency_stop',
+                   'return_home', 'cancel_return_home', 'move_forward', 'move_backward',
+                   'move_left', 'move_right', 'move_up', 'move_down'}
         if uav.get('UAV_MOVE_STICK') is True:
             actions.update(('turn_left', 'turn_right'))
         camera = (raw.get('loadInfoCode') or {}).get('1001') is True and bool(load.get('optoelecPodParamList'))
         if camera:
-            actions.add('camera_photo')
+            actions.update(('camera_photo', 'camera_start_recording', 'camera_stop_recording',
+                            'camera_electro_optical', 'camera_infrared', 'camera_wide',
+                            'camera_zoom', 'camera_panorama', 'infrared_set_limits'))
         if camera:
             actions.update(('gimbal_up', 'gimbal_down', 'gimbal_left', 'gimbal_right'))
             actions.add('gimbal_reset')
@@ -56,11 +69,14 @@ class BrowserSnapshotProvider(LegacyKtdSnapshotProvider):
         state['legacy_pose_verified'] = bool(complete)
         if not complete:
             actions.difference_update(('move_forward', 'move_backward', 'move_left', 'move_right', 'move_up', 'move_down'))
+            actions.discard('camera_panorama')
         if not fresh:
             actions.difference_update(('turn_left', 'turn_right'))
         permissions = snapshot.permissions.intersection(actions)
         capabilities = {key: value for key, value in snapshot.capabilities.items() if key in actions}
-        capabilities['UAV_MOVE_DISTANCE'] = uav.get('UAV_MOVE_DISTANCE') is True
+        # 保留原页面字段用于诊断；执行能力来源为已验证DJI实现+新鲜位姿。
+        state['platform_ui_distance_mode'] = uav.get('UAV_MOVE_DISTANCE') is True
+        capabilities['UAV_MOVE_DISTANCE'] = bool(complete)
         availability = {action: {'available': action in permissions,
                                 'reasons': [] if action in permissions else ['CAPABILITY_OR_POSE_UNAVAILABLE']}
                         for action in snapshot.action_availability}
@@ -91,7 +107,7 @@ class BrowserGateway:
             operation = 'other'
         print(json.dumps({'event': 'flight_gateway', 'operation': operation,
               'status': response.status_code, 'error_code': response.payload.get('error_code'),
-              'distance_mode_available': response.payload.get('distance_mode_available'),
+              'platform_ui_distance_mode': response.payload.get('platform_ui_distance_mode'),
               'trace_id': response.payload.get('trace_id'),
               'elapsed_ms': round((time.monotonic() - started) * 1000)}), flush=True)
         return response
@@ -135,7 +151,7 @@ class BrowserGateway:
                                                           drone_id=values['drone_id']))
                 response = self.runtime.failure(409, 'TASK_REQUIRED')
                 response.payload['connection_verified'] = True
-                response.payload['distance_mode_available'] = bool(isinstance(capabilities, dict)
+                response.payload['platform_ui_distance_mode'] = bool(isinstance(capabilities, dict)
                     and isinstance(capabilities.get('uav'), dict)
                     and capabilities['uav'].get('UAV_MOVE_DISTANCE') is True)
                 return response

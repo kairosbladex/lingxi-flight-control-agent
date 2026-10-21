@@ -381,6 +381,16 @@ def _ordered_motion_steps(text):
 
 def grounded_parameters(action, parameters, text):
     """A conservative evidence check, not an intent parser or replacement LLM."""
+    if action == 'infrared_set_limits':
+        # 此动作的上下限就是精确参数，不是移动距离的模糊限制。
+        # 按角色分别绑定，防止模型把上下限颠倒或从其他数字中补猜。
+        for key, label in (('min_c', '下限'), ('max_c', '上限')):
+            matches = re.findall(label + r'\s*(?:设为|设置为|为|是|[:：])?\s*'
+                r'([负-]?(?:\d+(?:\.\d+)?|[零〇一二两三四五六七八九十百千点]+))\s*(?:摄氏度|℃|度)', text)
+            if len(matches) != 1 or key not in parameters or not math.isclose(
+                    _number(matches[0]), parameters[key], abs_tol=1e-8):
+                return False
+        return True
     text, quantities = _exact_quantity_evidence(text)
     for key, value in parameters.items():
         if isinstance(value, bool):

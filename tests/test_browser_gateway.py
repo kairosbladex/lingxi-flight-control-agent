@@ -17,10 +17,12 @@ class OldJava:
         self.source.responses['permissions'].payload['data'].update(
             loadInfoCode={'1001': True}, load={'optoelecPodParamList': [{'podType': 'wide'}]})
         self.requests = []
+        self.posts = []
     def open(self, request, timeout):
         path = urlsplit(request.full_url).path.removeprefix('/gis_server_a')
         self.requests.append((request.get_method(), path))
         if request.get_method() == 'POST':
+            self.posts.append((path, json.loads(request.data)))
             packet = {'code': 200}
         else:
             key = {'/user/info':'user_info', '/uavSite/list':'sites', '/uavControlPower/list':'owners',
@@ -37,9 +39,11 @@ class BrowserGatewayTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         self.java = OldJava()
         self.action = 'camera_photo'
+        self.parameters = None
         def model(*args):
             return {'done_reason': 'stop', 'message': {'tool_calls': [{'function': {
-                'name': self.action, 'arguments': {'distance_m': 10} if self.action == 'move_forward' else {}}}]}}
+                'name': self.action, 'arguments': self.parameters if self.parameters is not None else
+                ({'distance_m': 10} if self.action == 'move_forward' else {})}}]}}
         config = PlatformRuntimeConfig('http://127.0.0.1:10086/gis_server_a',
             RuntimeBinding('unbound', 'unbound', 'unbound', 'unbound', 'unbound', 1), 'unbound', None,
             Path(self.tmp.name)/'journal.sqlite', 'unbound', 'synthetic-private-gateway', True)
@@ -53,7 +57,9 @@ class BrowserGatewayTests(unittest.TestCase):
         return self.gateway.handle('GET' if body is None else 'POST', '/api/flight-control'+path,
                                    b'' if body is None else json.dumps(body).encode(), self.headers)
     def proposal(self):
-        return self.call('/agent/messages', {'text':'向前飞10米' if self.action == 'move_forward' else '拍张照', 'request_id':'r-1', 'context_version':1})
+        text={'move_forward':'向前飞10米', 'camera_zoom':'光学变焦设置为5倍',
+              'infrared_set_limits':'红外温度下限10摄氏度，上限40摄氏度'}.get(self.action, '拍张照')
+        return self.call('/agent/messages', {'text':text, 'request_id':'r-1', 'context_version':1})
     def confirmation(self, card):
         return {k:card[k] for k in ('confirmation_id','confirmation_binding','command_id','idempotency_key','context_version')}
     def test_identity_from_old_java_not_forged_headers(self):
@@ -105,11 +111,49 @@ class BrowserGatewayTests(unittest.TestCase):
         response=self.call()
         self.assertEqual(response.payload['error_code'],'TASK_REQUIRED')
         self.assertTrue(self.java.requests)
-    def test_distance_false_is_not_overridden(self):
+    def test_dji_implementation_supports_distance_despite_ui_mode_false(self):
         self.action='move_forward'
         response=self.proposal()
-        self.assertEqual(response.payload['status'],'rejected')
+        self.assertEqual(response.payload['status'],'preview_required',response.payload)
         self.assertFalse(any(m=='POST' for m,p in self.java.requests))
+        result=self.call('/agent/confirm',self.confirmation(response.payload['card']))
+        self.assertEqual(result.payload['status'],'submitted',result.payload)
+        path, body=self.java.posts[0]
+        self.assertEqual(path,'/screen/uav/operation/control')
+        self.assertEqual((body['type'],body['mode'],body['param']),(202,2,10))
+    def test_java_camera_and_route_contracts_through_confirmation(self):
+        cases = [
+            ('camera_start_recording', {}, 'camera', {'type':101}),
+            ('camera_stop_recording', {}, 'camera', {'type':102}),
+            ('camera_wide', {}, 'camera', {'type':105,'cameraMode':5}),
+            ('camera_infrared', {}, 'camera', {'type':105,'cameraMode':2}),
+            ('camera_electro_optical', {}, 'camera', {'type':105,'cameraMode':6}),
+            ('camera_zoom', {'value':5}, 'camera', {'type':103,'cameraMode':6,'param':5}),
+            ('camera_panorama', {}, 'camera', {'type':125}),
+            ('infrared_set_limits', {'min_c':10,'max_c':40}, 'camera', {'type':127,
+                'jsonParams':'{"lowerLimit":10,"openIsotherm":true,"upperLimit":40}'}),
+            ('route_pause', {}, 'route', {'type':110}),
+            ('route_resume', {}, 'route', {'type':112}),
+            ('emergency_stop', {}, 'route', {'type':113}),
+            ('return_home', {}, 'route', {'type':114,'interrupt':False}),
+            ('cancel_return_home', {}, 'route', {'type':-114}),
+        ]
+        for index,(action,parameters,endpoint,expected) in enumerate(cases):
+            with self.subTest(action=action):
+                self.headers['X-Agent-Session']=f'case-{index}'
+                self.action,self.parameters=action,parameters
+                before=len(self.java.posts)
+                proposal=self.proposal()
+                self.assertEqual(proposal.payload['status'],'preview_required',proposal.payload)
+                self.assertEqual(len(self.java.posts),before)
+                confirmation=self.confirmation(proposal.payload['card'])
+                result=self.call('/agent/confirm',confirmation)
+                self.assertEqual(result.payload['status'],'submitted',result.payload)
+                self.assertEqual(result.payload['device_effect'],'not_verified')
+                self.assertEqual(self.java.posts[-1],(f'/screen/uav/{endpoint}/control',
+                    {'terminalId':'drone-1','siteId':'site-1','taskId':'task-1',**expected}))
+                self.call('/agent/confirm',confirmation)
+                self.assertEqual(len(self.java.posts),before+1)
     def test_verified_distance_does_not_need_unverified_pose_switch(self):
         self.action='move_forward'
         self.java.source.responses['permissions'].payload['data']['uav']['UAV_MOVE_DISTANCE']=True
@@ -122,6 +166,37 @@ class BrowserGatewayTests(unittest.TestCase):
         response=self.proposal()
         self.assertEqual(response.payload['status'],'rejected')
         self.assertFalse(any(m=='POST' for m,p in self.java.requests))
+    def test_pose_expiry_after_preview_blocks_distance_confirmation(self):
+        self.action='move_forward'
+        card=self.proposal().payload['card']
+        self.java.source.responses['pose'].payload['data']['timeStamp']=900
+        result=self.call('/agent/confirm',self.confirmation(card))
+        self.assertEqual(result.payload['status'],'rejected')
+        self.assertEqual(self.java.posts,[])
+    def test_unknown_profile_does_not_inherit_dji_distance(self):
+        self.action='move_forward'
+        self.java.source.responses['permissions'].payload['data']['hangarInfo']['brand']='unknown'
+        response=self.proposal()
+        self.assertNotEqual(response.payload.get('status'),'preview_required')
+        self.assertEqual(self.java.posts,[])
+    def test_strawberry_brand_uses_verified_dji_distance_implementation(self):
+        self.action='move_forward'
+        self.java.source.responses['permissions'].payload['data']['hangarInfo']['brand']='207616'
+        response=self.proposal()
+        self.assertEqual(response.payload['status'],'preview_required',response.payload)
+        self.assertEqual(self.java.posts,[])
+    def test_missing_camera_blocks_new_camera_actions(self):
+        self.action='camera_start_recording'
+        self.java.source.responses['permissions'].payload['data']['loadInfoCode']={}
+        response=self.proposal()
+        self.assertEqual(response.payload['status'],'rejected')
+        self.assertEqual(self.java.posts,[])
+    def test_temperature_grounding_preserves_roles(self):
+        from lingxi_flight_control.cockpit import grounded_parameters
+        phrase='红外温度下限10摄氏度，上限40摄氏度'
+        self.assertTrue(grounded_parameters('infrared_set_limits',{'min_c':10,'max_c':40},phrase))
+        self.assertFalse(grounded_parameters('infrared_set_limits',{'min_c':40,'max_c':10},phrase))
+        self.assertFalse(grounded_parameters('infrared_set_limits',{'min_c':10,'max_c':40},'温度10度和40度'))
     def test_unexpected_confirmation_failure_does_not_claim_unsent(self):
         def failed(*args): raise RuntimeError('private error')
         self.gateway.runtime.handle=failed

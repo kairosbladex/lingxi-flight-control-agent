@@ -17,6 +17,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--port', type=int, default=8794)
     parser.add_argument('--model', default=DEFAULT_MODEL)
+    parser.add_argument('--model-timeout', type=int, default=45,
+                        help='单次模型理解超时秒数，范围1至60，不重试')
     parser.add_argument('--base-url', default=DEFAULT_BASE_URL, help='模型服务地址')
     parser.add_argument('--enable-platform-control', action='store_true',
                         help='显式开放已获权威许可的动作提议与逐次确认；需单独的设备测试授权')
@@ -33,6 +35,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if not 1 <= args.port <= 65535:
         parser.error('port必须在1至65535之间')
+    if not 1 <= args.model_timeout <= 60:
+        parser.error('model-timeout必须在1至60之间')
     if args.allow_legacy_pose_unverified and not args.enable_legacy_control:
         parser.error('--allow-legacy-pose-unverified 必须与 --enable-legacy-control 同时使用')
     try:
@@ -51,7 +55,7 @@ def main(argv=None):
         config = PlatformRuntimeConfig.from_environment(environment)
         decider = lambda: OllamaDecider(
             model=args.model, base_url=args.base_url, system_prompt=COCKPIT_SYSTEM_PROMPT,
-            timeout=20, max_attempts=1, max_output_tokens=2048, keep_alive='30m')
+            timeout=args.model_timeout, max_attempts=1, max_output_tokens=2048, keep_alive='30m')
         if args.browser_gateway:
             from lingxi_flight_control.browser_gateway import BrowserGateway
             service = BrowserGateway(config, decider, enable_control=args.enable_platform_control,
