@@ -62,6 +62,10 @@ class BrowserGatewayTests(unittest.TestCase):
         self.assertEqual(response.payload['context']['drone_id'], 'drone-1')
         self.assertEqual(response.payload['execution_mode'], 'platform')
         self.assertFalse(any(method=='POST' for method,path in self.java.requests))
+    def test_original_platform_raw_token_and_case_insensitive_bearer(self):
+        for token in ('synthetic', 'bearer synthetic'):
+            self.headers['Authorization']=token
+            self.assertEqual(self.call().status_code,200)
     def test_camera_requires_confirmation_and_exact_replay_does_not_resend(self):
         proposal = self.proposal()
         self.assertEqual(proposal.payload['status'],'preview_required',proposal.payload)

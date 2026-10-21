@@ -84,14 +84,29 @@ class BrowserGateway:
         self.runtime = PlatformGateway(config, decider_factory, enable_control=enable_control, factory=factory)
 
     def handle(self, method, path, body=b'', headers=None):
+        started = time.monotonic()
+        response = self._handle(method, path, body, headers)
+        operation = path.split('?', 1)[0]
+        if not re.fullmatch(r'/api/flight-control/(context|state|agent/(messages|confirm|cancel|reset|receipt))', operation):
+            operation = 'other'
+        print(json.dumps({'event': 'flight_gateway', 'operation': operation,
+              'status': response.status_code, 'error_code': response.payload.get('error_code'),
+              'trace_id': response.payload.get('trace_id'),
+              'elapsed_ms': round((time.monotonic() - started) * 1000)}), flush=True)
+        return response
+
+    def _handle(self, method, path, body=b'', headers=None):
         headers = {k.lower(): v for k, v in (headers or {}).items()}
         if method == 'GET' and path in ('/healthz', '/api/flight-control/healthz'):
             return self.runtime.handle(method, path)
         try:
             auth = headers.get('authorization', '')
-            if not re.fullmatch(r'Bearer [!-~]{1,8192}', auth):
+            if re.fullmatch(r'Bearer [!-~]{1,8192}', auth, re.IGNORECASE):
+                token = auth[7:]
+            elif re.fullmatch(r'[!-~]{1,8192}', auth):
+                token = auth
+            else:
                 return self.runtime.failure(401, 'AUTHENTICATION_REQUIRED')
-            token = auth[7:]
             values = {k: headers.get(h, '') for k, h in (
                 ('project_id', 'projectid'), ('site_id', 'x-flight-site'),
                 ('drone_id', 'x-flight-drone'), ('task_id', 'x-flight-task'))}
