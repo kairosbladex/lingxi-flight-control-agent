@@ -1,0 +1,253 @@
+[
+  {
+    "event": "probe_start",
+    "time": "2026-10-21T07:18:27.497441+00:00",
+    "model": "qwen3.5:9b",
+    "offline_scripted": false,
+    "direct_commands": false,
+    "model_keep_alive": "-1",
+    "cases_sha256": "1b73f3ef27770d1960a0cb7a424406d8094d5494b35f9e34989848a8aaa1b185",
+    "prompt_sha256": "1674d12cad0a6bcbe027877b5931ca6c8354bb1fca74ebe04dde6d30458021c4",
+    "budgets": {
+      "seconds": 360,
+      "calls": 12,
+      "request_timeout": 45,
+      "run_timeout": 65,
+      "steps": 3,
+      "num_ctx": 32768,
+      "max_output_tokens": 2048
+    },
+    "session": "one synthetic session; previews only; no confirmations",
+    "port": 46103
+  },
+  {
+    "case": 0,
+    "input": "拍一张照片",
+    "expected_action": "camera_photo",
+    "status": "error",
+    "error_code": "MODEL_ERROR",
+    "action": null,
+    "parameters": null,
+    "elapsed_ms": 109,
+    "model_calls": 1,
+    "passed": false,
+    "dispatched": false,
+    "idempotent_replay": true
+  },
+  {
+    "case": 1,
+    "input": "向前飞2米",
+    "expected_action": "move_forward",
+    "status": "error",
+    "error_code": "MODEL_ERROR",
+    "action": null,
+    "parameters": null,
+    "elapsed_ms": 13,
+    "model_calls": 1,
+    "passed": false,
+    "dispatched": false,
+    "idempotent_replay": true
+  },
+  {
+    "case": 2,
+    "input": "向后飞2米",
+    "expected_action": "move_backward",
+    "status": "error",
+    "error_code": "MODEL_ERROR",
+    "action": null,
+    "parameters": null,
+    "elapsed_ms": 12,
+    "model_calls": 1,
+    "passed": false,
+    "dispatched": false,
+    "idempotent_replay": true
+  },
+  {
+    "case": 3,
+    "input": "拍一张照片",
+    "expected_action": "camera_photo",
+    "status": "error",
+    "error_code": "MODEL_ERROR",
+    "action": null,
+    "parameters": null,
+    "elapsed_ms": 13,
+    "model_calls": 1,
+    "passed": false,
+    "dispatched": false,
+    "idempotent_replay": true
+  },
+  {
+    "case": 4,
+    "input": "向右平移2米",
+    "expected_action": "move_right",
+    "status": "error",
+    "error_code": "MODEL_ERROR",
+    "action": null,
+    "parameters": null,
+    "elapsed_ms": 12,
+    "model_calls": 1,
+    "passed": false,
+    "dispatched": false,
+    "idempotent_replay": true
+  },
+  {
+    "case": 5,
+    "input": "向左平移2米",
+    "expected_action": "move_left",
+    "status": "error",
+    "error_code": "MODEL_ERROR",
+    "action": null,
+    "parameters": null,
+    "elapsed_ms": 22,
+    "model_calls": 1,
+    "passed": false,
+    "dispatched": false,
+    "idempotent_replay": true
+  },
+  {
+    "event": "probe_complete",
+    "passed": 0,
+    "total": 6,
+    "rows": [
+      {
+        "case": 0,
+        "input": "拍一张照片",
+        "expected_action": "camera_photo",
+        "status": "error",
+        "error_code": "MODEL_ERROR",
+        "action": null,
+        "parameters": null,
+        "elapsed_ms": 109,
+        "model_calls": 1,
+        "passed": false,
+        "dispatched": false,
+        "idempotent_replay": true
+      },
+      {
+        "case": 1,
+        "input": "向前飞2米",
+        "expected_action": "move_forward",
+        "status": "error",
+        "error_code": "MODEL_ERROR",
+        "action": null,
+        "parameters": null,
+        "elapsed_ms": 13,
+        "model_calls": 1,
+        "passed": false,
+        "dispatched": false,
+        "idempotent_replay": true
+      },
+      {
+        "case": 2,
+        "input": "向后飞2米",
+        "expected_action": "move_backward",
+        "status": "error",
+        "error_code": "MODEL_ERROR",
+        "action": null,
+        "parameters": null,
+        "elapsed_ms": 12,
+        "model_calls": 1,
+        "passed": false,
+        "dispatched": false,
+        "idempotent_replay": true
+      },
+      {
+        "case": 3,
+        "input": "拍一张照片",
+        "expected_action": "camera_photo",
+        "status": "error",
+        "error_code": "MODEL_ERROR",
+        "action": null,
+        "parameters": null,
+        "elapsed_ms": 13,
+        "model_calls": 1,
+        "passed": false,
+        "dispatched": false,
+        "idempotent_replay": true
+      },
+      {
+        "case": 4,
+        "input": "向右平移2米",
+        "expected_action": "move_right",
+        "status": "error",
+        "error_code": "MODEL_ERROR",
+        "action": null,
+        "parameters": null,
+        "elapsed_ms": 12,
+        "model_calls": 1,
+        "passed": false,
+        "dispatched": false,
+        "idempotent_replay": true
+      },
+      {
+        "case": 5,
+        "input": "向左平移2米",
+        "expected_action": "move_left",
+        "status": "error",
+        "error_code": "MODEL_ERROR",
+        "action": null,
+        "parameters": null,
+        "elapsed_ms": 22,
+        "model_calls": 1,
+        "passed": false,
+        "dispatched": false,
+        "idempotent_replay": true
+      }
+    ],
+    "model_calls": [
+      {
+        "case": 0,
+        "timeout_sec": 45.0,
+        "tool_count": 83,
+        "tools_sha256": "f54c290d36b2433b00e69a3977f0d157a84206ac1fe4f0a4095d31ba8468de47",
+        "error_type": "ValueError",
+        "elapsed_ms": 4
+      },
+      {
+        "case": 1,
+        "timeout_sec": 45.0,
+        "tool_count": 83,
+        "tools_sha256": "f54c290d36b2433b00e69a3977f0d157a84206ac1fe4f0a4095d31ba8468de47",
+        "error_type": "ValueError",
+        "elapsed_ms": 3
+      },
+      {
+        "case": 2,
+        "timeout_sec": 45.0,
+        "tool_count": 83,
+        "tools_sha256": "f54c290d36b2433b00e69a3977f0d157a84206ac1fe4f0a4095d31ba8468de47",
+        "error_type": "ValueError",
+        "elapsed_ms": 4
+      },
+      {
+        "case": 3,
+        "timeout_sec": 45.0,
+        "tool_count": 83,
+        "tools_sha256": "f54c290d36b2433b00e69a3977f0d157a84206ac1fe4f0a4095d31ba8468de47",
+        "error_type": "ValueError",
+        "elapsed_ms": 3
+      },
+      {
+        "case": 4,
+        "timeout_sec": 45.0,
+        "tool_count": 83,
+        "tools_sha256": "f54c290d36b2433b00e69a3977f0d157a84206ac1fe4f0a4095d31ba8468de47",
+        "error_type": "ValueError",
+        "elapsed_ms": 3
+      },
+      {
+        "case": 5,
+        "timeout_sec": 45.0,
+        "tool_count": 83,
+        "tools_sha256": "f54c290d36b2433b00e69a3977f0d157a84206ac1fe4f0a4095d31ba8468de47",
+        "error_type": "ValueError",
+        "elapsed_ms": 5
+      }
+    ],
+    "java_control_posts": 0,
+    "write_attempts": 0,
+    "confirmations": 0,
+    "device_requests": 0,
+    "server_stopped": true
+  }
+]

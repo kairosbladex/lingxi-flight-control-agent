@@ -1,0 +1,63 @@
+{
+  "source_sha": "ef5ec1db0b06e805c5110f21457e6e2f15db592e",
+  "owner_11437": {
+    "purpose": "lingxi-rewrite-5008-9b",
+    "created": "2026-10-08T03:44:46.521171613Z",
+    "recent_calls": true,
+    "reused": false,
+    "modified": false
+  },
+  "new_instance": {
+    "name": "flight-control-ollama-gpu5",
+    "port": 11438,
+    "gpu_uuid": "GPU-867d3056-9e2e-2b5e-90e2-b7f0d866aa74",
+    "gpu_index": 5,
+    "memory_gib": 16,
+    "swap_enabled": false,
+    "cpus": 4,
+    "parallel": 1,
+    "max_queue": 4,
+    "context": 32768,
+    "model_catalog": [
+      "qwen3.5:9b"
+    ],
+    "model_digest": "6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7",
+    "image_id": "sha256:013cbb5ffadc4b6672bf6c86f81a63c4ddf83c1c25168cccee877b5ae7942895",
+    "keep_alive": -1,
+    "cuda_cache_persistent": true,
+    "user_systemd_enabled": true,
+    "existing_linger": true
+  },
+  "final_acceptance": {
+    "sequential_passed": 6,
+    "sequential_total": 6,
+    "idle_seconds": 60,
+    "two_clients_passed": 4,
+    "two_clients_total": 4,
+    "offline_tests": 759,
+    "timeout_sec_unchanged": 45,
+    "run_timeout_sec_unchanged": 65,
+    "runner_starts_after_final_restart": 1,
+    "evictions_after_final_restart": 0,
+    "oom_after_final_restart": 0,
+    "real_device_requests": 0,
+    "controlled_restart_with_cache_seconds": 6
+  },
+  "failed_attempts_retained": [
+    "initial cold request timeout; probe interrupted with remaining cases unattempted",
+    "string keep_alive=-1 rejected by model HTTP400, all six cases failed; fixed numeric serialization"
+  ],
+  "deployment": {
+    "gateway_pid": 79256,
+    "model_url": "http://192.168.130.238:11438",
+    "source": "source-ef5ec1d",
+    "rollback": "/home/zhuoyi/ktd/flight-browser-20261021/service-before-gpu5-ef5ec1d",
+    "front_end_unchanged": true,
+    "authenticated_real_device_preview": "not_verified"
+  },
+  "limitations": [
+    "GPU5 still shared with existing processes; not exclusive hardware",
+    "minute-scale residency validation, not long-duration SLA",
+    "no physical flight, media or device completion validation"
+  ]
+}
