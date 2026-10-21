@@ -63,6 +63,7 @@ def gateway_event(operation, body, headers, response, elapsed_ms):
         card = {}
     emit('flight_gateway', operation=operation, status=response.status_code,
         result=identifier(payload.get('status')), error_code=identifier(payload.get('error_code')),
+        interpretation_source=identifier(payload.get('interpretation_source')),
         task_ref=digest(headers.get('x-flight-task')), drone_ref=digest(headers.get('x-flight-drone')),
         session_ref=digest(headers.get('x-agent-session')), input_ref=digest(request.get('text')),
         request_id=identifier(request.get('request_id')),

@@ -11,7 +11,7 @@ UNIT = 'lingxi-flight-browser-10086.service'
 FIELDS = {'event','audit_version','time','code_sha','operation','status','result','error_code',
     'task_ref','drone_ref','session_ref','input_ref','request_id','command_id','trace_id',
     'action','parameters','device_effect','platform_ui_distance_mode','elapsed_ms','phase',
-    'request_ref','endpoint','http_status','java_code'}
+    'request_ref','endpoint','http_status','java_code','interpretation_source'}
 
 
 def select(lines, task_ref=None, after=0):

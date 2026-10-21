@@ -115,7 +115,8 @@ def build_platform_cockpit(config: PlatformRuntimeConfig, decider_factory, *,
                            enable_control: bool = False, enable_vendor_requests: bool = False,
                            enable_legacy_control: bool | None = None,
                            allow_legacy_pose_unverified: bool | None = None,
-                           opener=None, clock=time.time, legacy_snapshot_factory=None):
+                           opener=None, clock=time.time, legacy_snapshot_factory=None,
+                           enable_direct_commands=False):
     """将既有Agent会话接到Java适配器；构建本身不请求Java或模型。"""
     from .cockpit import CockpitService
     from .ktd_platform import KtdPlatformExecutor, SqliteCommandJournal
@@ -161,5 +162,6 @@ def build_platform_cockpit(config: PlatformRuntimeConfig, decider_factory, *,
         transport=transport, allowed_origins=config.media_allowed_origins,
         allow_insecure_http=config.media_allow_insecure_http, clock=clock)
     return CockpitService(config.binding, executor, decider_factory,
+                          enable_direct_commands=enable_direct_commands,
                           gateway_token=config.gateway_token, task_id=config.task_id, clock=clock,
                           visuals_provider=visuals)

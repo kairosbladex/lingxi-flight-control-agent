@@ -26,7 +26,7 @@ from .full_control import (
     RuntimeBinding, _CONTROL_FREE_ACTIONS, parameter_json_schema,
 )
 from .plan import build_plan_registry, plan_binding_hash, plan_clarify_detector
-from .models import DecisionKind, LoopStatus, ModelDecision, ToolDefinition, ToolParameter, ToolSchema
+from .models import DecisionKind, LoopStatus, ModelDecision, ToolCall, ToolDefinition, ToolParameter, ToolSchema
 from .ktd_platform import KtdPlatformError
 from .ollama_decider import ModelOutputTruncatedError, ModelTimeoutError, PromptBudgetExceeded
 from .safety import SafetyFastPath
@@ -147,6 +147,31 @@ def _separate_motion_constraints(text):
     return '，'.join(remaining), forbidden
 
 _CONTINUE = frozenset({'继续', '下一步', '继续下一步', 'continue', 'next'})
+# Strict full-sentence grammar; ambiguous numbers and extra clauses fall back.
+_DIRECT_NUMBER = (r'(?:[0-9]+(?:\.[0-9]+)?|半|'
+                  r'(?:[一二两三四五六七八九]|十[一二三四五六七八九]?|二十|零)'
+                  r'(?:点[零一二三四五六七八九]+)?)')
+_DIRECT_PHOTO = re.compile(r'(?:请|帮我)?(?:拍照|拍(?:一)?张(?:照片|照))[。!！]?')
+_DIRECT_MOVE = re.compile(r'(?:请|帮我)?(?P<motion>向前飞|往前飞|前进|向前平移|'
+    r'向后飞|往后飞|往后退|后退|向后平移|向左飞|往左飞|向左平移|'
+    r'向右飞|往右飞|向右平移)\s*(?P<number>' + _DIRECT_NUMBER + r')\s*米[。!！]?')
+
+
+def _direct_command(text):
+    if _DIRECT_PHOTO.fullmatch(text):
+        return ToolCall('camera_photo', {})
+    match = _DIRECT_MOVE.fullmatch(text)
+    if match is None:
+        return None
+    value = _number(match['number'])
+    if not math.isfinite(value) or not 0 < value <= 20:
+        return None
+    motion = match['motion']
+    direction = next((name for character, name in (
+        ('前', 'forward'), ('后', 'backward'), ('左', 'left'), ('右', 'right')) if character in motion), None)
+    return ToolCall('move_' + direction, {'distance_m': value}) if direction else None
+
+
 # Full utterances only: mixed flight requests must retain the confirmation path.
 _STATE_QUERY = re.compile(
     r'(?:(?:请|帮我)?(?:查询|查看|读取|刷新|看一下)(?:一下)?(?:当前|现在)?(?:无人机|飞机|设备)?(?:的)?(?:状态|电量|高度|控制权)'
@@ -521,7 +546,7 @@ class CockpitService:
                  max_model_steps=3, timeout_sec=65, session_ttl_sec=1800,
                  max_sessions=64, task_id=None, visuals_provider=None,
                  enable_plan_execution=False, plan_decider_factory=None,
-                 max_plan_steps=5, plan_ttl_sec=120):
+                 max_plan_steps=5, plan_ttl_sec=120, enable_direct_commands=False):
         binding.validate()
         self.binding = binding
         self.executor = coerce_executor(executor)
@@ -537,6 +562,9 @@ class CockpitService:
                 raise ValueError('budgets must be positive and finite')
         if type(enable_plan_execution) is not bool:
             raise ValueError('enable_plan_execution must be a boolean')
+        if type(enable_direct_commands) is not bool:
+            raise ValueError('enable_direct_commands must be a boolean')
+        self._direct_commands = enable_direct_commands
         if enable_plan_execution:
             # 模拟器天然同步完成；平台执行器必须显式声明已完成回执验证。
             if not (self.execution_mode == 'simulator'
@@ -939,6 +967,9 @@ class CockpitService:
                 session.motion_source = None
                 session.requests[request_id] = (fingerprint, result)
                 return result
+            if self._direct_commands and not self._plan_enabled and _direct_command(text):
+                # A complete new command must not revive an older clarification.
+                session.clarification = False
             parameter_reply = text if session.clarification and _motion_parameter_reply(text) else None
             if text.lower() in _CONTINUE:
                 if not session.active_intent:
@@ -983,6 +1014,8 @@ class CockpitService:
         started = time.monotonic()
         try:
             safety_call = None if any(mark in text for mark in '?？') else SafetyFastPath().recognize(text)
+            direct_call = _direct_command(text) if self._direct_commands and not self._plan_enabled else None
+            fixed_call = safety_call or direct_call
             if self._plan_enabled and safety_call is None:
                 response, pending = self._plan_turn(session, epoch, started, model_input,
                                                    grounding_text, request_id)
@@ -1004,7 +1037,7 @@ class CockpitService:
                     return response
             model_failure_code = None
             try:
-                decider = None if safety_call else self._factory()
+                decider = None if fixed_call else self._factory()
             except Exception as exc:
                 model_failure_code = _model_failure_code(exc)
                 decider = None
@@ -1024,8 +1057,8 @@ class CockpitService:
                     if model_failure_code:
                         raise ValueError(_MODEL_FAILURE_MESSAGES[model_failure_code])
                     try:
-                        decision = (ModelDecision(DecisionKind.TOOL_CALL, tool_call=safety_call)
-                                    if safety_call else decider.decide(user_message, checkpoint, tools))
+                        decision = (ModelDecision(DecisionKind.TOOL_CALL, tool_call=fixed_call)
+                                    if fixed_call else decider.decide(user_message, checkpoint, tools))
                     except Exception as exc:
                         model_failure_code = _model_failure_code(exc)
                         # The loop records exception text in its checkpoint. Only
@@ -1043,6 +1076,8 @@ class CockpitService:
                     response = self._proposal(result, grounding_text, request_id, session,
                                               model_failure_code=model_failure_code,
                                               parameter_reply=parameter_reply)
+                    response['interpretation_source'] = ('exact-command-v1' if direct_call else
+                        'safety-fast-path' if safety_call else 'model')
                     session.clarification = response['status'] == 'clarification'
                     history += [{'role': 'user', 'text': text}, {'role': 'assistant', 'status': response['status'], 'text': response['message']}]
                     result.checkpoint.context['conversation'] = history[-12:]

@@ -93,7 +93,7 @@ class BrowserSnapshotProvider(LegacyKtdSnapshotProvider):
 
 class BrowserGateway:
     def __init__(self, config, decider_factory, *, enable_control=False, opener=None, clock=time.time,
-                 allowed_drone_sns=()):
+                 allowed_drone_sns=(), enable_direct_commands=False):
         if not isinstance(allowed_drone_sns, (tuple, list)) or not allowed_drone_sns or any(
                 not isinstance(s, str) or not re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', s) for s in allowed_drone_sns):
             raise ValueError('必须配置明确的设备范围')
@@ -101,6 +101,7 @@ class BrowserGateway:
         self.config, self.opener = config, opener
         def factory(bound, decider, **kwargs):
             return build_platform_cockpit(replace(bound, legacy_read_api=True), decider,
+                enable_direct_commands=enable_direct_commands,
                 opener=opener, clock=clock, legacy_snapshot_factory=BrowserSnapshotProvider, **kwargs)
         self.runtime = PlatformGateway(config, decider_factory, enable_control=enable_control, factory=factory)
 

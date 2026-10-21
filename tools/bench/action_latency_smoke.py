@@ -31,7 +31,12 @@ def main():
     parser.add_argument('--base-url', required=True)
     parser.add_argument('--model', default='qwen3.5:9b')
     parser.add_argument('--offline-scripted', action='store_true')
+    parser.add_argument('--direct-commands', action='store_true')
+    parser.add_argument('--fallback-paraphrases', action='store_true')
     args = parser.parse_args()
+    cases = ([('帮我拍摄一张照片', 'camera_photo', {}),
+              ('机头方向向前平移3米', 'move_forward', {'distance_m': 3})]
+             if args.fallback_paraphrases else CASES)
     base = args.base_url.rstrip('/')
     fixture = BrowserGatewayTests()
     fixture.setUp()
@@ -50,7 +55,7 @@ def main():
         started = time.monotonic()
         try:
             if args.offline_scripted:
-                _, name, arguments = CASES[current[0]]
+                _, name, arguments = cases[current[0]]
                 response = {'done_reason': 'stop', 'message': {'tool_calls': [
                     {'function': {'name': name, 'arguments': arguments}}]}}
             else:
@@ -79,6 +84,7 @@ def main():
             system_prompt=COCKPIT_SYSTEM_PROMPT, timeout=45, max_attempts=1,
             max_output_tokens=2048, keep_alive='30m', transport=transport),
         enable_control=True, opener=ReadOnlyJava(), clock=lambda: 1000,
+        enable_direct_commands=args.direct_commands,
         allowed_drone_sns=['uav-sn-1'])
     server = build_standalone_server(fixture.gateway, '127.0.0.1', 0)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -86,13 +92,14 @@ def main():
     port = server.server_port
     print(json.dumps({'event': 'probe_start', 'time': datetime.now(timezone.utc).isoformat(),
         'model': args.model, 'offline_scripted': args.offline_scripted,
-        'cases_sha256': hashlib.sha256(json.dumps(CASES, ensure_ascii=False).encode()).hexdigest(),
+        'direct_commands': args.direct_commands,
+        'cases_sha256': hashlib.sha256(json.dumps(cases, ensure_ascii=False).encode()).hexdigest(),
         'prompt_sha256': hashlib.sha256(COCKPIT_SYSTEM_PROMPT.encode()).hexdigest(),
         'budgets': {'seconds': 360, 'calls': 12, 'request_timeout': 45, 'run_timeout': 65,
                     'steps': 3, 'num_ctx': 32768, 'max_output_tokens': 2048},
         'session': 'one synthetic session; previews only; no confirmations', 'port': port}), flush=True)
     try:
-        for index, (text, expected, parameters) in enumerate(CASES):
+        for index, (text, expected, parameters) in enumerate(cases):
             current[0] = index
             row = {'case': index, 'input': text, 'expected_action': expected}
             if time.monotonic() >= deadline or len(calls) >= 12:
@@ -131,11 +138,13 @@ def main():
         thread.join(timeout=2)
         fixture.doCleanups()
     summary = {'event': 'probe_complete', 'passed': sum(r.get('passed', False) for r in rows),
-        'total': len(CASES), 'rows': rows, 'model_calls': calls,
+        'total': len(cases), 'rows': rows, 'model_calls': calls,
         'java_control_posts': len(fixture.java.posts), 'write_attempts': len(violations),
         'confirmations': 0, 'device_requests': 0, 'server_stopped': not thread.is_alive()}
     print(json.dumps(summary, ensure_ascii=False), flush=True)
-    return 0 if summary['passed'] == len(CASES) and not violations else 1
+    if args.direct_commands and not args.fallback_paraphrases:
+        assert len(calls) == 0, 'exact commands must never call model'
+    return 0 if summary['passed'] == len(cases) and not violations else 1
 
 
 if __name__ == '__main__':
