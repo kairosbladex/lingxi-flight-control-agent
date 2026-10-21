@@ -248,6 +248,10 @@ class SafetyRegressionTests(unittest.TestCase):
     def test_every_action_receipt_passes_the_unsafe_content_check(self):
         """裸词 payload 曾被列入禁用表，会把驾驶舱回执整条判为禁止内容。"""
         arguments = {
+            FlightControlAction.SPEAKER_SPEAK: {"text": "安全提示"},
+            FlightControlAction.SPEAKER_VOLUME: {"value": 50},
+            FlightControlAction.SEARCHLIGHT_BRIGHTNESS: {"value": 50},
+            FlightControlAction.AI_ALGORITHM_SET: {"algorithm": "烟火", "enabled": True},
             FlightControlAction.SET_VIRTUAL_BUTTON: {"button": "b1", "action": "press"},
             FlightControlAction.TURN_LEFT: {"angle_deg": 90},
             FlightControlAction.TURN_RIGHT: {"angle_deg": 90},
@@ -275,9 +279,14 @@ class SafetyRegressionTests(unittest.TestCase):
 
         simulator = MemoryFlightControlSimulator(binding())
         registry = build_full_control_tool_registry(simulator)
-        decisions = [call(ACQUIRE)] + [
-            call(action.value, **arguments.get(action, {})) for action in FlightControlAction
-        ]
+        # Exercise route receipts with a real upload/start/pause/resume sequence,
+        # rather than letting enum ordering fabricate a paused route from idle.
+        route_actions = (FlightControlAction.UPLOAD_ROUTE, FlightControlAction.EXECUTE_ROUTE,
+                         FlightControlAction.ROUTE_PAUSE, FlightControlAction.ROUTE_RESUME)
+        ordered_actions = list(route_actions) + [action for action in FlightControlAction
+                                               if action not in route_actions]
+        decisions = [call(ACQUIRE)] + [call(action.value, **arguments.get(action, {}))
+                                      for action in ordered_actions]
         loop = BoundedAgentLoop(ScriptedDecider(decisions + [final("ok")]), registry, max_steps=200)
         result = drive(loop, "跑完所有动作", max_rounds=400)
 
@@ -288,6 +297,8 @@ class SafetyRegressionTests(unittest.TestCase):
             if "result" in observation:
                 self.assertFalse(_contains_unsafe_content(observation["result"]),
                                  observation["tool"])
+                if observation["tool"] in {action.value for action in route_actions}:
+                    self.assertEqual(observation["result"]["status"], "accepted")
         executed = {c["name"] for c in result.checkpoint.tool_calls}
         self.assertEqual(executed, set(action_tool_names()))
 

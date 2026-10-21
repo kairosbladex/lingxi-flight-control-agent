@@ -1,0 +1,59 @@
+{
+  "schema_version": "cockpit-intent-fixture-provenance/v1",
+  "created_at": "2026-10-16T15:13:29.483Z",
+  "source_kind": "synthetic_agent_authored_contract",
+  "human_reviewed": false,
+  "real_flight_truth": false,
+  "source_fixture": "fixtures/intent_scenarios.json",
+  "source_fixture_sha256": "355395aa8c3e367afcca06080ae06caa7fa9277d2d68b5ecde47f5d06725a7cd",
+  "fixture": "fixtures/intent-scenarios-v2.json",
+  "fixture_sha256": "6ac73f55874d0c0fabcc01fae5074b57538ab1659a9384b907d5902107cac354",
+  "scenario_count": 102,
+  "inherited_scenario_count": 100,
+  "inherited_inputs_and_intent_labels": "unchanged by id; v1 file remains byte-for-byte unchanged",
+  "added_scenarios": [
+    "payload_06",
+    "route_07"
+  ],
+  "new_service_labels": "independent typed status contract frozen before any service candidate; proposal labels are not merged",
+  "state_changes": {
+    "route_01": {
+      "route_status": "running"
+    },
+    "route_02": {
+      "route_status": "paused"
+    },
+    "route_03": {
+      "route_status": "paused",
+      "breakpoint_index": 2
+    },
+    "route_06": {
+      "route_status": "uploaded",
+      "reason": "v1 paused is inconsistent with execute_route precondition"
+    },
+    "control_01": {
+      "control_owner": null
+    },
+    "control_03": {
+      "control_owner": null
+    },
+    "control_07": {
+      "control_request": "pending"
+    },
+    "control_08": {
+      "control_request": "pending"
+    }
+  },
+  "state_contract": "explicit real FlightControlState fields per sample; no control_owned pseudo-state injected",
+  "reference_code": {
+    "src/lingxi_flight_control/cockpit.py": "e833d97e97afe723923b8750f7012dc305db403973e44cba79bcb3dfa3521fbb",
+    "src/lingxi_flight_control/full_control.py": "d844dd9da7ede6615fdaf28c89b594f98c71476e7fbe9f81ec50078aabf34360"
+  },
+  "label_basis": [
+    "CockpitService._message early policy returns clarification for blocked negation/conditional/unsafe requests",
+    "CockpitService._proposal preview/final/clarification typed statuses",
+    "MemoryFlightControlSimulator._ROUTE_REQUIRED_STATES and preview",
+    "ACTION_SPECS allowlist of 59 actions"
+  ],
+  "accuracy_status": "not_evaluable"
+}

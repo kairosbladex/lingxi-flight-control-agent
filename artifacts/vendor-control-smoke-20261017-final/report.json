@@ -1,0 +1,927 @@
+{
+  "schema_version": "lingxi-vendor-control-smoke/v1",
+  "result": "PASS",
+  "recorded_at": "2026-10-16T17:04:44.290704+00:00",
+  "original_fixture": {
+    "fixture_sha256": "c73c7be750b3f3661718c3730f267ec96a84c64afaa622aaeb734159453ca5b2",
+    "fixture_bytes": 90137,
+    "snapshots": 2,
+    "body_records": 56,
+    "decoded_cases": [
+      "submitted-flight_authority_grab",
+      "submitted-drc_mode_enter",
+      "submitted-drc_mode_exit",
+      "request-succeeded",
+      "failed-negative-one",
+      "failed-int-min",
+      "conflict",
+      "unknown-after-commit",
+      "expired",
+      "null-task"
+    ],
+    "rejected_envelopes": [
+      "duplicate-key",
+      "wrong-method",
+      "disabled"
+    ],
+    "raw_packets_modified": false
+  },
+  "source_freeze": {
+    "before": {
+      "src/lingxi_flight_control/__init__.py": "f1bf8cf44cfd961dc0a9313672d7acf085db92e79981ec3c691737dad957a70f",
+      "src/lingxi_flight_control/agent.py": "c83c30c2efd4ec546298dddae779d52d0eb6ae6c3f4d819ddcd197041a3a672b",
+      "src/lingxi_flight_control/cockpit.py": "a8535d008022768057954d76aaa8188ebe518a2dab0f8b7ba2a4e16943697725",
+      "src/lingxi_flight_control/command_receipts.py": "91af76164b9c625337bc536fc0769aa741fd67f28b44647de780c4cd4cbf5f06",
+      "src/lingxi_flight_control/executor.py": "2c9d96df7ffb58a5f7cf280469888fb47465cef63509bc7cc23b3486bb990f7e",
+      "src/lingxi_flight_control/full_control.py": "d844dd9da7ede6615fdaf28c89b594f98c71476e7fbe9f81ec50078aabf34360",
+      "src/lingxi_flight_control/geometry.py": "eef1085ccbf046f89ea9aa876cc8e08ffca01e04947cab61c1706fc7c6bf62a9",
+      "src/lingxi_flight_control/ktd_platform.py": "d3787123a568a1ccc8005fa97ae4adb84e77315a5df2a037afb0ca09155daf8c",
+      "src/lingxi_flight_control/ktd_snapshot.py": "d70816540360716afb2e39b8620e844274191b35c95f1bd8ad0bb4ed3b4eb6dc",
+      "src/lingxi_flight_control/ktd_visuals.py": "75ea04c5c497a9c7644e5e5c3c30a7fbd2de99c6c22c56c31c51f7e41016a621",
+      "src/lingxi_flight_control/models.py": "e10c3de393d93743ed60bb695a52c2b6a1f8357bb0ce302e77532043ea9392ba",
+      "src/lingxi_flight_control/ollama_decider.py": "4835e20296b476d60e9867ff328919049b8a131ccb8dc6148082750cada6351f",
+      "src/lingxi_flight_control/platform_runtime.py": "4f2011018c88c44fcfec7030248f9940becedb380f281cccc2602810851c91ee",
+      "src/lingxi_flight_control/preview.py": "5d29e58f2dfc74a8ad0a4da1d92521da2040e88ff49d191cb12b2af9a00c81c6",
+      "src/lingxi_flight_control/safety.py": "eaa18da6d719e4c395c048c58760905d465c7434f0998ff2fc8ebd4590e55402",
+      "src/lingxi_flight_control/service.py": "55d593061aa6166dd2ed581c4042020c01f4018158a29ebef485744e296d6882",
+      "src/lingxi_flight_control/session.py": "42448cccaffb63aee50270ec8f965199e66c45763e5513ba5ec28dea31bdbd94",
+      "src/lingxi_flight_control/simulator.py": "70270a54a1fb356461a2a0816a92067406583017c7163001377698fd70a136f8",
+      "src/lingxi_flight_control/standalone_preview.py": "a317ed153d3ed4fcb221684d9e1bb60237ae8ee4b7bb93791eba40fb439284cd",
+      "src/lingxi_flight_control/telemetry.py": "8e60cb055261948bc76ed17c186665733d0574290103c2d1c4a9147de1733474",
+      "src/lingxi_flight_control/tool_selector.py": "13afe002347286182ba17549f1dfef37011421281d88aac8c2c245acd34f3ff9",
+      "src/lingxi_flight_control/vendor_control.py": "a2d591203f8a8ae07c53cb05e8e8804dd19a202d092faa81f489f1c8a5c271b8",
+      "tools/bench/vendor_control_smoke.py": "9750c448e52484c71a61197aa96b4a728ab46037e1d279716ddafbe581708280",
+      "fixtures/ktd-vendor-http-v1.json": "c73c7be750b3f3661718c3730f267ec96a84c64afaa622aaeb734159453ca5b2",
+      "fixtures/ktd-vendor-http-v1.provenance.json": "48b5788dc3a08eaa4c2848da6cfbafe47e7c5cfd9957f58d7b1232cdbcce357f"
+    },
+    "after": {
+      "src/lingxi_flight_control/__init__.py": "f1bf8cf44cfd961dc0a9313672d7acf085db92e79981ec3c691737dad957a70f",
+      "src/lingxi_flight_control/agent.py": "c83c30c2efd4ec546298dddae779d52d0eb6ae6c3f4d819ddcd197041a3a672b",
+      "src/lingxi_flight_control/cockpit.py": "a8535d008022768057954d76aaa8188ebe518a2dab0f8b7ba2a4e16943697725",
+      "src/lingxi_flight_control/command_receipts.py": "91af76164b9c625337bc536fc0769aa741fd67f28b44647de780c4cd4cbf5f06",
+      "src/lingxi_flight_control/executor.py": "2c9d96df7ffb58a5f7cf280469888fb47465cef63509bc7cc23b3486bb990f7e",
+      "src/lingxi_flight_control/full_control.py": "d844dd9da7ede6615fdaf28c89b594f98c71476e7fbe9f81ec50078aabf34360",
+      "src/lingxi_flight_control/geometry.py": "eef1085ccbf046f89ea9aa876cc8e08ffca01e04947cab61c1706fc7c6bf62a9",
+      "src/lingxi_flight_control/ktd_platform.py": "d3787123a568a1ccc8005fa97ae4adb84e77315a5df2a037afb0ca09155daf8c",
+      "src/lingxi_flight_control/ktd_snapshot.py": "d70816540360716afb2e39b8620e844274191b35c95f1bd8ad0bb4ed3b4eb6dc",
+      "src/lingxi_flight_control/ktd_visuals.py": "75ea04c5c497a9c7644e5e5c3c30a7fbd2de99c6c22c56c31c51f7e41016a621",
+      "src/lingxi_flight_control/models.py": "e10c3de393d93743ed60bb695a52c2b6a1f8357bb0ce302e77532043ea9392ba",
+      "src/lingxi_flight_control/ollama_decider.py": "4835e20296b476d60e9867ff328919049b8a131ccb8dc6148082750cada6351f",
+      "src/lingxi_flight_control/platform_runtime.py": "4f2011018c88c44fcfec7030248f9940becedb380f281cccc2602810851c91ee",
+      "src/lingxi_flight_control/preview.py": "5d29e58f2dfc74a8ad0a4da1d92521da2040e88ff49d191cb12b2af9a00c81c6",
+      "src/lingxi_flight_control/safety.py": "eaa18da6d719e4c395c048c58760905d465c7434f0998ff2fc8ebd4590e55402",
+      "src/lingxi_flight_control/service.py": "55d593061aa6166dd2ed581c4042020c01f4018158a29ebef485744e296d6882",
+      "src/lingxi_flight_control/session.py": "42448cccaffb63aee50270ec8f965199e66c45763e5513ba5ec28dea31bdbd94",
+      "src/lingxi_flight_control/simulator.py": "70270a54a1fb356461a2a0816a92067406583017c7163001377698fd70a136f8",
+      "src/lingxi_flight_control/standalone_preview.py": "a317ed153d3ed4fcb221684d9e1bb60237ae8ee4b7bb93791eba40fb439284cd",
+      "src/lingxi_flight_control/telemetry.py": "8e60cb055261948bc76ed17c186665733d0574290103c2d1c4a9147de1733474",
+      "src/lingxi_flight_control/tool_selector.py": "13afe002347286182ba17549f1dfef37011421281d88aac8c2c245acd34f3ff9",
+      "src/lingxi_flight_control/vendor_control.py": "a2d591203f8a8ae07c53cb05e8e8804dd19a202d092faa81f489f1c8a5c271b8",
+      "tools/bench/vendor_control_smoke.py": "9750c448e52484c71a61197aa96b4a728ab46037e1d279716ddafbe581708280",
+      "fixtures/ktd-vendor-http-v1.json": "c73c7be750b3f3661718c3730f267ec96a84c64afaa622aaeb734159453ca5b2",
+      "fixtures/ktd-vendor-http-v1.provenance.json": "48b5788dc3a08eaa4c2848da6cfbafe47e7c5cfd9957f58d7b1232cdbcce357f"
+    },
+    "changed": [],
+    "stable": true
+  },
+  "provenance": {
+    "flow": "owned-loopback-http-with-explicit-synthetic-rebinding",
+    "production_java_commit": "af034e1b16512a67d96d57ef2f12c7518c98a898",
+    "raw_java_packets_unchanged_phase": true,
+    "synthetic_rebindings": [
+      {
+        "source_case": "submitted-flight_authority_grab",
+        "changes": {
+          "command_id": {
+            "original": "fixture-submitted-flight_authority_grab",
+            "synthetic": "31d533ca9c964053a47b18891c6a722b"
+          },
+          "idempotency_key": {
+            "original": "key-fixture-submitted-flight_authority_grab",
+            "synthetic": "31d533ca9c964053a47b18891c6a722b"
+          },
+          "trace_id": {
+            "original": "trace-fixture-submitted-flight_authority_grab",
+            "synthetic": "050cf8cd861c4944a1536e37cde368f6"
+          }
+        },
+        "source_body_sha256": "5cff9a0de8fe6a8c981ca2a49ec4779766ebf18d6ede179ec914c57b7a7ba359"
+      },
+      {
+        "source_case": "request-succeeded",
+        "changes": {
+          "command_id": {
+            "original": "fixture-request-succeeded",
+            "synthetic": "31d533ca9c964053a47b18891c6a722b"
+          },
+          "idempotency_key": {
+            "original": "key-fixture-request-succeeded",
+            "synthetic": "31d533ca9c964053a47b18891c6a722b"
+          },
+          "trace_id": {
+            "original": "trace-fixture-request-succeeded",
+            "synthetic": "050cf8cd861c4944a1536e37cde368f6"
+          },
+          "dispatch_ids": {
+            "original": {
+              "bid": "dc353584-bf8a-4dd4-a188-d889bb6b913b",
+              "tid": "98fccebe-a6b5-45fd-876d-56231c002a63"
+            },
+            "synthetic": {
+              "bid": "db05833d-b241-4ebb-8a39-8aa0a54a7e9f",
+              "tid": "e0880f1c-82cb-4cac-95d8-156c487f4e85"
+            }
+          }
+        },
+        "source_body_sha256": "096a3598be2c554e3c896b5baa92169685a7d19df8053a4d19d238b9321e16a1"
+      },
+      {
+        "source_case": "submitted-drc_mode_enter",
+        "changes": {
+          "command_id": {
+            "original": "fixture-submitted-drc_mode_enter",
+            "synthetic": "549de4e9b3604321af2a4f78f5b88ca1"
+          },
+          "idempotency_key": {
+            "original": "key-fixture-submitted-drc_mode_enter",
+            "synthetic": "549de4e9b3604321af2a4f78f5b88ca1"
+          },
+          "trace_id": {
+            "original": "trace-fixture-submitted-drc_mode_enter",
+            "synthetic": "40f0437da0734601949724df23492941"
+          }
+        },
+        "source_body_sha256": "a957fec0960cd9a84ac668d81ced16d19ce5f5d625ea03715560646f6eb6a9e5"
+      },
+      {
+        "source_case": "failed-int-min",
+        "changes": {
+          "command_id": {
+            "original": "fixture-failed-int-min",
+            "synthetic": "549de4e9b3604321af2a4f78f5b88ca1"
+          },
+          "idempotency_key": {
+            "original": "key-fixture-failed-int-min",
+            "synthetic": "549de4e9b3604321af2a4f78f5b88ca1"
+          },
+          "trace_id": {
+            "original": "trace-fixture-failed-int-min",
+            "synthetic": "40f0437da0734601949724df23492941"
+          },
+          "method": {
+            "original": "flight_authority_grab",
+            "synthetic": "drc_mode_enter"
+          },
+          "dispatch_ids": {
+            "original": {
+              "bid": "763aa65d-d8be-4682-bcdf-08c85292fb6e",
+              "tid": "dd9c4e81-7118-4c57-b26a-abfaa94af086"
+            },
+            "synthetic": {
+              "bid": "aee2f6aa-2e14-47e8-a33e-26768d54d738",
+              "tid": "b191eac3-6895-4089-945d-15b5884153f5"
+            }
+          }
+        },
+        "source_body_sha256": "bc03a058be018300637691af9c4fc80221270dd3dbfdbaab1abd5b0075449d8f"
+      },
+      {
+        "source_case": "unknown-after-commit",
+        "changes": {
+          "command_id": {
+            "original": "fixture-unknown-after-commit",
+            "synthetic": "5f3aad23cccd47039a53e59397c74dc6"
+          },
+          "idempotency_key": {
+            "original": "key-fixture-unknown-after-commit",
+            "synthetic": "5f3aad23cccd47039a53e59397c74dc6"
+          },
+          "trace_id": {
+            "original": "trace-fixture-unknown-after-commit",
+            "synthetic": "ebaea249039145559d8391d43ba3f9e6"
+          },
+          "method": {
+            "original": "flight_authority_grab",
+            "synthetic": "drc_mode_exit"
+          }
+        },
+        "source_body_sha256": "3fe75eaade8ab02c40b43996b68461e2fa587e113fecf94da4baec8789f904ef"
+      }
+    ],
+    "snapshot_http_bytes_unchanged": true,
+    "real_platform_requests": 0,
+    "physical_device_requests": 0,
+    "live_model_requests": 0,
+    "movement_enabled": false,
+    "offline_unittest_discover": false
+  },
+  "limits": {
+    "agent_http_requests": 100,
+    "java_http_requests": 160,
+    "scripted_model_calls": 8,
+    "max_model_steps": 3,
+    "model_max_attempts": 1,
+    "http_timeout_seconds": 5,
+    "wall_seconds": 90
+  },
+  "counts": {
+    "agent_http_requests": 46,
+    "java_http_requests": 51,
+    "vendor_posts": 3,
+    "scripted_model_calls": 6,
+    "public_receipts": 8,
+    "public_receipt_fields": 18,
+    "raw_snapshots": 2,
+    "raw_decoded_cases": 10,
+    "raw_rejected_envelopes": 3,
+    "server_instances": 4,
+    "max_concurrent_servers": 2,
+    "connects": 97,
+    "blocked": 0
+  },
+  "java_http_calls": [
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/screen/uav/operation/control/vendor-request",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/commands/vendor-receipt",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/commands/vendor-receipt",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/screen/uav/operation/control/vendor-request",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/commands/vendor-receipt",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/commands/vendor-receipt",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/screen/uav/operation/control/vendor-request",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/commands/vendor-receipt",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/commands/vendor-receipt",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/commands/vendor-receipt",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/commands/vendor-receipt",
+      "valid": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/lingxi/agent/platform/snapshot",
+      "valid": true
+    }
+  ],
+  "agent_http_calls": [
+    {
+      "method": "GET",
+      "path": "/context",
+      "status": 401
+    },
+    {
+      "method": "GET",
+      "path": "/context",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/context",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/messages",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/confirm",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/confirm",
+      "status": 403
+    },
+    {
+      "method": "POST",
+      "path": "/agent/confirm",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/confirm",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/agent/vendor-receipt",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/agent/vendor-receipt",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/messages",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/messages",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/confirm",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/confirm",
+      "status": 403
+    },
+    {
+      "method": "POST",
+      "path": "/agent/confirm",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/confirm",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/agent/vendor-receipt",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/agent/vendor-receipt",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/messages",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/messages",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/confirm",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/confirm",
+      "status": 403
+    },
+    {
+      "method": "POST",
+      "path": "/agent/confirm",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/confirm",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/agent/vendor-receipt",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/messages",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/agent/vendor-receipt",
+      "status": 401
+    },
+    {
+      "method": "GET",
+      "path": "/agent/vendor-receipt",
+      "status": 403
+    },
+    {
+      "method": "GET",
+      "path": "/agent/vendor-receipt",
+      "status": 400
+    },
+    {
+      "method": "GET",
+      "path": "/agent/vendor-receipt",
+      "status": 400
+    },
+    {
+      "method": "GET",
+      "path": "/agent/vendor-receipt",
+      "status": 400
+    },
+    {
+      "method": "GET",
+      "path": "/agent/vendor-receipt",
+      "status": 409
+    },
+    {
+      "method": "GET",
+      "path": "/agent/vendor-receipt",
+      "status": 400
+    },
+    {
+      "method": "POST",
+      "path": "/agent/messages",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/cancel",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/messages",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/reset",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/confirm",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/messages",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/context",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/agent/vendor-receipt",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/confirm",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/agent/vendor-receipt",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/confirm",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/agent/vendor-receipt",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/agent/confirm",
+      "status": 200
+    }
+  ],
+  "model_calls": [
+    {
+      "method": "flight_authority_grab",
+      "tools": 60
+    },
+    {
+      "method": "drc_mode_enter",
+      "tools": 60
+    },
+    {
+      "method": "drc_mode_exit",
+      "tools": 60
+    },
+    {
+      "method": "drc_mode_enter",
+      "tools": 60
+    },
+    {
+      "method": "drc_mode_enter",
+      "tools": 60
+    },
+    {
+      "method": "move_forward",
+      "tools": 60
+    }
+  ],
+  "public_reports": [
+    {
+      "command_id": "31d533ca9c964053a47b18891c6a722b",
+      "context_version": 1,
+      "continuation_allowed": false,
+      "device_effect": "not_verified",
+      "drc_link": "unknown",
+      "execution_mode": "platform",
+      "kind": "vendor_service_result",
+      "method": "flight_authority_grab",
+      "receipt_version": 2,
+      "received_at": null,
+      "report_source": "ktd-command-journal",
+      "reported_at": null,
+      "reported_status": "submitted",
+      "result_code": null,
+      "schema_version": "vendor-control-receipt/v1",
+      "success": true,
+      "trace_id": "050cf8cd861c4944a1536e37cde368f6",
+      "vendor_authority": "unknown"
+    },
+    {
+      "command_id": "31d533ca9c964053a47b18891c6a722b",
+      "context_version": 1,
+      "continuation_allowed": false,
+      "device_effect": "not_verified",
+      "drc_link": "unknown",
+      "execution_mode": "platform",
+      "kind": "vendor_service_result",
+      "method": "flight_authority_grab",
+      "receipt_version": 3,
+      "received_at": 1700000000.002,
+      "report_source": "ktd-command-journal",
+      "reported_at": 1700000000.002,
+      "reported_status": "request_succeeded",
+      "result_code": 0,
+      "schema_version": "vendor-control-receipt/v1",
+      "success": true,
+      "trace_id": "050cf8cd861c4944a1536e37cde368f6",
+      "vendor_authority": "unknown"
+    },
+    {
+      "command_id": "549de4e9b3604321af2a4f78f5b88ca1",
+      "context_version": 1,
+      "continuation_allowed": false,
+      "device_effect": "not_verified",
+      "drc_link": "unknown",
+      "execution_mode": "platform",
+      "kind": "vendor_service_result",
+      "method": "drc_mode_enter",
+      "receipt_version": 2,
+      "received_at": null,
+      "report_source": "ktd-command-journal",
+      "reported_at": null,
+      "reported_status": "submitted",
+      "result_code": null,
+      "schema_version": "vendor-control-receipt/v1",
+      "success": true,
+      "trace_id": "40f0437da0734601949724df23492941",
+      "vendor_authority": "unknown"
+    },
+    {
+      "command_id": "549de4e9b3604321af2a4f78f5b88ca1",
+      "context_version": 1,
+      "continuation_allowed": false,
+      "device_effect": "not_verified",
+      "drc_link": "unknown",
+      "execution_mode": "platform",
+      "kind": "vendor_service_result",
+      "method": "drc_mode_enter",
+      "receipt_version": 3,
+      "received_at": 1700000000.002,
+      "report_source": "ktd-command-journal",
+      "reported_at": 1700000000.002,
+      "reported_status": "failed",
+      "result_code": -2147483648,
+      "schema_version": "vendor-control-receipt/v1",
+      "success": true,
+      "trace_id": "40f0437da0734601949724df23492941",
+      "vendor_authority": "unknown"
+    },
+    {
+      "command_id": "5f3aad23cccd47039a53e59397c74dc6",
+      "context_version": 1,
+      "continuation_allowed": false,
+      "device_effect": "not_verified",
+      "drc_link": "unknown",
+      "execution_mode": "platform",
+      "kind": "vendor_service_result",
+      "method": "drc_mode_exit",
+      "receipt_version": 2,
+      "received_at": null,
+      "report_source": "ktd-command-journal",
+      "reported_at": null,
+      "reported_status": "unknown",
+      "result_code": null,
+      "schema_version": "vendor-control-receipt/v1",
+      "success": true,
+      "trace_id": "ebaea249039145559d8391d43ba3f9e6",
+      "vendor_authority": "unknown"
+    },
+    {
+      "command_id": "31d533ca9c964053a47b18891c6a722b",
+      "context_version": 1,
+      "continuation_allowed": false,
+      "device_effect": "not_verified",
+      "drc_link": "unknown",
+      "execution_mode": "platform",
+      "kind": "vendor_service_result",
+      "method": "flight_authority_grab",
+      "receipt_version": 3,
+      "received_at": 1700000000.002,
+      "report_source": "ktd-command-journal",
+      "reported_at": 1700000000.002,
+      "reported_status": "request_succeeded",
+      "result_code": 0,
+      "schema_version": "vendor-control-receipt/v1",
+      "success": true,
+      "trace_id": "050cf8cd861c4944a1536e37cde368f6",
+      "vendor_authority": "unknown"
+    },
+    {
+      "command_id": "549de4e9b3604321af2a4f78f5b88ca1",
+      "context_version": 1,
+      "continuation_allowed": false,
+      "device_effect": "not_verified",
+      "drc_link": "unknown",
+      "execution_mode": "platform",
+      "kind": "vendor_service_result",
+      "method": "drc_mode_enter",
+      "receipt_version": 3,
+      "received_at": 1700000000.002,
+      "report_source": "ktd-command-journal",
+      "reported_at": 1700000000.002,
+      "reported_status": "failed",
+      "result_code": -2147483648,
+      "schema_version": "vendor-control-receipt/v1",
+      "success": true,
+      "trace_id": "40f0437da0734601949724df23492941",
+      "vendor_authority": "unknown"
+    },
+    {
+      "command_id": "5f3aad23cccd47039a53e59397c74dc6",
+      "context_version": 1,
+      "continuation_allowed": false,
+      "device_effect": "not_verified",
+      "drc_link": "unknown",
+      "execution_mode": "platform",
+      "kind": "vendor_service_result",
+      "method": "drc_mode_exit",
+      "receipt_version": 2,
+      "received_at": null,
+      "report_source": "ktd-command-journal",
+      "reported_at": null,
+      "reported_status": "unknown",
+      "result_code": null,
+      "schema_version": "vendor-control-receipt/v1",
+      "success": true,
+      "trace_id": "ebaea249039145559d8391d43ba3f9e6",
+      "vendor_authority": "unknown"
+    }
+  ],
+  "elapsed_seconds": 1.2099334580016148,
+  "limitations": [
+    "回环fixture服务不是实际Java在线联调",
+    "合成模型只验证已冻结工具协议，不代表自然语言准确率",
+    "request_succeeded不证明持续航权/DRC链路或设备效果",
+    "厂商请求不解除旧动作拒绝或允许续接",
+    "源文件在运行期间变化时stable=false，不能宣称冻结验收"
+  ]
+}

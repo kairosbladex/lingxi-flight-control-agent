@@ -21,7 +21,7 @@ from lingxi_flight_control import (
     ToolSchema,
 )
 from lingxi_flight_control.models import AgentCheckpoint
-from lingxi_flight_control.ollama_decider import PromptBudgetExceeded
+from lingxi_flight_control.ollama_decider import ModelOutputTruncatedError, PromptBudgetExceeded
 from lingxi_flight_control.telemetry import (
     EVENT_COMPRESSED,
     EVENT_DECIDE,
@@ -189,11 +189,26 @@ class EventContractTests(unittest.TestCase):
     def test_decide_event_flags_truncated_generation(self):
         response = tool_call_response("read_state", {})
         response["done_reason"] = "length"
-        decider = OllamaDecider(model="m", telemetry=self.telemetry,
-                                transport=FakeTransport([response]))
-        decider.decide("读取当前状态", checkpoint_with_observations(0), ())
-        payload = self.sink.events[0].to_dict()
-        self.assertTrue(payload["generation_truncated"])
+        for response in (response, {"message": {"content": ""}, "done_reason": "length"}):
+            sink = MemorySink()
+            broken = Telemetry(exploding_sink)
+            outcomes = []
+            for telemetry in (Telemetry.disabled(), Telemetry(sink), broken):
+                transport = FakeTransport([response])
+                decider = OllamaDecider(model="m", telemetry=telemetry, transport=transport)
+                with self.assertRaises(ModelOutputTruncatedError) as raised:
+                    decider.decide("读取当前状态", checkpoint_with_observations(0), ())
+                outcomes.append((str(raised.exception), transport.calls, decider.empty_responses))
+                self.assertEqual(len(transport.calls), 1)
+                self.assertEqual(decider.empty_responses, 0)
+            self.assertEqual(outcomes[0], outcomes[1])
+            self.assertEqual(outcomes[0], outcomes[2])
+            self.assertEqual(sink.names, [EVENT_DECIDE])
+            payload = sink.dicts()[0]
+            self.assertTrue(payload["generation_truncated"])
+            self.assertEqual(payload["kind"], "error")
+            self.assertFalse(payload["empty_response"])
+            self.assertEqual(broken.sink_errors, 1)
 
     def test_decide_reports_when_the_prompt_exactly_fills_its_budget(self):
         checkpoint = checkpoint_with_observations(0)
@@ -213,7 +228,7 @@ class EventContractTests(unittest.TestCase):
         broken = Telemetry(exploding_sink)
         for telemetry in (Telemetry.disabled(), self.telemetry, broken):
             transport = FakeTransport([
-                {"message": {"content": ""}, "done_reason": "length", "eval_count": 20},
+                {"message": {"content": ""}, "done_reason": "stop", "eval_count": 20},
                 tool_call_response("read_state", {}),
             ])
             decider = OllamaDecider(model="m", keep_recent_observations=1,
@@ -230,7 +245,7 @@ class EventContractTests(unittest.TestCase):
         self.assertEqual([e["attempt"] for e in decisions], [1, 2])
         self.assertEqual([e["kind"] for e in decisions], ["empty", "tool_call"])
         self.assertTrue(decisions[0]["empty_response"])
-        self.assertTrue(decisions[0]["generation_truncated"])
+        self.assertFalse(decisions[0]["generation_truncated"])
         self.assertEqual(broken.sink_errors, 4)
 
     def test_hard_model_failures_emit_once_without_retry_or_stale_generation(self):

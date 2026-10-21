@@ -1,0 +1,50 @@
+{
+  "schema_version": "cockpit-simple-stage-evidence/v1",
+  "date": "2026-10-16",
+  "work_mode": "offline local UI candidate; no deployment, business API, model call, stream or device execution",
+  "ui_repository": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui",
+  "ui_branch": "feature/natural-language-cockpit",
+  "ui_baseline_commit": "be3a0b03b439803e9a55df058fcda8c9b330beba",
+  "ui_baseline_worktree": "clean; task changes left uncommitted for root review",
+  "source_contract": "source-contract.json",
+  "tests": {
+    "unit": {"command": "npm test", "passed": 117, "failed": 0},
+    "build": {"command": "npm run build", "exit_code": 0, "existing_warning": "Vite dependency chunk exceeds 500kB"},
+    "format": {"command": "git diff --check", "exit_code": 0},
+    "browser": {
+      "command": "env -u COCKPIT_API_URL COCKPIT_EVIDENCE_DIR=/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016 node scripts/cockpit-e2e.mjs",
+      "source": "offline-http-fixture",
+      "exit_code": 0,
+      "raw_result": "run-B0snq3/evidence.json",
+      "raw_result_sha256": "75bf06f1ddbed31910f8e7d8811b3dd85122e899753111fe1c01ebaba05fef59",
+      "scenarios": 87,
+      "fixture_api_requests": 161,
+      "fixture_confirmations": 21,
+      "forbidden_requests": 0,
+      "physical_device_requests": 0,
+      "browser_errors": [],
+      "added_scenarios": ["simple-dual-stage-geometry", "simple-responsive-passive-layout", "simple-mode-retains-confirmation", "simple-coordinate-snapshot-values", "simple-control-authority-shared-confirmation"],
+      "added_fixture_requests": {"manual_state_reads": 5, "authority_proposals": 2, "authority_cancellations": 2, "confirmations": 0}
+    }
+  },
+  "product_and_runner_sha256_before_and_after_final_browser_run": {
+    "unchanged": true,
+    "src/CockpitWorkspace.vue": "f484297cbf851044b78a93df9b796fb934854cc2d235410c7aa71e77e2f57676",
+    "src/cockpitWorkspace.css": "3db5deaa64caed147ef48d46e2f0046bfb56b1606c3ee03d88f0e63ac4881ee5",
+    "scripts/cockpit-e2e.mjs": "2a8b0cda972a9c7927a69191181d3b5920a67004b63797a8ba1d78bfcd04ee74"
+  },
+  "red_evidence": [
+    {"issue": "Original simple map region and missing main video differ from fixed source", "raw_json": "run-iH6EO2/simple-stage-observed.json", "sha256": "8e5c4faae3ba394512295923dcb6d3b2a8dd3ab79c5fd06cf06cf088ab47f783", "screenshot": "run-iH6EO2/05-simple-stage-observed.png"},
+    {"issue": "Hidden peripheral column also hides the only authority entry", "raw_json": "run-oBeGYx/simple-stage-observed.json", "sha256": "5eb2bfb07aed37ebc22e3eefe87a9af05b612634ad13501256df85f7fc83beab", "screenshot": "run-oBeGYx/05-simple-stage-observed.png"},
+    {"issue": "1280px simple header background remains91px and overlays source-scaled coordinate band", "raw_json": "run-fJ1nf8/simple-1280-observed.json", "sha256": "37396ca0ab5658b6f6463d25ab533094fceff2ba84934cde799fbee350101923", "screenshot": "run-fJ1nf8/05c-simple-1280-observed.png"}
+  ],
+  "visual_review": {"final_run": "run-B0snq3", "reviewed_final_1280": "05c-simple-1280.png", "also_reviewed_pre_header_fix": ["run-fV1vPw/05-desktop-simple.png", "run-fV1vPw/05c-simple-1280.png", "run-fV1vPw/06e-simple-authority-confirmation.png"], "limits": "Source geometry plus product screenshot review; no full original runtime screenshot, online test-environment acceptance or real media/device claim"},
+  "recoverable_intermediate_artifacts": {
+    "archive_directory": "/tmp/cockpit-simple-stage-intermediate-LhJtDV",
+    "moved_complete_runs": ["run-Q6zuxZ", "run-fV1vPw", "run-sjNt6u", "run-srDmYJ"],
+    "moved_non_red_files_only": ["run-iH6EO2", "run-oBeGYx", "run-fJ1nf8"],
+    "path_mapping": "Replace the original evidence-root prefix with archive_directory; the same run directory and basename are retained. Red JSON/PNG listed above and final run remain in the persistent root.",
+    "raw_bytes": "JSON and PNG files were moved without rewriting; historical JSON paths in archived runs remain historical and require the mapping above. No intermediate artifact was deleted."
+  },
+  "limits": ["414px acceptance is the assistant workflow only", "Unknown source device fields remain unavailable", "No authority owner identity is invented", "No original SysTask business action, forced authority, stream-start API, MQTT, Java write or device call was executed", "Unit and browser fixture results do not prove model accuracy, deployed Java receipt integration or actual flight"]
+}

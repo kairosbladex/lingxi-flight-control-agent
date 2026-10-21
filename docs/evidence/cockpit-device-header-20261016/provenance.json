@@ -1,0 +1,484 @@
+{
+  "topic": "professional-device-card-local-header",
+  "code_baseline": {
+    "repository": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui",
+    "branch": "feature/natural-language-cockpit",
+    "commit": "7f14780eb2fca94dca4fa664d26edd246c11d780",
+    "initial_dirty": false,
+    "delivery_state": "uncommitted candidate; root performs independent gates and decides commit/push"
+  },
+  "workflow": "TDD: changed browser assertions -> build unchanged product source -> actual Vue/Chrome red exit1 -> minimal Workspace/CSS implementation -> actual Vue/Chrome full offline green exit0",
+  "inputs": {
+    "source": "fixed original frontend commit35574cba46d498e0992de05504756bccf7014ade; source-contract.json records exact file/hash/lines",
+    "fixture": "existing synthetic HTTP fixture only; new online/identity variants are in the hashed runner",
+    "network": "loopback fixture/static/media whitelist; no actual model/business/device service"
+  },
+  "source_contract": "source-contract.json",
+  "red_assertion": "red-assertion.json",
+  "validation": [
+    {
+      "command": "npm test",
+      "exit_code": 0,
+      "tests": 120,
+      "passed": 120,
+      "failed": 0,
+      "source": "observed tool result; root will independently rerun"
+    },
+    {
+      "command": "npm run build",
+      "exit_code": 0,
+      "note": "Only existing large HLS chunk advisory; no dependencies added"
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    },
+    {
+      "command": "env -u COCKPIT_API_URL COCKPIT_EVIDENCE_DIR=<evidence>/green npm run e2e:cockpit",
+      "exit_code": 0,
+      "report": "green/run-oYlQL7/evidence.json",
+      "source": "offline-http-fixture",
+      "scenarios": 102,
+      "device_scenarios": 6,
+      "api_requests": 185,
+      "confirmed_requests": 21,
+      "forbidden_requests": 0,
+      "physical_device_requests": 0,
+      "browser_errors": []
+    }
+  ],
+  "comparison": {
+    "previous_ui_commit": "7f14780eb2fca94dca4fa664d26edd246c11d780",
+    "previous_scenarios": 96,
+    "current_scenarios": 102,
+    "added_device_scenarios": 6,
+    "previous_api_requests": 175,
+    "current_api_requests": 185,
+    "added_requests": {
+      "manual_state_get": 10,
+      "action_proposal": 0,
+      "confirmation": 0,
+      "visuals": 0,
+      "playback": 0
+    },
+    "confirmed_requests_unchanged": 21
+  },
+  "responsive_limit": "Existing outer content width remains335px. Local source sizes scale with cockpit-unit; online badge wraps below avatar/text at1920 and fits in the same row toward the right at1280. No complete internal cross-resolution pixel-equivalence or outer absolute card rectangle is claimed; no sidebar expansion was made.",
+  "persistence": "Raw JSON and PNG files below are persisted directly under this topic's red/green run directories. Chrome profiles remain independent temporary directories. Absolute paths, byte sizes and SHA256 values map every persisted browser file.",
+  "side_effects": {
+    "local_source_and_evidence_writes": true,
+    "local_fixture_server_and_isolated_chrome_only": true,
+    "business_reads": 0,
+    "business_writes": 0,
+    "real_model_calls": 0,
+    "real_device_actions": 0,
+    "deployment": false,
+    "commit": false,
+    "push": false
+  },
+  "not_verified": [
+    "complete professional device details/weather",
+    "full test-environment visual pixel agreement",
+    "actual Java service integration",
+    "real telemetry/media availability",
+    "physical flight effects or accuracy"
+  ],
+  "rollback": "Root can reverse only the scoped Workspace/CSS/runner/README changes after reviewing its own git diff; no unrelated work or shared environment changed.",
+  "freeze": {
+    "collected_at": "2026-10-16T15:47:20.577Z",
+    "ui_head": "7f14780eb2fca94dca4fa664d26edd246c11d780",
+    "ui_branch": "feature/natural-language-cockpit",
+    "sources": [
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui/src/CockpitWorkspace.vue",
+        "bytes": 24096,
+        "sha256": "b56ecc67956b4fa6678fb276dca731f19043c2da5615015e23f32f85dc9bbdb8",
+        "baseline_sha256": "ba232cc7db9419d77b3636cc8defc8cee0f415c1e780edec9842b591c9a12ad2"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui/src/cockpitWorkspace.css",
+        "bytes": 35035,
+        "sha256": "22b62209f59ecf57accae0255955c6a48266107f831cece59c2c56d643b5d588",
+        "baseline_sha256": "a695b2d92a533e50f79945cf3efacc7e16209aaf4c478ff88f2cc68497ba1b47"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui/scripts/cockpit-e2e.mjs",
+        "bytes": 120547,
+        "sha256": "0f3afd89bc7fc9171edd77226c47ec52492e7af12138dc5cc46e4b6b5fd23e88",
+        "baseline_sha256": "c6b317922b7c4bc24e888998735af5ea7503242dc674d341fd2f4eeb25b17121"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui/README.md",
+        "bytes": 36282,
+        "sha256": "e41e01a7483b5b5cb4414ccd7ac49a580d76513209072b28b365b6ce3b2f7fb2",
+        "baseline_sha256": "3f0edafbfa32d5cea64bae7506a5e0676432a8887352ada7bee375bdb0dd6407"
+      }
+    ],
+    "source_records": [
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/source-contract.json",
+        "bytes": 4430,
+        "sha256": "32435b2af2ffd67d00108f66b3beac60039f3b8c10b5fdf0c779b8a8571e751a"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/red-assertion.json",
+        "bytes": 917,
+        "sha256": "78f3f8f076a67f26204f97a447b860fc44cbc40c133bec3de9ccbcc42f70e825"
+      }
+    ],
+    "build_files": [
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui/dist/index.html",
+        "bytes": 437,
+        "sha256": "052fec7ed7d9e11a4edce01955f51065d44399dc999919de182aa9c52773eb77"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui/dist/assets/aiEmpty-B5OSth28.png",
+        "bytes": 16193,
+        "sha256": "2396792aa2f0d5248d67cacc5303b827591fd7b747433f1b6659d84dca36435e"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui/dist/assets/aiTalkBg-Cgp_mIGm.png",
+        "bytes": 13696,
+        "sha256": "903c5da6c378d972c878fef060006e93a4400c92b03fd73d2286e8db31efc0a0"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui/dist/assets/general-bg1-B0NsJNR8.png",
+        "bytes": 126407,
+        "sha256": "af6c9bf3d790ca55ded0c2b019eb6c478a613c25bb4d5133230140b44968305c"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui/dist/assets/general-sys_bg-BFKphwO3.png",
+        "bytes": 25474,
+        "sha256": "27275d804c1bc78266a04a2343c87a5ce54a9cd4bf6b4cd029628cc15ff18a6e"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui/dist/assets/hangar2-dbg-CnqbJtGc.png",
+        "bytes": 4174,
+        "sha256": "ef8e4be7b6a3ff4edf859951d6cdbae194d0bd9cebc16a33f3e754ede9ccf0d6"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui/dist/assets/hls-DmiZoos-.js",
+        "bytes": 574428,
+        "sha256": "02d2878f12f7c24b6de08dec38a54c0a0ad1183256266174157a72787ee9d8fe"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui/dist/assets/index-CI6881gb.js",
+        "bytes": 193509,
+        "sha256": "9b62d37d83bac00611943f13ad5902f2458cf8977ca6ac3a8bb0de8a74376deb"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui/dist/assets/index-DbRYEguV.css",
+        "bytes": 51202,
+        "sha256": "a3337fd7e29164e6903b77754d39b4529fd9a15eb0f19316422b8ceba160cf0e"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui/dist/assets/mpegts-DYZhZ6Ch.js",
+        "bytes": 272394,
+        "sha256": "c137c23478fba194aed958337aeeab967a9554b22488ed6e8c8c9ad053209520"
+      }
+    ],
+    "run_files": [
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/red/run-BycvHJ/00-header-geometry-observed.png",
+        "bytes": 1166704,
+        "sha256": "f1ffd9468433798b6eb50645e465ef2faa36a5ec611d00771dc6f6b20018021e"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/red/run-BycvHJ/00-professional-stage-observed.png",
+        "bytes": 534494,
+        "sha256": "cc056a5bb8b3c2eee75311bd4f1c27e290078a3797e068229e8640b9c8013552"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/red/run-BycvHJ/01-ready.png",
+        "bytes": 88475,
+        "sha256": "d77802f75364a47906ae4477f9801e1f6d39c1321d43cd072f38e7b71ff0b99d"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/red/run-BycvHJ/02-confirmation.png",
+        "bytes": 93197,
+        "sha256": "7082c50ffa82faa7a6d44de831384d4d4bb0d6c6b54d0d40fd14ab4247ab515e"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/red/run-BycvHJ/03-model-timeout.png",
+        "bytes": 82803,
+        "sha256": "ba4b269250378258b97ecdea9b913dfb16501cb9017b00e7cc42e9d30b7dbe5c"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/red/run-BycvHJ/04f-device-header-1920-observed.png",
+        "bytes": 1435877,
+        "sha256": "d80fa921d22c1132e33a3b3783299207627f0a5c2fc7697d8dcfea1d83f1321f"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/red/run-BycvHJ/device-header-observed.json",
+        "bytes": 907,
+        "sha256": "128327a098e007cd34aa8d679aad817f95a566c278033dd8c10692786b440a8e"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/red/run-BycvHJ/header-geometry-observed.json",
+        "bytes": 492,
+        "sha256": "27e4cf3511202db425c507298dd74d2c079890b4de805bde27c5961ae896de36"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/red/run-BycvHJ/stage-geometry-observed.json",
+        "bytes": 406,
+        "sha256": "add16adf5e1a530800ed7c5d557fefcfd21c48ba4b06bc57feb94f3d312447b5"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/00-header-geometry-observed.png",
+        "bytes": 1170833,
+        "sha256": "1045817fd1c7568f8d655ce30603b3cdc1ea9c27f5e05879aeaf75df41670d19"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/00-professional-stage-observed.png",
+        "bytes": 534927,
+        "sha256": "61e631e7c27ba573291373fd5a7d8186eb9a88c7dd521a39c9117194d3afc53c"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/01-ready.png",
+        "bytes": 88475,
+        "sha256": "d77802f75364a47906ae4477f9801e1f6d39c1321d43cd072f38e7b71ff0b99d"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/02-confirmation.png",
+        "bytes": 93197,
+        "sha256": "7082c50ffa82faa7a6d44de831384d4d4bb0d6c6b54d0d40fd14ab4247ab515e"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/03-model-timeout.png",
+        "bytes": 82803,
+        "sha256": "ba4b269250378258b97ecdea9b913dfb16501cb9017b00e7cc42e9d30b7dbe5c"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/04-desktop-professional.png",
+        "bytes": 1542691,
+        "sha256": "a48816502a8061fb6acef966f5d43a19d2c0f016d4ecc6f7ace6431e99025d39"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/04b-professional-video-mini-map.png",
+        "bytes": 633690,
+        "sha256": "7eb36492768cae89c9158629c5101d183023ff15eb61e2965172b18c15f06949"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/04f-device-header-1920-observed.png",
+        "bytes": 1441071,
+        "sha256": "d99b11aabc860c7209d16b51da86b13ff392905eaae853f52cc0705d1fa62917"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/04g-device-header-1280.png",
+        "bytes": 775187,
+        "sha256": "b264e4f7e8a5e05673be6a12fe70297c0b35762a708bdda292161065722f909c"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/04h-device-read-failure.png",
+        "bytes": 1447802,
+        "sha256": "100ab373cca432b12298866f60d6519b22d7edd75b54106dd808c7b8d0b0edc7"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/04i-device-long-resource-id.png",
+        "bytes": 1463471,
+        "sha256": "3e08b8bd23d3159e2d7792db4233c782ef3ff91466dd2291e7b08e4bfa3beec8"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/05-desktop-simple.png",
+        "bytes": 1147109,
+        "sha256": "a95653967c8a5b7f0746c0b97c430d182a8e9c71181009f0ddc58fb8d5b61cc4"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/05-simple-stage-observed.png",
+        "bytes": 1147109,
+        "sha256": "a95653967c8a5b7f0746c0b97c430d182a8e9c71181009f0ddc58fb8d5b61cc4"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/05b-simple-distance-settings.png",
+        "bytes": 1160436,
+        "sha256": "f6ab325e9b7d586b7baa59f7632e633792618c88b8725fb7fa0560bf7d471a7d"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/05c-simple-1280-observed.png",
+        "bytes": 567932,
+        "sha256": "cc69bfe097a535582250e0ebff5fd64a13ae5fa389597d7d23d417902bf69096"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/05c-simple-1280.png",
+        "bytes": 567932,
+        "sha256": "cc69bfe097a535582250e0ebff5fd64a13ae5fa389597d7d23d417902bf69096"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/05d-simple-1280-settings.png",
+        "bytes": 575531,
+        "sha256": "704c85d7f08ccfee7e70020ea4d012f22ff801907e5dd787f2c3f435d733fbda"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/05e-simple-mobile-assistant.png",
+        "bytes": 89538,
+        "sha256": "2e5687de0b3ea926ec26444d433d27dd236697c8590274dea8e2ccd1a67bb333"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/05f-simple-instruments-1920-observed.png",
+        "bytes": 1147109,
+        "sha256": "a95653967c8a5b7f0746c0b97c430d182a8e9c71181009f0ddc58fb8d5b61cc4"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/05g-simple-instruments-1280-observed.png",
+        "bytes": 567932,
+        "sha256": "cc69bfe097a535582250e0ebff5fd64a13ae5fa389597d7d23d417902bf69096"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/06-desktop-confirmation.png",
+        "bytes": 914035,
+        "sha256": "5603f7eddc2dc08550b6c72e3cc2b2f4bac3dc6ba3b68ad9110988fe7d3d7b47"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/06b-simple-existing-confirmation.png",
+        "bytes": 640395,
+        "sha256": "a047223632e2c73abb036baf87eb5e2fdac7df8b94cf3e27c08acc3d3d234640"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/06c-simple-confirmation-1280.png",
+        "bytes": 404413,
+        "sha256": "86dc36ebf6fe79b1c66c930327e9c4ebb7631c4e6b86ec5e2f8bae18af268af4"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/06d-simple-zero-coordinates.png",
+        "bytes": 636784,
+        "sha256": "b73af1db8ec4867682c39aa4f3c78c9735ab361a7e8d921c9d277f5e6d023f97"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/06e-simple-authority-confirmation.png",
+        "bytes": 633314,
+        "sha256": "d5650ec3d384260db06d63d167211b1941cb9b72ae2201ca5004729eb623b0d9"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/07-telemetry-read-failure.png",
+        "bytes": 925284,
+        "sha256": "143eaa9ffd4100f54b056bbef79fa2a7d27732f433c4fca4d2f803b20840cfb2"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/08-device-receipt-completed.png",
+        "bytes": 926023,
+        "sha256": "e439ac282462af3b7bbc7d7b2af890c143acb315ef6554dd1c6b581c95a9202d"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/08-device-receipt-mobile.png",
+        "bytes": 93246,
+        "sha256": "8bd24037777c0e8cec54996e4f29d7031b42f0794954e49c4303368b98396211"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/09-confirm-timeout-receipt.png",
+        "bytes": 925026,
+        "sha256": "89a5e080a6e0030edef5753c49e2a8dbcf37e2b0c54eba70d71b46b11a367a3b"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/10-dual-height-instruments.png",
+        "bytes": 915639,
+        "sha256": "c458a410606c18d5b4afa475781bbf4d091de1df00e2361b893e72ca032e48e5"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/11-dual-height-simulator.png",
+        "bytes": 916100,
+        "sha256": "1e3b9d48aa4647074e2fc275147a89d4b119d3ee29391aeec2ffce578f50c917"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/12-offline-map-workspace.png",
+        "bytes": 937636,
+        "sha256": "c8742fbf151d35297b7c328e127c31e02027d05e02a413f0366d1906f4a69f0b"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/12a-simple-platform-missing-fields.png",
+        "bytes": 639345,
+        "sha256": "0ab2dfa0f3c3d2dabeb669fbe0a3425bad627981333b73cd74ea1a16a901a74c"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/12b-simple-zero-instruments.png",
+        "bytes": 629771,
+        "sha256": "814230784983a5ebb02777498d3ebd8f8f0d0a2be7713783f1da689300f905b8"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/12c-simple-negative-angle-instruments.png",
+        "bytes": 632640,
+        "sha256": "389731bfd12c01bc657c085c36bd1214da1266383963690b5703ae42f317427c"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/12d-simple-negative-angle-1280.png",
+        "bytes": 404292,
+        "sha256": "c9adb6085feeda1c0856b6166340ff1fb18524cff43dc70ffbf0914387bec395"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/12e-simple-gimbal-lower-boundary.png",
+        "bytes": 631417,
+        "sha256": "e01c7efa7df7ae8a094efad5845b5096ff81be67e12ab1763ccfe858d163a17c"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/12e-simple-gimbal-upper-boundary.png",
+        "bytes": 631651,
+        "sha256": "b1a4722c638e21decddec46bffbfb38192ea0163d56d2876f060981bbb086ef9"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/13-video-sources-1280.png",
+        "bytes": 466339,
+        "sha256": "ec39d3730619f96bf6913ca0fd8e6c8b871493d52ef52df1e008d0aa45a9d481"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/13-video-sources-desktop.png",
+        "bytes": 568862,
+        "sha256": "64234cfd99e28fad124d173d2edcdbddddb318a652e55f2df07da08f0bb9bafb"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/13-video-sources-mobile.png",
+        "bytes": 68167,
+        "sha256": "1f79a5e7c895eb9b0293ef3114fff311e2763d457b58f62e27778f5588e56d9d"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/device-header-observed.json",
+        "bytes": 1267,
+        "sha256": "0e5d418daa954096328c7d7d998ec67070a79c76f93d759e08f528d9b2783265"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/evidence.json",
+        "bytes": 40318,
+        "sha256": "af9bc78dcc0d5a311da320d4dbfce3c10a94112ba536f56be81908db56bc758b"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/header-geometry-observed.json",
+        "bytes": 494,
+        "sha256": "fc5a2e9698b23a6e53e5bf9b5fd5ba94d57450a38639da25234b7838ae4c13f7"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/simple-1280-observed.json",
+        "bytes": 640,
+        "sha256": "942c98ada2f600dcb74d8b986c5c0f02f133a243b8f1728ccfe0b366c97e7c67"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/simple-instrument-boundary-labels.json",
+        "bytes": 1042,
+        "sha256": "ce2ed51216983764555f3d4f5d55595c8f686007b18a307a93f1497dd725e406"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/simple-instruments-observed.json",
+        "bytes": 2694,
+        "sha256": "a974a13bf69251490205878cb8c53452302826fb4dfa2686daebc672d5ad79cd"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/simple-stage-observed.json",
+        "bytes": 898,
+        "sha256": "aa7eadc79ac96653a6ca9fdcd81fcfc8e87c826cf0c894a29a82a92e219384a6"
+      },
+      {
+        "path": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/stage-geometry-observed.json",
+        "bytes": 408,
+        "sha256": "6d976099b60e87322dd992409cd871155c69bdfab57159be31e1f240ab53d073"
+      }
+    ],
+    "results": {
+      "source": "offline-http-fixture",
+      "scenarios": 102,
+      "device_scenarios": 6,
+      "api_requests": 185,
+      "confirmed_requests": 21,
+      "forbidden_requests": 0,
+      "physical_device_requests": 0,
+      "browser_errors": []
+    }
+  }
+}

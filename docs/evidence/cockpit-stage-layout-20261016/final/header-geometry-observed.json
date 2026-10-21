@@ -1,0 +1,18 @@
+{
+  "sourceCommit": "35574cba46d498e0992de05504756bccf7014ade",
+  "reference": {
+    "height": 68,
+    "titleCenter": 960,
+    "backgroundHeight": 91
+  },
+  "actual": {
+    "x": 0,
+    "y": 0,
+    "width": 1920,
+    "height": 68,
+    "titleCenter": 960,
+    "title": "fixture-project",
+    "backgroundHeight": 91
+  },
+  "screenshot": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/00-header-geometry-observed.png"
+}

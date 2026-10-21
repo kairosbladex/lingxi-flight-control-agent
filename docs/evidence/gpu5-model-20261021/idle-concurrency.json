@@ -1,0 +1,208 @@
+[
+  {
+    "event": "probe_start",
+    "time": "2026-10-21T07:22:36.087195+00:00",
+    "model": "qwen3.5:9b",
+    "offline_scripted": false,
+    "direct_commands": true,
+    "model_keep_alive": "-1",
+    "cases_sha256": "800f1cd372143e6fb974108d6ecfaeac6aabad06beeade3d112eb8d65f0fa331",
+    "prompt_sha256": "1674d12cad0a6bcbe027877b5931ca6c8354bb1fca74ebe04dde6d30458021c4",
+    "budgets": {
+      "seconds": 360,
+      "calls": 12,
+      "request_timeout": 45,
+      "run_timeout": 65,
+      "steps": 3,
+      "num_ctx": 32768,
+      "max_output_tokens": 2048
+    },
+    "session": "one synthetic session; previews only; no confirmations",
+    "port": 36691
+  },
+  {
+    "event": "probe_start",
+    "time": "2026-10-21T07:22:36.089146+00:00",
+    "model": "qwen3.5:9b",
+    "offline_scripted": false,
+    "direct_commands": true,
+    "model_keep_alive": "-1",
+    "cases_sha256": "800f1cd372143e6fb974108d6ecfaeac6aabad06beeade3d112eb8d65f0fa331",
+    "prompt_sha256": "1674d12cad0a6bcbe027877b5931ca6c8354bb1fca74ebe04dde6d30458021c4",
+    "budgets": {
+      "seconds": 360,
+      "calls": 12,
+      "request_timeout": 45,
+      "run_timeout": 65,
+      "steps": 3,
+      "num_ctx": 32768,
+      "max_output_tokens": 2048
+    },
+    "session": "one synthetic session; previews only; no confirmations",
+    "port": 40121
+  },
+  {
+    "event": "probe_complete",
+    "passed": 2,
+    "total": 2,
+    "rows": [
+      {
+        "case": 0,
+        "input": "帮我拍摄一张照片",
+        "expected_action": "camera_photo",
+        "status": "preview_required",
+        "error_code": null,
+        "action": "camera_photo",
+        "parameters": {},
+        "elapsed_ms": 8269,
+        "model_calls": 1,
+        "passed": true,
+        "dispatched": false,
+        "idempotent_replay": true
+      },
+      {
+        "case": 1,
+        "input": "机头方向向前平移3米",
+        "expected_action": "move_forward",
+        "status": "preview_required",
+        "error_code": null,
+        "action": "move_forward",
+        "parameters": {
+          "distance_m": 3
+        },
+        "elapsed_ms": 16174,
+        "model_calls": 1,
+        "passed": true,
+        "dispatched": false,
+        "idempotent_replay": true
+      }
+    ],
+    "model_calls": [
+      {
+        "case": 0,
+        "timeout_sec": 45.0,
+        "tool_count": 83,
+        "tools_sha256": "f54c290d36b2433b00e69a3977f0d157a84206ac1fe4f0a4095d31ba8468de47",
+        "generation": {
+          "done_reason": "stop",
+          "prompt_eval_count": 7150,
+          "eval_count": 113,
+          "load_duration": 281601288,
+          "prompt_eval_duration": 3701007922,
+          "eval_duration": 4036388125,
+          "total_duration": 8175486687
+        },
+        "tools": [
+          "camera_photo"
+        ],
+        "elapsed_ms": 8177
+      },
+      {
+        "case": 1,
+        "timeout_sec": 45.0,
+        "tool_count": 83,
+        "tools_sha256": "f54c290d36b2433b00e69a3977f0d157a84206ac1fe4f0a4095d31ba8468de47",
+        "generation": {
+          "done_reason": "stop",
+          "prompt_eval_count": 7201,
+          "eval_count": 117,
+          "load_duration": 308382578,
+          "prompt_eval_duration": 3699195073,
+          "eval_duration": 4324818332,
+          "total_duration": 16159343865
+        },
+        "tools": [
+          "move_forward"
+        ],
+        "elapsed_ms": 16161
+      }
+    ],
+    "java_control_posts": 0,
+    "write_attempts": 0,
+    "confirmations": 0,
+    "device_requests": 0,
+    "server_stopped": true
+  },
+  {
+    "event": "probe_complete",
+    "passed": 2,
+    "total": 2,
+    "rows": [
+      {
+        "case": 0,
+        "input": "帮我拍摄一张照片",
+        "expected_action": "camera_photo",
+        "status": "preview_required",
+        "error_code": null,
+        "action": "camera_photo",
+        "parameters": {},
+        "elapsed_ms": 16267,
+        "model_calls": 1,
+        "passed": true,
+        "dispatched": false,
+        "idempotent_replay": true
+      },
+      {
+        "case": 1,
+        "input": "机头方向向前平移3米",
+        "expected_action": "move_forward",
+        "status": "preview_required",
+        "error_code": null,
+        "action": "move_forward",
+        "parameters": {
+          "distance_m": 3
+        },
+        "elapsed_ms": 16281,
+        "model_calls": 1,
+        "passed": true,
+        "dispatched": false,
+        "idempotent_replay": true
+      }
+    ],
+    "model_calls": [
+      {
+        "case": 0,
+        "timeout_sec": 45.0,
+        "tool_count": 83,
+        "tools_sha256": "f54c290d36b2433b00e69a3977f0d157a84206ac1fe4f0a4095d31ba8468de47",
+        "generation": {
+          "done_reason": "stop",
+          "prompt_eval_count": 7150,
+          "eval_count": 119,
+          "load_duration": 355860717,
+          "prompt_eval_duration": 3533469958,
+          "eval_duration": 4301916190,
+          "total_duration": 16171631344
+        },
+        "tools": [
+          "camera_photo"
+        ],
+        "elapsed_ms": 16173
+      },
+      {
+        "case": 1,
+        "timeout_sec": 45.0,
+        "tool_count": 83,
+        "tools_sha256": "f54c290d36b2433b00e69a3977f0d157a84206ac1fe4f0a4095d31ba8468de47",
+        "generation": {
+          "done_reason": "stop",
+          "prompt_eval_count": 7201,
+          "eval_count": 117,
+          "load_duration": 284682204,
+          "prompt_eval_duration": 3669017250,
+          "eval_duration": 4307762360,
+          "total_duration": 16268263466
+        },
+        "tools": [
+          "move_forward"
+        ],
+        "elapsed_ms": 16270
+      }
+    ],
+    "java_control_posts": 0,
+    "write_attempts": 0,
+    "confirmations": 0,
+    "device_requests": 0,
+    "server_stopped": true
+  }
+]

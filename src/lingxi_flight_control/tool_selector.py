@@ -120,7 +120,8 @@ def default_domain_of(name: str) -> str:
     try:
         action = FlightControlAction(name)
     except (TypeError, ValueError):
-        return ""
+        from .java_tools import TOOLS
+        return TOOLS[name].domain if name in TOOLS else ""
     spec = ACTION_SPECS.get(action)
     return "" if spec is None else spec.domain
 

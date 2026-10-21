@@ -1,0 +1,176 @@
+"""同源浏览器直连Python；身份与资源从原Java只读接口核验，不要求Java新增接口。"""
+from dataclasses import replace
+import json
+import re
+import time
+from .ktd_legacy import LegacyKtdSnapshotProvider, _data, _hash
+from .ktd_platform import KtdHttpTransport, KtdPlatformError
+from .platform_gateway import PlatformGateway
+from .platform_runtime import build_platform_cockpit
+
+
+def require_task(transport, project, site, drone, task):
+    data = _data(transport.read_legacy('task', project_id=project, query={'taskId': task}))
+    if (not isinstance(data, dict) or data.get('taskId') != task or data.get('terminalId') != drone
+            or data.get('siteId') != site or data.get('taskFlag') != '2'):
+        raise KtdPlatformError('TASK_NOT_RUNNING_OR_CHANGED')
+
+
+class BrowserSnapshotProvider(LegacyKtdSnapshotProvider):
+    """以已核验DJI实现映射动作；页面操作模式不作为硬件能力证明。"""
+    java_tools_enabled = True
+    def supported_hangar_brands(self):
+        # Java AbstractUavDevProvider明确将草莓机场交给DJHangarOperation。
+        # 不顺带开放其普宙分支，后者的高度/环绕语义不同。
+        return frozenset({'207601', '207616'})
+
+    def write_actions(self):
+        from .java_tools import TOOLS
+        return super().write_actions() | set(TOOLS) | {'route_pause', 'route_resume', 'emergency_stop',
+            'return_home', 'cancel_return_home', 'camera_electro_optical', 'camera_infrared',
+            'camera_wide', 'camera_zoom', 'camera_panorama', 'infrared_set_limits'}
+
+    def _require_binding(self, user):
+        super()._require_binding(user)
+        if not self.task_id:
+            raise KtdPlatformError('TASK_REQUIRED')
+        require_task(self._transport, self.binding.project_id, self.site_id, self.binding.drone_id, self.task_id)
+
+    def _read_profile(self):
+        profile = super()._read_profile()
+        self.actual_capabilities = self._read('permissions', drone_id=self.binding.drone_id)
+        return profile
+
+    def __call__(self):
+        snapshot = super().__call__()
+        raw = self.actual_capabilities
+        uav, load = raw.get('uav') or {}, raw.get('load') or {}
+        # super已验证DJI机库profile、操作者、资源及任务。原Java的mode=2
+        # 实现独立于页面UAV_MOVE_DISTANCE开关，仍要求下面的新鲜完整位姿。
+        actions = {'read_state', 'route_pause', 'route_resume', 'emergency_stop',
+                   'return_home', 'cancel_return_home', 'move_forward', 'move_backward',
+                   'move_left', 'move_right', 'move_up', 'move_down',
+                   'uav_night_light','uav_stealth','point_flight_stop','point_orbit_stop'}
+        if uav.get('UAV_MOVE_STICK') is True:
+            actions.update(('turn_left', 'turn_right'))
+        camera = (raw.get('loadInfoCode') or {}).get('1001') is True and bool(load.get('optoelecPodParamList'))
+        if camera:
+            from .java_tools import TOOLS
+            actions.update(name for name,spec in TOOLS.items() if spec.domain=='camera')
+            actions.update(('camera_photo', 'camera_start_recording', 'camera_stop_recording',
+                            'camera_electro_optical', 'camera_infrared', 'camera_wide',
+                            'camera_zoom', 'camera_panorama', 'infrared_set_limits'))
+        if camera:
+            actions.update(('gimbal_up', 'gimbal_down', 'gimbal_left', 'gimbal_right'))
+            actions.add('gimbal_reset')
+            if raw.get('pitch45') is True: actions.add('gimbal_45')
+            if raw.get('pitch90') is True: actions.add('gimbal_90')
+        state = dict(snapshot.state)
+        pose = self.pose()
+        fresh = bool(pose and pose.get('observed_at') is not None
+                     and 0 <= self._now() - pose['observed_at'] <= 5)
+        complete = fresh and all(pose.get(k) is not None for k in
+                                ('longitude', 'latitude', 'altitude_m', 'height_m', 'yaw_deg'))
+        state['legacy_pose_verified'] = bool(complete)
+        if not complete:
+            actions.difference_update(('move_forward', 'move_backward', 'move_left', 'move_right', 'move_up', 'move_down'))
+            actions.discard('camera_panorama')
+        if not fresh:
+            actions.difference_update(('turn_left', 'turn_right'))
+        permissions = snapshot.permissions.intersection(actions)
+        capabilities = {key: value for key, value in snapshot.capabilities.items() if key in actions}
+        # 保留原页面字段用于诊断；执行能力来源为已验证DJI实现+新鲜位姿。
+        state['platform_ui_distance_mode'] = uav.get('UAV_MOVE_DISTANCE') is True
+        capabilities['UAV_MOVE_DISTANCE'] = bool(complete)
+        availability = {action: {'available': action in permissions,
+                                'reasons': [] if action in permissions else ['CAPABILITY_OR_POSE_UNAVAILABLE']}
+                        for action in snapshot.action_availability}
+        return replace(snapshot, state=state, permissions=frozenset(permissions), capabilities=capabilities,
+                       action_availability=availability,
+                       version=_hash({'original': snapshot.version, 'permissions': sorted(permissions),
+                                      'capabilities': capabilities, 'pose_verified': complete}))
+
+
+class BrowserGateway:
+    def __init__(self, config, decider_factory, *, enable_control=False, opener=None, clock=time.time,
+                 allowed_drone_sns=(), enable_direct_commands=False):
+        if not isinstance(allowed_drone_sns, (tuple, list)) or not allowed_drone_sns or any(
+                not isinstance(s, str) or not re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', s) for s in allowed_drone_sns):
+            raise ValueError('必须配置明确的设备范围')
+        self.allowed_drone_sns = frozenset(allowed_drone_sns)
+        self.config, self.opener = config, opener
+        def factory(bound, decider, **kwargs):
+            return build_platform_cockpit(replace(bound, legacy_read_api=True), decider,
+                enable_direct_commands=enable_direct_commands,
+                opener=opener, clock=clock, legacy_snapshot_factory=BrowserSnapshotProvider, **kwargs)
+        self.runtime = PlatformGateway(config, decider_factory, enable_control=enable_control, factory=factory)
+
+    def handle(self, method, path, body=b'', headers=None):
+        started = time.monotonic()
+        response = self._handle(method, path, body, headers)
+        operation = path.split('?', 1)[0]
+        if not re.fullmatch(r'/api/flight-control/(context|state|agent/(messages|confirm|cancel|reset|receipt))', operation):
+            operation = 'other'
+        from .audit import gateway_event
+        gateway_event(operation, body, headers, response, round((time.monotonic()-started)*1000))
+        return response
+
+    def _handle(self, method, path, body=b'', headers=None):
+        headers = {k.lower(): v for k, v in (headers or {}).items()}
+        if method == 'GET' and path in ('/healthz', '/api/flight-control/healthz'):
+            return self.runtime.handle(method, path)
+        try:
+            auth = headers.get('authorization', '')
+            if re.fullmatch(r'Bearer [!-~]{1,8192}', auth, re.IGNORECASE):
+                token = auth[7:]
+            elif re.fullmatch(r'[!-~]{1,8192}', auth):
+                token = auth
+            else:
+                return self.runtime.failure(401, 'AUTHENTICATION_REQUIRED')
+            values = {k: headers.get(h, '') for k, h in (
+                ('project_id', 'projectid'), ('site_id', 'x-flight-site'),
+                ('drone_id', 'x-flight-drone'), ('task_id', 'x-flight-task'))}
+            if any(not re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', v) for k, v in values.items() if k != 'task_id'):
+                return self.runtime.failure(400, 'INVALID_PLATFORM_CONTEXT')
+            session = headers.get('x-agent-session', '')
+            if not re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', session):
+                return self.runtime.failure(400, 'INVALID_SESSION')
+            transport = KtdHttpTransport(self.config.base_url, token=token, actor_id='identity-lookup',
+                allow_insecure_http=self.config.allow_insecure_http, opener=self.opener)
+            user = _data(transport.read_legacy('user_info', project_id=values['project_id']))
+            actor = user.get('empId') if isinstance(user, dict) else None
+            if not isinstance(actor, str) or not re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', actor):
+                return self.runtime.failure(401, 'AUTHENTICATION_REQUIRED')
+            sites = _data(transport.read_legacy('sites', project_id=values['project_id'],
+                                               query={'projectId': values['project_id']}))
+            matches = [s for s in sites if isinstance(s, dict) and s.get('id') == values['site_id']] if isinstance(sites, list) else []
+            if len(matches) != 1 or matches[0].get('uavId') != values['drone_id']:
+                return self.runtime.failure(403, 'RESOURCE_BINDING_MISMATCH')
+            # 原/uavSite/list投影只返回uavCode；UAVSite.getUavSn也优先使用该字段。
+            if (matches[0].get('uavCode') or matches[0].get('uavSn')) not in self.allowed_drone_sns:
+                return self.runtime.failure(403, 'DEVICE_OUT_OF_SCOPE')
+            if not re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', values['task_id']):
+                capabilities = _data(transport.read_legacy('permissions', project_id=values['project_id'],
+                                                          drone_id=values['drone_id']))
+                response = self.runtime.failure(409, 'TASK_REQUIRED')
+                response.payload['connection_verified'] = True
+                response.payload['platform_ui_distance_mode'] = bool(isinstance(capabilities, dict)
+                    and isinstance(capabilities.get('uav'), dict)
+                    and capabilities['uav'].get('UAV_MOVE_DISTANCE') is True)
+                return response
+            require_task(transport, values['project_id'], values['site_id'], values['drone_id'], values['task_id'])
+            scope = {**values, 'actor_id': actor, 'hangar_id': matches[0].get('hangarId')}
+            trusted = {'X-Agent-Gateway': self.config.gateway_token, 'X-Agent-Actor': actor,
+                'X-Agent-Context': json.dumps(scope), 'X-Agent-Platform-Token': token,
+                'X-Agent-Session': session}
+            return self.runtime.handle(method, path, body, trusted)
+        except KtdPlatformError as error:
+            code = str(error)
+            return self.runtime.failure(403 if code in ('AUTHENTICATION_REQUIRED', 'TASK_NOT_RUNNING_OR_CHANGED') else 503, code)
+        except Exception:
+            if method == 'POST' and path.rstrip('/').endswith('/confirm'):
+                response = self.runtime.failure(503, 'PLATFORM_OUTCOME_UNKNOWN')
+                response.payload.pop('dispatched', None)
+                response.payload['message'] = '提交结果未知，请核对设备；不要重复确认或重发。'
+                return response
+            return self.runtime.failure(503, 'PLATFORM_SOURCE_UNAVAILABLE')

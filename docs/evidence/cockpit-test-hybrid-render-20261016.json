@@ -1,0 +1,275 @@
+{
+  "source": "current deployed compiled Vue components extracted into isolated local modules",
+  "capturedAt": "2026-10-16T09:42:15.506Z",
+  "csp": "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'",
+  "requests": [
+    {
+      "path": "/visual-reference.html",
+      "method": "GET",
+      "cookie": false,
+      "authorization": false
+    },
+    {
+      "path": "/index-h5SovXmL.css",
+      "method": "GET",
+      "cookie": false,
+      "authorization": false
+    },
+    {
+      "path": "/index-kKXzDv0G.css",
+      "method": "GET",
+      "cookie": false,
+      "authorization": false
+    },
+    {
+      "path": "/TipTitle-BPd_ueav.css",
+      "method": "GET",
+      "cookie": false,
+      "authorization": false
+    },
+    {
+      "path": "/render-isolated.mjs",
+      "method": "GET",
+      "cookie": false,
+      "authorization": false
+    },
+    {
+      "path": "/vue-vendor-BAIqUb6N.js",
+      "method": "GET",
+      "cookie": false,
+      "authorization": false
+    },
+    {
+      "path": "/ui-vendor-DqG_w2kj.js",
+      "method": "GET",
+      "cookie": false,
+      "authorization": false
+    },
+    {
+      "path": "/isolated-index-CO_tJEWL.js",
+      "method": "GET",
+      "cookie": false,
+      "authorization": false
+    },
+    {
+      "path": "/isolated-maintenanceRecord-D7yDEbKp.js",
+      "method": "GET",
+      "cookie": false,
+      "authorization": false
+    },
+    {
+      "path": "/isolated-index-DPadamzi.js",
+      "method": "GET",
+      "cookie": false,
+      "authorization": false
+    },
+    {
+      "path": "/isolated-face-r2GhDcYK.js",
+      "method": "GET",
+      "cookie": false,
+      "authorization": false
+    },
+    {
+      "path": "/isolated-TipTitle-DDaik21W.js",
+      "method": "GET",
+      "cookie": false,
+      "authorization": false
+    },
+    {
+      "path": "/isolated-tstate10-CN2JWYGl.js",
+      "method": "GET",
+      "cookie": false,
+      "authorization": false
+    },
+    {
+      "path": "/isolated-br5-DQxvqjk7.js",
+      "method": "GET",
+      "cookie": false,
+      "authorization": false
+    },
+    {
+      "path": "/isolated-task_15-jvO0Y_Ar.js",
+      "method": "GET",
+      "cookie": false,
+      "authorization": false
+    },
+    {
+      "path": "/AFMAP/assets/Alibaba-PuHuiTi-Regular-subset-DoIwNFbl.ttf",
+      "method": "GET",
+      "cookie": false,
+      "authorization": false
+    }
+  ],
+  "denied": [],
+  "proxyBlocked": [
+    "HTTP",
+    "CONNECT",
+    "CONNECT",
+    "CONNECT",
+    "CONNECT",
+    "CONNECT",
+    "CONNECT",
+    "CONNECT",
+    "CONNECT",
+    "CONNECT",
+    "CONNECT",
+    "CONNECT",
+    "CONNECT"
+  ],
+  "errors": [],
+  "warnings": [],
+  "captures": [
+    {
+      "mode": "professional",
+      "file": "/tmp/flight-static-audit.zkzwIi/deployed-professional-synthetic.png",
+      "text": "飞行速度 (m/s)\n慢速(19)\n标准(20)\n快速(23)\n自定义飞行速度 (19~23m/s)\n-0.4\n-0.1\n+0.1\n+0.4\n一键返航\n一键备降\n跳转航点\n恢复航线\n指点环绕\n目标锁定\n向上\n向左\n向下\n向右\n放大（+）\n缩小（-）",
+      "bounds": {
+        "x": 360,
+        "y": 824.015625,
+        "width": 1200,
+        "height": 216
+      },
+      "images": [
+        {
+          "loaded": true,
+          "src": "embedded"
+        },
+        {
+          "loaded": true,
+          "src": "embedded"
+        },
+        {
+          "loaded": true,
+          "src": "embedded"
+        },
+        {
+          "loaded": true,
+          "src": "embedded"
+        },
+        {
+          "loaded": true,
+          "src": "embedded"
+        },
+        {
+          "loaded": true,
+          "src": "embedded"
+        },
+        {
+          "loaded": true,
+          "src": "embedded"
+        },
+        {
+          "loaded": true,
+          "src": "embedded"
+        }
+      ],
+      "events": [],
+      "blockedRuntime": [],
+      "branch": "hybrid_composite_wing_only"
+    },
+    {
+      "mode": "simple",
+      "file": "/tmp/flight-static-audit.zkzwIi/deployed-simple-synthetic.png",
+      "text": "无人机操作\n一键返航\n一键备降\n跳转航点\n指点环绕\n恢复航线\n目标锁定\n飞行速度 (m/s)\n慢速(19)\n标准(20)\n快速(23)\n自定义飞行速度 (19~23m/s)\n-0.4\n-0.1\n+0.1\n+0.4\n遥测数据\n飞行高度\nASL\n126.8 m\nALT\n26.8 m\n飞行航向\n90.0°\n云台角度\n-12°\n180°\n-180°\n载荷操作\n上升(↑)\n下降\n(↓)\n向左\n(←)\n向右\n(→)\n放大 (+)\n缩小 (-)",
+      "bounds": {
+        "x": 825,
+        "y": 813,
+        "width": 1085.015625,
+        "height": 224
+      },
+      "images": [
+        {
+          "loaded": true,
+          "src": "embedded"
+        },
+        {
+          "loaded": true,
+          "src": "embedded"
+        },
+        {
+          "loaded": true,
+          "src": "embedded"
+        },
+        {
+          "loaded": true,
+          "src": "embedded"
+        },
+        {
+          "loaded": true,
+          "src": "embedded"
+        },
+        {
+          "loaded": true,
+          "src": "embedded"
+        },
+        {
+          "loaded": true,
+          "src": "embedded"
+        },
+        {
+          "loaded": true,
+          "src": "embedded"
+        },
+        {
+          "loaded": true,
+          "src": "embedded"
+        },
+        {
+          "loaded": true,
+          "src": "embedded"
+        },
+        {
+          "loaded": true,
+          "src": "embedded"
+        },
+        {
+          "loaded": true,
+          "src": "embedded"
+        },
+        {
+          "loaded": true,
+          "src": "embedded"
+        }
+      ],
+      "events": [],
+      "blockedRuntime": [],
+      "branch": "hybrid_composite_wing_only"
+    }
+  ],
+  "sources": {
+    "isolated-TipTitle-DDaik21W.js": "689c531f2e67cbcf8cb4188479cd058f49841c25504ddea55906d164d94d6756",
+    "isolated-br5-DQxvqjk7.js": "9a525af743280723cead1cf700a41e9e1b2b35438bcc70f00ea672cfc777c8eb",
+    "isolated-face-r2GhDcYK.js": "557817fdb1c4f9ecedd321a1bd4d96144e9f27e33ec949c0e2ad7044141fe64f",
+    "isolated-index-CO_tJEWL.js": "574c8f4b6e28146aaac8f0d175346e36298808b1ca1fb8e0968e462293ea1a8b",
+    "isolated-index-DPadamzi.js": "484290754b1a579d8c3b5acce5d19ba6ca9b4c280fe8e6fc238b7447f2c77ee3",
+    "isolated-maintenanceRecord-D7yDEbKp.js": "5be328efa12e0867bd925efdf1ffeeee76a08e0ee58032cc5d13c31387d16ad9",
+    "isolated-task_15-jvO0Y_Ar.js": "8a343075c96cf487d323d4076b978149cf1f0595be7c225f059b8b81b7be51c3",
+    "isolated-tstate10-CN2JWYGl.js": "8110d5b229991d0a84e7558fa1b2ddef9b3d4cc990540987d9e90e5f93849c63",
+    "visual-reference.html": "e624ed195761b82290c3e236a6c1ca528e624196d3115aa4ce065dee203d5c22",
+    "render-isolated.mjs": "e202feca9ef150b17b8fc0f4999c65423e07237e06e7f6c8a9d1cdf2099e41e9",
+    "vue-vendor-BAIqUb6N.js": "3e9d439a313275c874f4b8cc02337bd0171eda8d9e5ac44a87e39f17775dc79c",
+    "ui-vendor-DqG_w2kj.js": "f5457ae5441ff0bec9759914b199d44e382c723516cdf01945188cf7e6ae775a",
+    "index-h5SovXmL.css": "3c439f3ab665a80e361c168434464ca024c1711ab5e99f198469545c4ff24b7b",
+    "index-kKXzDv0G.css": "7ab2cd77262406ae955bd4a53de84438386746b928f47fc1bcf2e89c86211c12",
+    "TipTitle-BPd_ueav.css": "8bc9478495146f7d127e91b110c1bf4ed4e59a9f2652d0f4abb228e1601b0cec",
+    "AFMAP/assets/Alibaba-PuHuiTi-Regular-subset-DoIwNFbl.ttf": "705e2a67f12b617b5c8f9f745933f867545f691c14afed5335fb29e633b69fcf"
+  },
+  "realDeviceData": false,
+  "realDeviceActions": 0,
+  "platformApiRequests": 0,
+  "javascriptBusinessEntrypointExecuted": false,
+  "syntheticEnabledFlags": true,
+  "rootFontSizePx": 192,
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "limitations": [
+    "Only isolated original control components; backdrop and banner belong to the fixture.",
+    "Synthetic props and trail store values do not establish actual model capabilities.",
+    "Drag directive is inert; no control buttons are clicked.",
+    "No login, current device context, full cockpit composition, map or real media.",
+    "The parent hangar page chooses these controls only for siteData.uavType===HybridWing or a type name containing 复合翼; ordinary DJI/PZ visual rendering is not established by these screenshots."
+  ],
+  "branch": "hybrid_composite_wing_only"
+}

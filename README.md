@@ -1,12 +1,33 @@
-# 灵犀飞行执行 Agent
+# 灵犀飞控 Agent（lingxi-flight-control-agent）
 
 独立维护已绑定执行上下文内的受限控制文本解析和内存执行闭环；同时保留任务下发模型作为兼容层。
 
+本项目专门负责无人机飞行控制，对应独立前端为 `lingxi-flight-control-ui`（灵犀飞控助手，当前目录及 Git 远端兼容名称为 `lingxi-flight-agent-ui`）。巡检任务规划、草稿与下发交接属于 `lingxi-task-dispatch-agent`（当前兼容目录为 `lingxi-agent`），对应前端为 `lingxi-task-dispatch-ui`（当前兼容目录为 `lingxi-console`）。保留的任务下发模型只用于旧调用方导入兼容，不改变两个 Agent 的职责与权限隔离。
+
 ## 当前范围
+
+- **V1.3 飞控规则适配（2026-10-21）**：急停权限、航线微操拦截、设备极值可见调整；新增六个动作（共65项）、明确飞行+喊话并发、旧平台围栏/结束任务安全检查。Java喊话/音量与Vue确认卡已隔离联调。AI生命周期与主线/临时任务事件仍只有模拟验证，真实事件和测绘原子中断未完成。逐项范围及验证见 [V1.3 验收记录](docs/ACCEPTANCE_FLIGHT-V13.md)。
+
+- **悬浮对话入口（2026-10-17）**：独立前端默认显示右下角气泡，打开后通过传统聊天完成指令、
+  追问、动作确认/取消与回执。复用已有会话和Java适配链；完整驾驶舱保留为 `?mode=cockpit` 兼容入口，
+  当前不再扩展设备详情或天气。界面变更不切换服务端执行器或授权。
+- **自然语言完整交互（2026-10-16）**：`tools/cockpit_server.py` 将现有模型循环、59项动作契约、
+  检查点和执行器接到独立前端 `lingxi-flight-agent-ui`。支持多轮补参、逐动作确认、取消、
+  会话隔离和回执展示；默认仅本机模拟器。启动与验收见 [交付说明](docs/natural-language-cockpit.md)。
+- **Java 适配候选**：`KtdPlatformExecutor` 编译15个已核验写动作，默认关闭，
+  需要服务端权威状态、权限、控制权租约及持久幂等日志。HTTP受理不代表设备完成。
+  当前正式Java接口缺少完整权威快照契约，尚不能安全启用；见 [接口核对](docs/ktd-platform-contract.md)。
+- **地图与视频展示候选**：前端已接本地地理底图和独立播放器；服务端只读当前资源已有的视频描述，
+  默认媒体来源白名单为空。地址不进入模型、控制状态或检查点，读取/播放不启流。
+  来源策略、会话绑定和验证边界见 [媒体契约](docs/visuals-media-contract.md)。
 
 - **模型预览链路**：驾驶舱文字入口可接真实模型生成相对位移预览，并编译测试平台已有接口的请求格式。
   确认只返回 `confirmed_not_dispatched`，没有真实发送能力；按机头方向计算目标点。
   接口、验证和边界见 [模型预览说明](docs/model-preview.md)。
+
+- **独立产品入口**：`tools/standalone_preview_server.py` 提供不依赖 Java 和旧前端的
+  HTTP 预览服务。它接收外部遥测适配器写入的位姿，直接调用本仓库的模型 Agent，
+  返回预览、确认和取消结果；服务内没有 MQTT、真实飞控或平台写接口。
 
 - 将单个中文方向和距离解析为 `RelativeMove`；
 - 在已确认的 `ExecutionContext` 中执行相对移动；
@@ -20,7 +41,7 @@
   每个动作都经过 `ToolRegistry` schema 校验 + 执行器 `preview/confirm` 两阶段。
 - **执行器可注入**：`executor.py` 定义 `RuntimeExecutor` 协议（预览/确认 + 状态读取），
   `SimulatorExecutor` 包住现有模拟器（零行为变化），`LoopbackExecutor` 与 `FixtureExecutor`
-  用于本机回环与报文夹具回放。**当前没有接真实平台**（无凭据），详见 `docs/platform-executor.md`。
+  用于本机回环与报文夹具回放。**当前没有启用真实平台**，详见 `docs/platform-executor.md`。
 - **安全快路径**：急停等安全动作走确定性精确匹配，不经过模型。实测走模型要 9 秒才能发出急停，
   快路径 1 毫秒；且模型服务不可达时快路径照常可用。详见 `docs/safety-fast-path.md`。
 - **上下文预算**：发送前按 `num_ctx` 核对 prompt 预算并确定性压缩，绝不依赖服务端截断。
@@ -38,7 +59,7 @@ decider = SafetyFastPathDecider(OllamaDecider(model="qwen3.5:9b"))
 **只做精确匹配，绝不做子串包含**——「不要返航」包含「返航」，子串匹配会出人命。
 起飞刻意不在快路径里（它需要高度参数，替用户猜高度是危险的）。
 
-急停已豁免控制权要求（它只停止运动，且恰恰是控制权不在自己手上时最需要）。
+按 V1.3，急停、返航与其他飞行/载荷动作一样必须持有控制权；快路径只免模型推理，不免授权或确认。
 
 ## 驾驶舱工具
 
@@ -89,6 +110,35 @@ loop = BoundedAgentLoop(
 
 当前版本不连接 MQTT、真实飞控或生产任务平台；执行器由调用方注入（本次交付的是可注入挂点
 与报文夹具，未接真实平台）。
+
+## 独立预览产品
+
+启动服务：
+
+```bash
+PYTHONPATH=src python3 tools/standalone_preview_server.py \
+  --host 127.0.0.1 --port 8793
+```
+
+服务端点：
+
+- `GET /healthz`
+- `POST /api/flight-preview/pose`：写入开发/测试遥测，位姿必须在 15 秒内；
+- `GET /api/flight-preview/pose?...`：读取当前位姿；
+- `POST /api/flight-preview/preview`：模型理解并生成预览卡；
+- `POST /api/flight-preview/confirm`、`/cancel`：确认或取消预览，仍不下发。
+
+错误码契约（400/401/404/409/422/500 分别对应什么，含「推理期间位姿过期 → 409 `STALE_POSE`」）
+见 [模型预览说明](docs/model-preview.md#独立预览服务的错误码)。
+
+**操作者身份**：配了 `--gateway-token-env` 后，`X-Agent-Actor` 只能由持有共享凭证的网关
+注入，客户端自报一律 `401 UNAUTHENTICATED`。网关、操作者清单、CORS 白名单与验证矩阵见
+[鉴权边界](docs/standalone-gateway.md)。
+
+请求需要 `X-Agent-Actor` 和可追踪的 `X-Trace-Id`；项目、机库、无人机、任务、站点、
+上下文版本和位姿都由服务端校验。前端项目默认调用 `/api/flight-preview`，可用
+`VITE_FLIGHT_AGENT_API_BASE` 覆盖为独立服务地址。生产接入时只需另写一个经过鉴权的
+遥测适配器，把实时 `lng/lat/alt/yaw` 映射到 `/pose`，不需要修改 Java 或原有前端。
 
 ## 模型大脑
 

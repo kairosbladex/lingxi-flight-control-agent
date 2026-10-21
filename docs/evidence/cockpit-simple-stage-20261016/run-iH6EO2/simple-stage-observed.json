@@ -1,0 +1,27 @@
+{
+  "sourceCommit": "35574cba46d498e0992de05504756bccf7014ade",
+  "reference": {
+    "map": {
+      "x": 0,
+      "y": 143,
+      "width": 810,
+      "height": 894
+    },
+    "video": {
+      "x": 825,
+      "y": 143,
+      "width": 1085,
+      "height": 666
+    }
+  },
+  "actual": {
+    "map": {
+      "x": 308,
+      "y": 123,
+      "width": 1304,
+      "height": 646
+    },
+    "video": null
+  },
+  "screenshot": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-iH6EO2/05-simple-stage-observed.png"
+}

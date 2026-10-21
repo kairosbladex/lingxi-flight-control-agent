@@ -1,0 +1,917 @@
+{
+  "source": "offline-http-fixture",
+  "initialScreenshot": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/01-ready.png",
+  "confirmationScreenshot": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/02-confirmation.png",
+  "modelFailureScreenshot": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/03-model-timeout.png",
+  "modelFailureChecks": [
+    {
+      "errorCode": "MODEL_TIMEOUT",
+      "renderedMessage": "理解指令超时，操作未执行，请稍后重新提出指令。",
+      "oldCardCleared": true,
+      "rawExceptionVisible": false,
+      "observationWindowMs": 500,
+      "requestPaths": [
+        "/api/flight-control/agent/messages"
+      ]
+    },
+    {
+      "errorCode": "MODEL_OUTPUT_TRUNCATED",
+      "renderedMessage": "模型回答被截断，操作未执行，请简短描述本次动作。",
+      "oldCardCleared": true,
+      "rawExceptionVisible": false,
+      "observationWindowMs": 500,
+      "requestPaths": [
+        "/api/flight-control/agent/messages"
+      ]
+    },
+    {
+      "errorCode": "RUN_BUDGET_EXCEEDED",
+      "renderedMessage": "本轮理解预算已耗尽，操作未执行，请简短描述本次动作。",
+      "oldCardCleared": true,
+      "rawExceptionVisible": false,
+      "observationWindowMs": 500,
+      "requestPaths": [
+        "/api/flight-control/agent/messages"
+      ]
+    },
+    {
+      "errorCode": "MODEL_ERROR",
+      "renderedMessage": "未生成可靠的动作建议，操作未执行，请重新描述本次动作。",
+      "oldCardCleared": true,
+      "rawExceptionVisible": false,
+      "observationWindowMs": 500,
+      "requestPaths": [
+        "/api/flight-control/agent/messages"
+      ]
+    }
+  ],
+  "desktopScreenshots": [
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/04b-professional-video-mini-map.png",
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/04-desktop-professional.png",
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/05-desktop-simple.png",
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/05b-simple-distance-settings.png",
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/05c-simple-1280.png",
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/05d-simple-1280-settings.png",
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/05e-simple-mobile-assistant.png",
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/06b-simple-existing-confirmation.png",
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/06c-simple-confirmation-1280.png",
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/06d-simple-zero-coordinates.png",
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/06-desktop-confirmation.png",
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/06e-simple-authority-confirmation.png"
+  ],
+  "desktopChecks": {
+    "viewport": {
+      "width": 1920,
+      "height": 1080
+    },
+    "panelBounds": [
+      {
+        "id": "device-column",
+        "x": 0,
+        "y": 0,
+        "width": 355,
+        "height": 1080,
+        "right": 355,
+        "bottom": 1080
+      },
+      {
+        "id": "scene-panel",
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080,
+        "right": 1920,
+        "bottom": 1080
+      },
+      {
+        "id": "telemetry-column",
+        "x": 1565,
+        "y": 0,
+        "width": 355,
+        "height": 1080,
+        "right": 1920,
+        "bottom": 1080
+      },
+      {
+        "id": "flight-console",
+        "x": 360,
+        "y": 824.015625,
+        "width": 1200,
+        "height": 216,
+        "right": 1560,
+        "bottom": 1040.015625
+      }
+    ],
+    "sharedContextRequests": 1,
+    "proposalRequests": 1,
+    "manualIntent": "向前飞7.5米",
+    "automaticConfirmations": 0,
+    "unknownTelemetryPreserved": true,
+    "layoutSwitchRequests": 0
+  },
+  "telemetryChecks": {
+    "ageBefore": 2,
+    "ageAfter": 13,
+    "displayClockRequests": 0,
+    "pendingCardPreservedOnReadFailure": true,
+    "failureScreenshot": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/07-telemetry-read-failure.png",
+    "timersBeforeUnmount": 2,
+    "timersAfterUnmount": 0
+  },
+  "instrumentChecks": [
+    {
+      "scenario": "instrument-independent-heights",
+      "asl": 126.8,
+      "alt": 26.8,
+      "yaw": -45,
+      "instrumentBounds": [
+        {
+          "id": "height-instrument",
+          "width": 146.5,
+          "height": 187,
+          "contained": true
+        },
+        {
+          "id": "heading-instrument",
+          "width": 146.5,
+          "height": 187,
+          "contained": true
+        }
+      ]
+    },
+    {
+      "scenario": "instrument-missing-height",
+      "independentUnknowns": true
+    },
+    {
+      "scenario": "instrument-invalid-heights",
+      "variants": 3
+    },
+    {
+      "scenario": "instrument-zero-heights",
+      "zeroPreserved": true
+    },
+    {
+      "scenario": "instrument-unavailable",
+      "staleValuesHidden": true
+    },
+    {
+      "scenario": "instrument-simulator-label",
+      "simulationVisible": true
+    }
+  ],
+  "instrumentScreenshots": [
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/10-dual-height-instruments.png",
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/11-dual-height-simulator.png"
+  ],
+  "mapChecks": {
+    "sdk": "Cesium 1.92",
+    "imagery": "local NaturalEarthII",
+    "locateControlRequests": 0,
+    "missingPositionDisablesLocate": true,
+    "screenshot": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/12-offline-map-workspace.png"
+  },
+  "mapRequests": [
+    "vendor/cesium-1.92/Widgets/CesiumWidget/CesiumWidget.css",
+    "vendor/cesium-1.92/Cesium.js",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/tilemapresource.xml",
+    "vendor/cesium-1.92/Assets/IAU2006_XYS/IAU2006_XYS_18.json",
+    "vendor/cesium-1.92/Assets/Images/ion-credit.png",
+    "vendor/cesium-1.92/Workers/cesiumWorkerBootstrapper.js",
+    "vendor/cesium-1.92/Workers/transferTypedArrayTest.js",
+    "vendor/cesium-1.92/Workers/createVerticesFromHeightmap.js",
+    "vendor/cesium-1.92/Workers/Matrix2-c430e55a.js",
+    "vendor/cesium-1.92/Workers/RuntimeError-8952249c.js",
+    "vendor/cesium-1.92/Workers/defaultValue-81eec7ed.js",
+    "vendor/cesium-1.92/Workers/ComponentDatatype-9e86ac8f.js",
+    "vendor/cesium-1.92/Workers/WebGLConstants-508b9636.js",
+    "vendor/cesium-1.92/Workers/AxisAlignedBoundingBox-52bc7e5b.js",
+    "vendor/cesium-1.92/Workers/Transforms-4ee811db.js",
+    "vendor/cesium-1.92/Workers/_commonjsHelpers-3aae1032-26891ab7.js",
+    "vendor/cesium-1.92/Workers/combine-3c023bda.js",
+    "vendor/cesium-1.92/Workers/TerrainEncoding-7b2c3643.js",
+    "vendor/cesium-1.92/Workers/AttributeCompression-046b70bd.js",
+    "vendor/cesium-1.92/Workers/OrientedBoundingBox-e31a0f8a.js",
+    "vendor/cesium-1.92/Workers/EllipsoidTangentPlane-0152c019.js",
+    "vendor/cesium-1.92/Workers/IntersectionTests-4d132f79.js",
+    "vendor/cesium-1.92/Workers/Plane-7e828ad8.js",
+    "vendor/cesium-1.92/Workers/WebMercatorProjection-04357f64.js",
+    "vendor/cesium-1.92/Workers/createTaskProcessorWorker.js",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/0/1/0.jpg",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/0/0/0.jpg",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/1/3/1.jpg",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/1/3/0.jpg",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/1/2/1.jpg",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/1/2/0.jpg",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/2/6/2.jpg",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/2/7/2.jpg",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/2/6/1.jpg",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/2/5/2.jpg",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/2/7/1.jpg",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/2/6/3.jpg",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/2/5/1.jpg",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/2/7/3.jpg",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/2/5/3.jpg",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/2/4/3.jpg",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/2/4/2.jpg",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/2/4/1.jpg",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/2/6/0.jpg",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/2/7/0.jpg",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/2/5/0.jpg",
+    "vendor/cesium-1.92/Assets/Textures/NaturalEarthII/2/4/0.jpg"
+  ],
+  "deviceReceiptChecks": [
+    {
+      "scenario": "receipt-legacy-and-cancel-excluded",
+      "passed": true
+    },
+    {
+      "scenario": "receipt-dispatching",
+      "label": "命令提交中，实际飞行效果未验证",
+      "commandId": "command-19",
+      "method": "GET",
+      "continues": false
+    },
+    {
+      "scenario": "receipt-submitted",
+      "label": "平台已受理，等待设备报告",
+      "commandId": "command-20",
+      "method": "GET",
+      "continues": false
+    },
+    {
+      "scenario": "receipt-accepted",
+      "label": "设备报告已受理，实际飞行效果未验证",
+      "commandId": "command-21",
+      "method": "GET",
+      "continues": false
+    },
+    {
+      "scenario": "receipt-in_progress",
+      "label": "设备报告执行中，实际飞行效果未验证",
+      "commandId": "command-22",
+      "method": "GET",
+      "continues": false
+    },
+    {
+      "scenario": "receipt-completed",
+      "label": "设备报告已完成，实际位移精度未验证",
+      "commandId": "command-23",
+      "method": "GET",
+      "continues": true
+    },
+    {
+      "scenario": "receipt-failed",
+      "label": "设备报告执行失败，实际飞行效果未验证",
+      "commandId": "command-24",
+      "method": "GET",
+      "continues": false
+    },
+    {
+      "scenario": "receipt-cancelled",
+      "label": "设备报告已取消，是否发生部分动作需核实",
+      "commandId": "command-25",
+      "method": "GET",
+      "continues": false
+    },
+    {
+      "scenario": "receipt-expired",
+      "label": "等待设备回执已超时，实际飞行效果未验证",
+      "commandId": "command-26",
+      "method": "GET",
+      "continues": false
+    },
+    {
+      "scenario": "receipt-unknown",
+      "label": "设备回执结果不明，请核实设备状态",
+      "commandId": "command-27",
+      "method": "GET",
+      "continues": false
+    },
+    {
+      "scenario": "receipt-conflict",
+      "label": "设备回执存在冲突，请人工核实",
+      "commandId": "command-28",
+      "method": "GET",
+      "continues": false
+    },
+    {
+      "scenario": "receipt-same-version-expiry-projection",
+      "staleReversalRejected": true
+    },
+    {
+      "scenario": "receipt-mobile-layout",
+      "viewport": {
+        "width": 414,
+        "height": 747
+      },
+      "horizontalOverflow": false
+    },
+    {
+      "scenario": "receipt-manual-continuation-new-card",
+      "automaticCalls": 0,
+      "nextAction": "move_left"
+    },
+    {
+      "scenario": "receipt-invalid-or-error-preserves-report",
+      "invalidVariants": 4,
+      "rawExceptionVisible": false
+    },
+    {
+      "scenario": "receipt-checkpoint-warning-blocks-continuation",
+      "passed": true
+    },
+    {
+      "scenario": "receipt-late-reset",
+      "queries": 1,
+      "staleReportVisible": false
+    },
+    {
+      "scenario": "receipt-late-new-intent",
+      "queries": 1,
+      "staleReportVisible": false
+    },
+    {
+      "scenario": "receipt-after-confirm-timeout",
+      "originalCommandQueried": true,
+      "confirmations": 1,
+      "automaticResends": 0
+    }
+  ],
+  "receiptScreenshots": [
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/08-device-receipt-completed.png",
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/08-device-receipt-mobile.png",
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/09-confirm-timeout-receipt.png"
+  ],
+  "mediaChecks": [
+    {
+      "scenario": "media-initialization-is-passive",
+      "visualsReads": 0,
+      "playbackRequests": 0
+    },
+    {
+      "scenario": "media-scene-switch-is-passive",
+      "visualsReads": 0,
+      "playbackRequests": 0
+    },
+    {
+      "scenario": "media-manual-read-shares-session",
+      "reads": 1,
+      "candidates": 6,
+      "playbackRequests": 0
+    },
+    {
+      "scenario": "media-three-perspectives-are-local",
+      "kinds": [
+        "site",
+        "hangar",
+        "drone"
+      ],
+      "automaticReads": 0
+    },
+    {
+      "scenario": "media-candidate-and-perspective-cleanup",
+      "selectedPaths": [
+        "drone-b",
+        "drone-a",
+        "site",
+        "hangar"
+      ],
+      "automaticPlayback": 0,
+      "abortedRequests": 4
+    },
+    {
+      "scenario": "media-responsive-layout",
+      "mediaBounds": {
+        "mediaRight": 578,
+        "assistantLeft": 586,
+        "mediaWidth": 222
+      },
+      "mobileHorizontalOverflow": false
+    },
+    {
+      "scenario": "media-refresh-clears-before-response",
+      "duplicateReads": 0,
+      "oldRequestAborted": true
+    },
+    {
+      "scenario": "media-read-failure-clears-old-candidates",
+      "variants": 3,
+      "rawExceptionVisible": false
+    },
+    {
+      "scenario": "media-unbound-or-stale-descriptor-rejected",
+      "variants": 3,
+      "staleCandidatesVisible": false
+    },
+    {
+      "scenario": "media-transport-failure-is-manual",
+      "automaticRetries": 0,
+      "rawExceptionVisible": false
+    },
+    {
+      "scenario": "media-expiry-stops-and-requires-refresh",
+      "repeatedPlaybackRequests": 0,
+      "automaticReads": 0
+    },
+    {
+      "scenario": "media-resource-change-clears-and-stops",
+      "oldRequestAborted": true
+    },
+    {
+      "scenario": "media-late-resource-discarded",
+      "staleCandidatesVisible": false,
+      "automaticReads": 0
+    },
+    {
+      "scenario": "media-late-reset-discarded",
+      "staleCandidatesVisible": false,
+      "automaticReads": 0
+    },
+    {
+      "scenario": "media-reset-stops-existing-playback",
+      "oldRequestAborted": true
+    },
+    {
+      "scenario": "media-scene-unmount-stops-without-resume",
+      "oldRequestAborted": true,
+      "automaticReads": 0
+    },
+    {
+      "scenario": "media-simulator-clears-and-disables-platform-sources",
+      "disabledReads": true
+    },
+    {
+      "scenario": "media-no-device-action-or-url-leak",
+      "mediaRequests": 11,
+      "deviceRequests": 0,
+      "browserPlayCalls": 0,
+      "permissionRequests": 0,
+      "peerConnections": 0,
+      "businessCredentialsForwarded": false
+    }
+  ],
+  "mediaScreenshots": [
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/13-video-sources-desktop.png",
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/13-video-sources-1280.png",
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-stage-20261016/run-B0snq3/13-video-sources-mobile.png"
+  ],
+  "mediaRequests": [
+    {
+      "path": "/cockpit-media/drone-b.mp4",
+      "method": "GET",
+      "authorization": false,
+      "session": false,
+      "cookie": false,
+      "referrer": false,
+      "aborted": true,
+      "complete": false
+    },
+    {
+      "path": "/cockpit-media/drone-a.mp4",
+      "method": "GET",
+      "authorization": false,
+      "session": false,
+      "cookie": false,
+      "referrer": false,
+      "aborted": true,
+      "complete": false
+    },
+    {
+      "path": "/cockpit-media/site.mp4",
+      "method": "GET",
+      "authorization": false,
+      "session": false,
+      "cookie": false,
+      "referrer": false,
+      "aborted": true,
+      "complete": false
+    },
+    {
+      "path": "/cockpit-media/hangar.mp4",
+      "method": "GET",
+      "authorization": false,
+      "session": false,
+      "cookie": false,
+      "referrer": false,
+      "aborted": true,
+      "complete": false
+    },
+    {
+      "path": "/cockpit-media/drone-a.mp4",
+      "method": "GET",
+      "authorization": false,
+      "session": false,
+      "cookie": false,
+      "referrer": false,
+      "aborted": true,
+      "complete": false
+    },
+    {
+      "path": "/cockpit-media/drone-a.mp4",
+      "method": "GET",
+      "authorization": false,
+      "session": false,
+      "cookie": false,
+      "referrer": false,
+      "aborted": false,
+      "complete": true
+    },
+    {
+      "path": "/cockpit-media/drone-a.mp4",
+      "method": "GET",
+      "authorization": false,
+      "session": false,
+      "cookie": false,
+      "referrer": false,
+      "aborted": true,
+      "complete": false
+    },
+    {
+      "path": "/cockpit-media/drone-a.mp4",
+      "method": "GET",
+      "authorization": false,
+      "session": false,
+      "cookie": false,
+      "referrer": false,
+      "aborted": true,
+      "complete": false
+    },
+    {
+      "path": "/cockpit-media/drone-a.mp4",
+      "method": "GET",
+      "authorization": false,
+      "session": false,
+      "cookie": false,
+      "referrer": false,
+      "aborted": true,
+      "complete": false
+    },
+    {
+      "path": "/cockpit-media/drone-a.mp4",
+      "method": "GET",
+      "authorization": false,
+      "session": false,
+      "cookie": false,
+      "referrer": false,
+      "aborted": true,
+      "complete": false
+    },
+    {
+      "path": "/cockpit-media/drone-a.mp4",
+      "method": "GET",
+      "authorization": false,
+      "session": false,
+      "cookie": false,
+      "referrer": false,
+      "aborted": true,
+      "complete": false
+    }
+  ],
+  "apiRequests": 161,
+  "confirmedRequests": 21,
+  "forbiddenRequests": 0,
+  "browserErrors": [],
+  "physicalDeviceRequests": 0,
+  "mediaDecoding": "not_evaluated_by_this_integration_fixture",
+  "scenarios": [
+    "clarification",
+    "confirmation",
+    "cancel",
+    "refresh-retains-card",
+    "reset",
+    "sequential-confirmation",
+    "expiry",
+    "http-error",
+    "MODEL_TIMEOUT",
+    "MODEL_OUTPUT_TRUNCATED",
+    "RUN_BUDGET_EXCEEDED",
+    "MODEL_ERROR",
+    "changed-context",
+    "late-response",
+    "platform-receipt-label-fixture",
+    "checkpoint-warning-preserves-receipt",
+    "desktop-layout",
+    "professional-simple-toggle",
+    "shared-manual-proposal",
+    "unavailable-controls",
+    "unknown-telemetry",
+    "legacy-preview-entry",
+    "offline-geographic-map",
+    "map-locate-without-control",
+    "telemetry-aging",
+    "telemetry-read-failure",
+    "telemetry-time-unknown",
+    "telemetry-future-time",
+    "telemetry-unavailable",
+    "telemetry-timer-cleanup",
+    "instrument-independent-heights",
+    "instrument-missing-height",
+    "instrument-invalid-heights",
+    "instrument-zero-heights",
+    "instrument-unavailable",
+    "instrument-simulator-label",
+    "receipt-legacy-and-cancel-excluded",
+    "receipt-dispatching",
+    "receipt-submitted",
+    "receipt-accepted",
+    "receipt-in_progress",
+    "receipt-completed",
+    "receipt-failed",
+    "receipt-cancelled",
+    "receipt-expired",
+    "receipt-unknown",
+    "receipt-conflict",
+    "receipt-same-version-expiry-projection",
+    "receipt-mobile-layout",
+    "receipt-manual-continuation-new-card",
+    "receipt-invalid-or-error-preserves-report",
+    "receipt-checkpoint-warning-blocks-continuation",
+    "receipt-late-reset",
+    "receipt-late-new-intent",
+    "receipt-after-confirm-timeout",
+    "media-initialization-is-passive",
+    "media-scene-switch-is-passive",
+    "media-manual-read-shares-session",
+    "media-three-perspectives-are-local",
+    "media-candidate-and-perspective-cleanup",
+    "media-responsive-layout",
+    "media-refresh-clears-before-response",
+    "media-read-failure-clears-old-candidates",
+    "media-unbound-or-stale-descriptor-rejected",
+    "media-transport-failure-is-manual",
+    "media-expiry-stops-and-requires-refresh",
+    "media-resource-change-clears-and-stops",
+    "media-late-resource-discarded",
+    "media-late-reset-discarded",
+    "media-reset-stops-existing-playback",
+    "media-scene-unmount-stops-without-resume",
+    "media-simulator-clears-and-disables-platform-sources",
+    "media-no-device-action-or-url-leak",
+    "simple-movement-settings-are-local",
+    "visible-control-ranges-match-tool-contract",
+    "narrowed-tool-range-prevents-manual-request",
+    "asymmetric-direction-ranges-preserve-editing",
+    "formal-header-geometry",
+    "professional-full-screen-map",
+    "professional-video-mini-map",
+    "simple-dual-stage-geometry",
+    "simple-responsive-passive-layout",
+    "professional-stage-retains-card",
+    "simple-mode-retains-confirmation",
+    "simple-coordinate-snapshot-values",
+    "simple-control-authority-shared-confirmation",
+    "professional-map-unmount-cleanup"
+  ],
+  "controlRangeChecks": [
+    {
+      "scenario": "simple-movement-settings-are-local",
+      "bounds": {
+        "x": 825,
+        "y": 602.1875,
+        "width": 331.984375,
+        "height": 184.84375,
+        "right": 1156.984375,
+        "bottom": 787.03125
+      },
+      "apiRequests": 0
+    },
+    {
+      "scenario": "visible-control-ranges-match-tool-contract",
+      "limits": [
+        {
+          "id": "move-distance",
+          "min": "0.01",
+          "max": "20"
+        },
+        {
+          "id": "yaw-angle",
+          "min": "0.01",
+          "max": "360"
+        },
+        {
+          "id": "camera-zoom",
+          "min": "1",
+          "max": "30"
+        }
+      ],
+      "yawInputPromisesGimbalAngle": false
+    },
+    {
+      "scenario": "narrowed-tool-range-prevents-manual-request",
+      "min": 2,
+      "max": 8,
+      "proposedRequests": 0
+    },
+    {
+      "scenario": "asymmetric-direction-ranges-preserve-editing",
+      "malformedForwardDisabled": true,
+      "validLeftEnabled": true,
+      "validRightRange": [
+        5,
+        270
+      ],
+      "proposedRequests": 0
+    }
+  ],
+  "consoleGeometryChecks": [
+    {
+      "mode": "professional",
+      "bounds": {
+        "id": "flight-console",
+        "x": 360,
+        "y": 824.015625,
+        "width": 1200,
+        "height": 216,
+        "right": 1560,
+        "bottom": 1040.015625
+      },
+      "reference": "ordinary deployed CSS at 1920x1080"
+    },
+    {
+      "mode": "simple",
+      "bounds": {
+        "x": 825,
+        "y": 813.015625,
+        "width": 1085.015625,
+        "height": 224
+      },
+      "reference": "ordinary deployed CSS at 1920x1080"
+    }
+  ],
+  "sceneLayoutChecks": [
+    {
+      "scenario": "formal-header-geometry",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 68,
+      "titleCenter": 960,
+      "title": "fixture-project",
+      "backgroundHeight": 91
+    },
+    {
+      "scenario": "professional-full-screen-map",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      },
+      "sideCards": [
+        {
+          "id": "device-column",
+          "x": 10,
+          "y": 85,
+          "width": 335
+        },
+        {
+          "id": "telemetry-column",
+          "x": 1575,
+          "y": 85,
+          "width": 335
+        }
+      ],
+      "actualCesiumCanvas": [
+        1920,
+        1080
+      ],
+      "mapReceivesPointer": true
+    },
+    {
+      "scenario": "professional-video-mini-map",
+      "videoBounds": {
+        "x": 356,
+        "y": 120,
+        "width": 1208,
+        "height": 698
+      },
+      "mapBounds": {
+        "x": 10,
+        "y": 120,
+        "width": 335,
+        "height": 188
+      },
+      "canvasPreserved": true,
+      "apiRequests": 0,
+      "playbackRequests": 0,
+      "actualPointerClicks": true
+    },
+    {
+      "scenario": "simple-dual-stage-geometry",
+      "map": {
+        "x": 0,
+        "y": 142.984375,
+        "width": 809.984375,
+        "height": 894.03125
+      },
+      "video": {
+        "x": 824.984375,
+        "y": 142.984375,
+        "width": 1085.03125,
+        "height": 666
+      },
+      "authority": {
+        "x": 99.984375,
+        "y": 24.984375,
+        "width": 576,
+        "height": 39.984375
+      }
+    },
+    {
+      "scenario": "simple-responsive-passive-layout",
+      "desktop": {
+        "map": {
+          "x": 0,
+          "y": 142.984375,
+          "width": 809.984375,
+          "height": 894.03125
+        },
+        "video": {
+          "x": 824.984375,
+          "y": 142.984375,
+          "width": 1085.03125,
+          "height": 666
+        },
+        "authority": {
+          "x": 99.984375,
+          "y": 24.984375,
+          "width": 576,
+          "height": 39.984375
+        }
+      },
+      "width1280": {
+        "map": {
+          "x": 0,
+          "y": 95.328125,
+          "width": 539.984375,
+          "height": 776.015625
+        },
+        "video": {
+          "x": 549.984375,
+          "y": 95.328125,
+          "width": 723.359375,
+          "height": 624
+        },
+        "console": {
+          "x": 550,
+          "y": 722.015625,
+          "width": 723.34375,
+          "height": 149.328125
+        },
+        "headerBackground": {
+          "x": 0,
+          "y": 0,
+          "width": 1280,
+          "height": 60.65625
+        }
+      },
+      "mobileWidth": 414,
+      "canvasPreserved": true,
+      "apiRequests": 0,
+      "playbackRequests": 0,
+      "actualPointerClicks": true
+    },
+    {
+      "scenario": "professional-stage-retains-card",
+      "cardPreserved": true,
+      "mapCanvasPreserved": true,
+      "apiRequests": 0,
+      "automaticConfirmations": 0
+    },
+    {
+      "scenario": "simple-mode-retains-confirmation",
+      "cardPreserved": true,
+      "canvasPreserved": true,
+      "apiRequests": 0,
+      "automaticConfirmations": 0
+    },
+    {
+      "scenario": "simple-coordinate-snapshot-values",
+      "unavailableValuesPreserved": true,
+      "zeroCoordinates": [
+        "0%",
+        "0.000000°",
+        "0.000000°",
+        "0.0 m"
+      ],
+      "manualStateReads": 2,
+      "cardPreserved": true,
+      "actionRequests": 0
+    },
+    {
+      "scenario": "simple-control-authority-shared-confirmation",
+      "uniqueButtonInstances": true,
+      "sameSession": true,
+      "manualStateReads": 3,
+      "proposalRequests": 2,
+      "cancelRequests": 2,
+      "automaticConfirmations": 0
+    },
+    {
+      "scenario": "professional-map-unmount-cleanup",
+      "canvasesBefore": 1,
+      "canvasesAfter": 0
+    }
+  ]
+}

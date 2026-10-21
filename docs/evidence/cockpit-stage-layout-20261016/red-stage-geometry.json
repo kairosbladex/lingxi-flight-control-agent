@@ -1,0 +1,16 @@
+{
+  "sourceCommit": "35574cba46d498e0992de05504756bccf7014ade",
+  "reference": {
+    "x": 0,
+    "y": 0,
+    "width": 1920,
+    "height": 1080
+  },
+  "actual": {
+    "x": 378,
+    "y": 127,
+    "width": 1164,
+    "height": 642
+  },
+  "screenshot": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-FoHA0F/00-professional-stage-observed.png"
+}

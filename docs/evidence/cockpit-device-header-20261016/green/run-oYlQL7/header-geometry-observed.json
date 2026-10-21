@@ -1,0 +1,18 @@
+{
+  "sourceCommit": "35574cba46d498e0992de05504756bccf7014ade",
+  "reference": {
+    "height": 68,
+    "titleCenter": 960,
+    "backgroundHeight": 91
+  },
+  "actual": {
+    "x": 0,
+    "y": 0,
+    "width": 1920,
+    "height": 68,
+    "titleCenter": 960,
+    "title": "fixture-project",
+    "backgroundHeight": 91
+  },
+  "screenshot": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/green/run-oYlQL7/00-header-geometry-observed.png"
+}

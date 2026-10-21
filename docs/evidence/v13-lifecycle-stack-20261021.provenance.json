@@ -1,0 +1,59 @@
+{
+  "captured_at": "2026-10-21T18:04:13+08:00",
+  "product_document": {
+    "path": "/Users/wangxiaolin/02-文档与资料/灵犀平台自然语言智能控制功能设计规范V1.3.docx",
+    "sha256": "9c35dc14fb1ae4b75418b76d41a2f6bb43777986b3e7ef937f0da9d17e88dff1"
+  },
+  "branches": {
+    "agent": {
+      "name": "feature/v13-lifecycle-extension",
+      "base_head": "71135892cfc2180e2353677368aa3a36ba6d7981"
+    },
+    "java": {
+      "name": "feature/v13-lifecycle-extension",
+      "base_head": "6721f11c35b3510ab66722e4f05481bac82e00a5"
+    },
+    "ui": {
+      "name": "feature/v13-lifecycle-extension",
+      "base_head": "4e71b551ee72b8679042b2e7a2295764b1b91b25"
+    }
+  },
+  "verification": {
+    "python_offline": {
+      "command": "bash tools/ci/offline_tests.sh",
+      "tests": 807,
+      "result": "OK"
+    },
+    "java": {
+      "command": "mvn -o -s tools/ci/snapshot-offline-settings.xml -pl biz-inspection -am verify",
+      "tests": 248,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "ui": {
+      "command": "npm test",
+      "tests": 159,
+      "failures": 0,
+      "build": "npm run build && npx vite build --config vite.v13.config.ts"
+    },
+    "stack": {
+      "command": "PYTHONPATH=src python3 tools/bench/v13_extension_stack.py",
+      "result_file": "v13-lifecycle-stack-20261021.json",
+      "result_sha256": "0dbe1cf6910450b4f4dbd78da1b317a07cb9099d569650d4bc0678f817432da6",
+      "checks": 18,
+      "java_ports": [49492],
+      "ui_ports": [49493],
+      "ports_released": true,
+      "browser": "Google Chrome headless=new",
+      "device_effect": "not_verified",
+      "model": "not-used",
+      "shared_environment": false
+    }
+  },
+  "not_verified": [
+    "The new annotation AI DDL was not applied to any shared database.",
+    "The fixture replaces the external GIS, task, annotation, algorithm and fence sources with deterministic offline data.",
+    "No real MQTT event source, model inference, shared deployment or real device control was used."
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "schema_version": "flight-intent-evaluation-freeze/v1",
+  "observed_at": "2026-10-16T12:48:42Z",
+  "task": "current-code-100-synthetic-intent-replay",
+  "report": "report.json",
+  "repository": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent",
+  "code_sha": "98178f821bd860e9f71bdfc7aa16195144f75eac",
+  "branch": "feature/natural-language-cockpit",
+  "dirty_paths_before": ["docs/natural-language-cockpit.md"],
+  "dirty_scope": "Root agent task-card documentation only; product, prompt, schema and fixture frozen.",
+  "runtime": {"python": "3.13.2", "actor": "intent-evaluation-actor"},
+  "source_sha256": {
+    "tools/bench/cockpit_intents.py": "298a8a51a882da9efb30f50873cba58ed59b2b57edd3ac8d967f0b63013ffe23",
+    "src/lingxi_flight_control/cockpit.py": "b24d3124b8e45fdb9b604b06c4d1d4746d723d46df67abeba9b8b0cda20d0be4",
+    "src/lingxi_flight_control/agent.py": "c83c30c2efd4ec546298dddae779d52d0eb6ae6c3f4d819ddcd197041a3a672b",
+    "src/lingxi_flight_control/full_control.py": "d844dd9da7ede6615fdaf28c89b594f98c71476e7fbe9f81ec50078aabf34360",
+    "src/lingxi_flight_control/models.py": "e10c3de393d93743ed60bb695a52c2b6a1f8357bb0ce302e77532043ea9392ba",
+    "src/lingxi_flight_control/executor.py": "2c9d96df7ffb58a5f7cf280469888fb47465cef63509bc7cc23b3486bb990f7e",
+    "src/lingxi_flight_control/ollama_decider.py": "4835e20296b476d60e9867ff328919049b8a131ccb8dc6148082750cada6351f"
+  },
+  "model_identity_before": {
+    "read_only_endpoint": "http://192.168.130.238:11434/api/tags",
+    "name": "qwen3.5:9b",
+    "digest": "6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7",
+    "size": 6594474711,
+    "quantization": "Q4_K_M",
+    "matches_previous_digest": true
+  },
+  "frozen_inputs": {
+    "fixture": "fixtures/intent_scenarios.json",
+    "fixture_sha256": "355395aa8c3e367afcca06080ae06caa7fa9277d2d68b5ecde47f5d06725a7cd",
+    "inputs_sha256": "ed771a519d99e5af11d881f6189e4f5c22e8e1dfca69f92249433808aa9cdbe2",
+    "labels_sha256": "e27a979d471489dd48535c9f50940967d44cf82f185cdf7aaaae2245284a72c1",
+    "context_sha256": "91670a74d8db54c6756f0e6549609918a950408f56cd6ebb070566e9e8f7b909",
+    "prompt_sha256": "ecdcc2bca38b762dcda44ba49e074c534757a4bf5623417a09eb94bd81035564",
+    "tool_schema_sha256": "395be055f367ee1fa3d6d64b70836896813f0aa1f382fe8e3c182b6c9f18ae21",
+    "artifact_prompt_label": "v1.0 is the record version assigned by this evaluation to this exact prompt hash, not an existing product semantic-version constant; the prompt hash is authoritative."
+  },
+  "budgets": {
+    "max_samples": 100,
+    "max_model_calls": 160,
+    "max_seconds": 1800,
+    "max_tokens": 2000000,
+    "request_timeout_seconds": 30,
+    "cost": null,
+    "cost_status": "not_provided_by_local_provider"
+  },
+  "scope": "Synthetic bounded-loop proposals and input guard before service policy; synthetic read_state may execute, while preview, confirmation, mutating execution and platform calls are forbidden.",
+  "allowed_network": ["existing GPU Ollama HTTP model endpoint only"],
+  "forbidden_effects": ["platform calls", "business data writes", "MQTT", "device actions", "service startup or restart", "deployment"],
+  "previous_report_preserved": "docs/evidence/cockpit-intents-current-20261016.json"
+}

@@ -1,0 +1,62 @@
+{
+  "schema_version": "flight-plan-mode-evidence/v1",
+  "created_at": "2026-10-19T10:12:38.713489+00:00",
+  "code_commit": "387ccca57c085cc1731580654242ab9bf81e40db",
+  "branch": "feature/natural-language-cockpit",
+  "model": "qwen3.5:9b",
+  "endpoint_class": "existing LAN Ollama",
+  "plan_prompt_sha256": "357c2cb7f18de95fa933b401436054414e27b0209ce273ebd44dd956ff83473d",
+  "max_plan_steps": 5,
+  "input": "往前飞10米，并帮我拍张照",
+  "proposal": {
+    "status": "preview_required",
+    "card_kind": "flight_plan",
+    "steps": [
+      {
+        "action": "move_forward",
+        "parameters": {
+          "distance_m": 10
+        }
+      },
+      {
+        "action": "camera_photo",
+        "parameters": {}
+      }
+    ],
+    "message": "请核对整份飞行计划（共2步）：第1步：向机头正前方水平平移，不改变航向（distance_m=10）；第2步：拍摄单张照片。确认后按顺序执行，任一步失败即停止，不会自动重试。",
+    "planning_seconds": 43.225,
+    "model_http_calls": 3
+  },
+  "confirmation": {
+    "status": "accepted",
+    "plan_status": "completed",
+    "failed_step": null,
+    "step_statuses": [
+      "accepted",
+      "accepted"
+    ],
+    "dispatched": false,
+    "device_effect": "not_verified",
+    "confirm_seconds": 0.003,
+    "model_http_calls_during_confirm": 0
+  },
+  "final_state": {
+    "longitude": 113.00009769270969,
+    "latitude": 22.999999999970047,
+    "photo_count": 1,
+    "revision": 2,
+    "control_owner_is_actor": true
+  },
+  "side_effects": {
+    "execution_mode": "simulator",
+    "platform_requests": 0,
+    "device_requests": 0,
+    "confirmation_cards_shown": 1
+  },
+  "limitations": [
+    "Simulator-only closed loop; no Java platform or real device was contacted.",
+    "One synthetic utterance and one model run; not an accuracy or reliability evaluation.",
+    "Plan completion is deterministic sequential execution of the approved plan; no model re-planning after each receipt.",
+    "Conditional/branching compound intents are not supported and are clarified."
+  ]
+}

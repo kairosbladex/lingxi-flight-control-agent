@@ -1,0 +1,53 @@
+{
+  "topic": "professional-device-card-local-header",
+  "date": "2026-10-16",
+  "ui_repository": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui",
+  "ui_branch": "feature/natural-language-cockpit",
+  "ui_baseline_commit": "7f14780eb2fca94dca4fa664d26edd246c11d780",
+  "source_repository": "/Users/wangxiaolin/PycharmProjects/onegismap_a-b4-20260910",
+  "source_commit": "35574cba46d498e0992de05504756bccf7014ade",
+  "source_read_mode": "git show of fixed commit only; original conflicted worktree was not modified or run",
+  "source_file": "src/views/hangar/components/devices.vue",
+  "source_file_sha256": "ddda5836c9e843722e069d0576f06eafe360863a1639068c4be951205846faa8",
+  "source_references": {
+    "template": "devices.vue:2-108",
+    "default_and_arrows": "devices.vue:161-198",
+    "arrow_geometry": "devices.vue:257-280",
+    "plate_avatar_and_text": "devices.vue:297-363",
+    "title_height": "src/components/title/index.vue:83-95"
+  },
+  "reference_local_px_at_1920": {
+    "title_height": 32,
+    "plate_height": 94,
+    "backdrop": { "left": 0, "bottom": 0, "height": 58 },
+    "info": { "top": 10, "padding_left": 40, "padding_right": 30 },
+    "avatar": { "width": 63, "height": 39, "margin_right": 10, "margin_bottom": 10 },
+    "arrows": { "top_from_card": 60, "edge": 5, "size": 20 }
+  },
+  "scaling": {
+    "rule": "existing cockpit-unit = viewport width / 1920 px; fixed source px scale by 2/3 at1280",
+    "tested_viewports": [[1920, 1080], [1280, 900], [414, 747]],
+    "mobile": "peripheral card remains hidden; existing assistant flow remains available",
+    "limit": "Only the listed local dimensions are sourced. The outer card/sidebar width and absolute vertical position are existing adaptations, not independently established source rectangles."
+  },
+  "existing_assets_reused": [
+    { "target": "hangar2-dbg.png", "source": "src/assets/hangar2/dbg.png", "sha256": "ef8e4be7b6a3ff4edf859951d6cdbae194d0bd9cebc16a33f3e754ede9ccf0d6" },
+    { "target": "hangar2-hangar.png", "source": "src/assets/hangar2/hangar.png", "sha256": "dddcc9946f72607db9ebe90259204a1bc8f4aa5d09e1c63598c1e2ed8d0cfcbc" },
+    { "target": "hangar2-uav.png", "source": "src/assets/hangar2/uav.png", "sha256": "dbe1139b4727b39b0b28b75497198a0288b5a6c888b79a22b5772f4a00f0e6c9" }
+  ],
+  "display_contract": {
+    "initial_device": "hangar",
+    "both_arrows": "toggle the same local hangar/drone selection; no original typeChange business event",
+    "identity": "Names, place and serial number remain unprovided. Context IDs are shown only as explicitly labeled resource identifiers.",
+    "hangar_online": "always unknown; no authoritative hangar field exists in the current snapshot contract",
+    "drone_online": "only boolean state.online from a ready, available, successfully read snapshot; false stays offline; missing/invalid/unavailable/read failure stays unknown",
+    "occupancy": "No cabin-in/out claim; airborne and task state cannot substitute for uavInHangar.",
+    "facts_adaptation": "Keep existing bound project/task/control facts; existing battery/link rows are explicitly labeled as UAV values.",
+    "responsive_arrangement_limit": "The outer content width remains the existing335px adaptation at both desktop widths. Local source dimensions scale with cockpit-unit: the online badge wraps below the portrait/text at1920, but fits on the same row toward the right at1280. This is not a claim that the complete internal arrangement matches source pixels across resolutions; the outer sidebar is not changed in this slice.",
+    "title_artwork": "Existing adapted section-title artwork is retained. This slice does not claim the original title artwork or all device details are restored.",
+    "continuity": "Same CockpitSession, request client, confirmation lifecycle, Teleport authority buttons, and Cesium canvas."
+  },
+  "excluded": ["weather grid", "new snapshot fields", "new business reads", "maintenance/debug/more business buttons", "control acquisition", "automatic video lookup/playback", "deployment", "real device actions"],
+  "test_input_source": "Existing synthetic HTTP fixture; API boundary only is substituted. Vue, DOM, CSS, Chrome pointer input and Cesium are real local implementations.",
+  "evidence_limit": "Offline UI behavior and source-local geometry only; no model understanding score, full test-environment visual acceptance, Java deployment or physical flight result."
+}

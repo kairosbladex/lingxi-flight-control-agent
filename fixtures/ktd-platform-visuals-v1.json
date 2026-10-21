@@ -1,0 +1,9 @@
+{
+	"code":200,
+	"data":{"schema_version":"lingxi-platform-visuals/v1","actor_employee_id":"employee-1","project_id":"project-1","site_id":"site-1","hangar_id":"hangar-1","drone_id":"drone-1","task_id":"task-1","generated_at":1.7E9,"streams":[{"kind":"site","sources":[{"format":"hls","url":"https://media.example.test/site/live.m3u8","expires_at":null}],"reason_codes":[]},{"kind":"hangar","sources":[{"format":"mp4","url":"https://media.example.test/hangar/live.mp4","expires_at":null}],"reason_codes":[]},{"kind":"drone","sources":[{"format":"hls","url":"https://media.example.test/drone/live.m3u8?sig=synthetic-example","expires_at":null},{"format":"flv","url":"https://media.example.test/drone/live.flv","expires_at":null},{"format":"webrtc","url":"webrtcs://media.example.test/rtc/drone","expires_at":null}],"reason_codes":[]}]},
+	"errDetailMsg":"",
+	"extra":"",
+	"message":"操作成功！",
+	"success":true,
+	"traceId":""
+}

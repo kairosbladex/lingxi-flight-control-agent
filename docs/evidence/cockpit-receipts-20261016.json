@@ -1,0 +1,23 @@
+{
+  "recorded_at": "2026-10-16T15:19:15+08:00",
+  "kind": "offline-engineering-validation-not-flight-acceptance",
+  "agent_base_commit": "ef163ece7b9b837d6a2c9313942aa333cd681052",
+  "java_commit": "728b9d34ddaf3995739a98e34bcae55097394a30",
+  "frontend_commits": ["27d8ef75b6c4c62a37e2cd7a68c5106651f0f2ce", "72712834fb674b1b1fcd63a732b0af6f5e40a1a9"],
+  "java_fixture_sha256": "19f13c591e93466f65414a0294851022bfe159b53e8412380d93ab13c7365eaa",
+  "python": {"command": "bash tools/ci/offline_tests.sh", "tests": 500, "failures": 0, "errors": 0},
+  "java": {"reactor_modules": 11, "inspection_tests": 75, "visualization_mockmvc_tests": 3, "failures": 0, "errors": 0, "skipped": 0, "source_log": "/tmp/flight-command-final-green.log"},
+  "frontend": {"unit_tests": 92, "failures": 0, "build": "passed", "browser_scenarios": 53, "fixture_api_requests": 122, "fixture_confirmations": 21, "forbidden_requests": 0, "browser_errors": 0, "source_browser_report": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-SlfZ41/evidence.json"},
+  "loopback": {"command": "PYTHONPATH=src python3 tools/bench/command_receipt_smoke.py", "result": "PASS", "raw_converter_fixture_status": "completed", "public_receipt_fields": 13, "agent_http_requests": 22, "java_snapshot_http_requests": 16, "java_receipt_http_requests": 6, "java_control_posts": 1, "synthetic_model_decisions": 2, "confirmation_cards": 2},
+  "side_effects": {"external_platform_requests": 0, "physical_device_requests": 0, "actual_model_calls": 0, "shared_database_migrations": 0, "deployments": 0},
+  "source_sha256": {
+    "src/lingxi_flight_control/cockpit.py": "fa960efd6c58b5ca084410030b8acb51dbe902e8e95ee6dbcaa5922f2528db00",
+    "src/lingxi_flight_control/ktd_platform.py": "723dddb90abcbbe2ad86c61ad8dc5b63ebd76ab95ea371e6d8968e1725683946",
+    "src/lingxi_flight_control/command_receipts.py": "91af76164b9c625337bc536fc0769aa741fd67f28b44647de780c4cd4cbf5f06",
+    "src/lingxi_flight_control/platform_runtime.py": "38013d8256d2c45b35f8ff07b5e94bfd848cc1e77c4f59f31087199c36392f44",
+    "tools/bench/command_receipt_smoke.py": "9d8d6c72d1251c5e070d2b895e0ba8566640cb998aa7343cd98da613c8e4b2b1"
+  },
+  "business_accuracy": "not_evaluable",
+  "physical_displacement_accuracy": "not_evaluable",
+  "limitations": ["Synthetic boundaries are not live platform acceptance.", "Current real Java authority and control-link gates deny distance actions.", "H2 tests do not validate deployed MySQL migrations or transaction wiring.", "Browser fixtures do not establish parity with the current shared test environment.", "No new live-model evaluation was run."]
+}

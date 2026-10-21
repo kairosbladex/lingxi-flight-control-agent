@@ -1,0 +1,241 @@
+[
+  {
+    "event": "probe_start",
+    "time": "2026-10-21T06:49:17.156269+00:00",
+    "model": "qwen3.5:9b",
+    "offline_scripted": false,
+    "cases_sha256": "1b73f3ef27770d1960a0cb7a424406d8094d5494b35f9e34989848a8aaa1b185",
+    "prompt_sha256": "1674d12cad0a6bcbe027877b5931ca6c8354bb1fca74ebe04dde6d30458021c4",
+    "budgets": {
+      "seconds": 360,
+      "calls": 12,
+      "request_timeout": 45,
+      "run_timeout": 65,
+      "steps": 3,
+      "num_ctx": 32768,
+      "max_output_tokens": 2048
+    },
+    "session": "one synthetic session; previews only; no confirmations",
+    "port": 39751
+  },
+  {
+    "event": "probe_complete",
+    "passed": 6,
+    "total": 6,
+    "rows": [
+      {
+        "case": 0,
+        "input": "拍一张照片",
+        "expected_action": "camera_photo",
+        "status": "preview_required",
+        "error_code": null,
+        "action": "camera_photo",
+        "parameters": {},
+        "elapsed_ms": 28845,
+        "model_calls": 1,
+        "passed": true,
+        "dispatched": false,
+        "idempotent_replay": true
+      },
+      {
+        "case": 1,
+        "input": "向前飞2米",
+        "expected_action": "move_forward",
+        "status": "preview_required",
+        "error_code": null,
+        "action": "move_forward",
+        "parameters": {
+          "distance_m": 2
+        },
+        "elapsed_ms": 28041,
+        "model_calls": 1,
+        "passed": true,
+        "dispatched": false,
+        "idempotent_replay": true
+      },
+      {
+        "case": 2,
+        "input": "向后飞2米",
+        "expected_action": "move_backward",
+        "status": "preview_required",
+        "error_code": null,
+        "action": "move_backward",
+        "parameters": {
+          "distance_m": 2
+        },
+        "elapsed_ms": 34006,
+        "model_calls": 1,
+        "passed": true,
+        "dispatched": false,
+        "idempotent_replay": true
+      },
+      {
+        "case": 3,
+        "input": "拍一张照片",
+        "expected_action": "camera_photo",
+        "status": "preview_required",
+        "error_code": null,
+        "action": "camera_photo",
+        "parameters": {},
+        "elapsed_ms": 34439,
+        "model_calls": 1,
+        "passed": true,
+        "dispatched": false,
+        "idempotent_replay": true
+      },
+      {
+        "case": 4,
+        "input": "向右平移2米",
+        "expected_action": "move_right",
+        "status": "preview_required",
+        "error_code": null,
+        "action": "move_right",
+        "parameters": {
+          "distance_m": 2
+        },
+        "elapsed_ms": 30628,
+        "model_calls": 1,
+        "passed": true,
+        "dispatched": false,
+        "idempotent_replay": true
+      },
+      {
+        "case": 5,
+        "input": "向左平移2米",
+        "expected_action": "move_left",
+        "status": "preview_required",
+        "error_code": null,
+        "action": "move_left",
+        "parameters": {
+          "distance_m": 2
+        },
+        "elapsed_ms": 28216,
+        "model_calls": 1,
+        "passed": true,
+        "dispatched": false,
+        "idempotent_replay": true
+      }
+    ],
+    "model_calls": [
+      {
+        "case": 0,
+        "timeout_sec": 45.0,
+        "tool_count": 83,
+        "tools_sha256": "f54c290d36b2433b00e69a3977f0d157a84206ac1fe4f0a4095d31ba8468de47",
+        "generation": {
+          "done_reason": "stop",
+          "prompt_eval_count": 7148,
+          "eval_count": 49,
+          "load_duration": 16288325007,
+          "prompt_eval_duration": 9947075930,
+          "eval_duration": 1859883248,
+          "total_duration": 28389992454
+        },
+        "tools": [
+          "camera_photo"
+        ],
+        "elapsed_ms": 28391
+      },
+      {
+        "case": 1,
+        "timeout_sec": 45.0,
+        "tool_count": 83,
+        "tools_sha256": "f54c290d36b2433b00e69a3977f0d157a84206ac1fe4f0a4095d31ba8468de47",
+        "generation": {
+          "done_reason": "stop",
+          "prompt_eval_count": 7194,
+          "eval_count": 122,
+          "load_duration": 12840814968,
+          "prompt_eval_duration": 10059194416,
+          "eval_duration": 4825834215,
+          "total_duration": 28029264205
+        },
+        "tools": [
+          "move_forward"
+        ],
+        "elapsed_ms": 28030
+      },
+      {
+        "case": 2,
+        "timeout_sec": 45.0,
+        "tool_count": 83,
+        "tools_sha256": "f54c290d36b2433b00e69a3977f0d157a84206ac1fe4f0a4095d31ba8468de47",
+        "generation": {
+          "done_reason": "stop",
+          "prompt_eval_count": 7239,
+          "eval_count": 129,
+          "load_duration": 17804181005,
+          "prompt_eval_duration": 10755067930,
+          "eval_duration": 5116355940,
+          "total_duration": 33995554750
+        },
+        "tools": [
+          "move_backward"
+        ],
+        "elapsed_ms": 33996
+      },
+      {
+        "case": 3,
+        "timeout_sec": 45.0,
+        "tool_count": 83,
+        "tools_sha256": "f54c290d36b2433b00e69a3977f0d157a84206ac1fe4f0a4095d31ba8468de47",
+        "generation": {
+          "done_reason": "stop",
+          "prompt_eval_count": 7282,
+          "eval_count": 219,
+          "load_duration": 14377732794,
+          "prompt_eval_duration": 10806705802,
+          "eval_duration": 8831515435,
+          "total_duration": 34429418988
+        },
+        "tools": [
+          "camera_photo"
+        ],
+        "elapsed_ms": 34430
+      },
+      {
+        "case": 4,
+        "timeout_sec": 45.0,
+        "tool_count": 83,
+        "tools_sha256": "f54c290d36b2433b00e69a3977f0d157a84206ac1fe4f0a4095d31ba8468de47",
+        "generation": {
+          "done_reason": "stop",
+          "prompt_eval_count": 7328,
+          "eval_count": 110,
+          "load_duration": 15767973029,
+          "prompt_eval_duration": 10231758659,
+          "eval_duration": 4286573663,
+          "total_duration": 30618520335
+        },
+        "tools": [
+          "move_right"
+        ],
+        "elapsed_ms": 30619
+      },
+      {
+        "case": 5,
+        "timeout_sec": 45.0,
+        "tool_count": 83,
+        "tools_sha256": "f54c290d36b2433b00e69a3977f0d157a84206ac1fe4f0a4095d31ba8468de47",
+        "generation": {
+          "done_reason": "stop",
+          "prompt_eval_count": 7373,
+          "eval_count": 110,
+          "load_duration": 13095304142,
+          "prompt_eval_duration": 10306763355,
+          "eval_duration": 4500026410,
+          "total_duration": 28205259694
+        },
+        "tools": [
+          "move_left"
+        ],
+        "elapsed_ms": 28207
+      }
+    ],
+    "java_control_posts": 0,
+    "write_attempts": 0,
+    "confirmations": 0,
+    "device_requests": 0,
+    "server_stopped": true
+  }
+]

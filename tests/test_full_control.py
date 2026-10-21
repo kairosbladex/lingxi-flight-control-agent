@@ -70,13 +70,16 @@ class FullControlSimulatorTests(unittest.TestCase):
 
     def test_route_camera_infrared_payload_and_parameters(self):
         cases = [
+            (FlightControlAction.UPLOAD_ROUTE, {"route_id": "r1", "waypoints": [
+                {"longitude": 1, "latitude": 2}, {"longitude": 1.1, "latitude": 2.1},
+                {"longitude": 1.2, "latitude": 2.2}]}),
+            (FlightControlAction.EXECUTE_ROUTE, {}),
             (FlightControlAction.ROUTE_PAUSE, {}),
             (FlightControlAction.ROUTE_RESUME, {}),
+            (FlightControlAction.ROUTE_PAUSE, {}),
             (FlightControlAction.CONTINUE_FROM_BREAKPOINT, {"index": 2}),
             (FlightControlAction.POINT_FLIGHT, {"longitude": 113.4, "latitude": 34.8, "altitude_m": 50}),
             (FlightControlAction.POINT_ORBIT, {"longitude": 113.4, "latitude": 34.8, "radius_m": 20}),
-            (FlightControlAction.UPLOAD_ROUTE, {"route_id": "r1", "waypoints": [{"longitude": 1, "latitude": 2}]}),
-            (FlightControlAction.EXECUTE_ROUTE, {}),
             (FlightControlAction.SET_MOVE_SPEED, {"value": 8}),
             (FlightControlAction.SET_ROLL_SPEED, {"value": 20}),
             (FlightControlAction.SET_PITCH_SPEED, {"value": 20}),

@@ -1,0 +1,44 @@
+[
+  {
+    "pitch": 180,
+    "labels": {
+      "value": {
+        "x": 1419.125,
+        "y": 882.03125,
+        "width": 45.109375,
+        "height": 14
+      },
+      "ticks": [
+        {
+          "x": 1420.15625,
+          "y": 987,
+          "width": 38.765625,
+          "height": 16
+        }
+      ],
+      "overlaps": 0
+    },
+    "screenshot": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/12e-simple-gimbal-upper-boundary.png"
+  },
+  {
+    "pitch": -180,
+    "labels": {
+      "value": {
+        "x": 1419.125,
+        "y": 988.015625,
+        "width": 51.5625,
+        "height": 14
+      },
+      "ticks": [
+        {
+          "x": 1420.15625,
+          "y": 889,
+          "width": 30.109375,
+          "height": 16
+        }
+      ],
+      "overlaps": 0
+    },
+    "screenshot": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/12e-simple-gimbal-lower-boundary.png"
+  }
+]

@@ -1,0 +1,19 @@
+{
+  "command": "env -u COCKPIT_API_URL COCKPIT_EVIDENCE_DIR=<evidence>/red npm run e2e:cockpit",
+  "actual_product_code_commit": "7f14780eb2fca94dca4fa664d26edd246c11d780",
+  "precondition": "npm run build completed successfully before this browser run; only the new browser assertions had changed",
+  "exit_code": 1,
+  "assertion": "Professional source card starts with the hangar",
+  "expected": "机库",
+  "actual": null,
+  "observed_file": "red/run-BycvHJ/device-header-observed.json",
+  "screenshot": "red/run-BycvHJ/04f-device-header-1920-observed.png",
+  "observed_missing_behavior": {
+    "legacy_generic_tabs": 1,
+    "old_portrait_width": 76,
+    "old_header_height": 100,
+    "source_header_kind": null,
+    "source_backdrop_and_arrows": null
+  },
+  "interpretation": "The actual built Vue page still used the generic tab/portrait structure. This failure was observed before changing Workspace or CSS."
+}

@@ -1,0 +1,80 @@
+{
+  "schema_version": "cockpit-service-bench-harness-evidence/v1",
+  "date": "2026-10-16",
+  "scope": "service benchmark implementation and root offline verification; not live model results",
+  "baseline": {
+    "repository": "lingxi-flight-control-agent",
+    "branch": "feature/natural-language-cockpit",
+    "head": "de0725faaf8ca9d885078767b903152697d50703",
+    "product_commit": "2284ee6a1f00c6385c2c860f420caacbe901ebc9",
+    "preexisting_task_card_preserved": true
+  },
+  "files_sha256": {
+    "tools/bench/cockpit_intents.py": "27e29edcb794137dd6458b017f2ab40806355f3eddbb29e4336d01c2903fd29c",
+    "tools/bench/cockpit_service_intents.py": "4305f8c83fc025ac61a3e7e340c8f8824a25afb3213f3713d1ef8de29f036f70",
+    "tests/test_intent_service_scenarios.py": "ee1a0edbd6790a9b6d1cde3a033fee306db58dd5df5496a450c6a52089a86e4a",
+    "fixtures/intent-scenarios-v2.json": "6ac73f55874d0c0fabcc01fae5074b57538ab1659a9384b907d5902107cac354",
+    "fixtures/intent-scenarios-v2.provenance.json": "11ca52651a5d5984e1edce3c66a479e1418eb708dd8ea84c64e90e2cb0cde385",
+    "fixtures/intent_scenarios.json": "355395aa8c3e367afcca06080ae06caa7fa9277d2d68b5ecde47f5d06725a7cd"
+  },
+  "worker_tdd_account": {
+    "source": "worker session reports; root did not independently observe or reconstruct historical red runs",
+    "red_behaviors": [
+      "documented CLI rejected missing --surface support",
+      "service runner did not yet exist",
+      "real script entrypoint could not import tools with only PYTHONPATH=src",
+      "non-mapping HTTP response did not mark token usage unknown"
+    ],
+    "new_test_methods": 10,
+    "existing_proposal_test_methods": 21,
+    "mock_boundary": "external model HTTP and time only; real CockpitService, loop, registry, checkpoint, executor and simulator"
+  },
+  "root_verified": {
+    "command": "bash tools/ci/offline_tests.sh",
+    "tests": 583,
+    "failures": 0,
+    "errors": 0,
+    "duration_seconds": 3.179,
+    "includes_offline_socket_guard": true,
+    "diff_check": "passed",
+    "source_and_test_hashes_match_worker_freeze": true,
+    "independent_scripted_policy_checks": {
+      "scope": "Root injected independently correct tool calls at external HTTP only; not live model results.",
+      "cases": {
+        "movement_08": {"input": "Please move down by 2 metres.", "tool": "move_down", "arguments": {"distance_m": 2}, "service_status": "preview_required", "preview_calls": 1},
+        "flight_02": {"input": "就在当前位置降落", "tool": "land", "arguments": {}, "service_status": "preview_required", "preview_calls": 1}
+      },
+      "confirmations": 0,
+      "mutating_tool_calls": 0,
+      "state_unchanged": true,
+      "live_model_calls": 0
+    },
+    "documented_cli_coverage": {
+      "command": "PYTHONPATH=src python3 tools/bench/cockpit_intents.py --surface service",
+      "model_calls": 0,
+      "denominator": 102,
+      "action_coverage": "59/59 declared expected actions; not 59 model successes"
+    }
+  },
+  "fixture": {
+    "source": "synthetic_agent_authored_contract",
+    "human_reviewed": false,
+    "real_flight_truth": false,
+    "inherited_cases": 100,
+    "added_cases": ["payload_06", "route_07"],
+    "intent_labels_sha256": "37ab74d818b62960a5e4225016c729a8b5439608c82bafe4732a2d99244f0ffc",
+    "service_labels_sha256": "e5389e0b6c418e2a17b2c5ecb343f19762dfb03d007cce262787b0f78d8fbb47",
+    "initial_contexts_sha256": "2b7b47f00d225ed6bd7d14e869bb37a49005f16124bd2a467dd1f0186aff5d8a",
+    "v1_unchanged": true,
+    "service_labels_independent_of_original_intent_labels": true,
+    "route_states": {"route_01": "running", "route_02": "paused", "route_03": "paused", "route_06": "uploaded", "route_07": "idle"},
+    "accuracy_status": "not_evaluable"
+  },
+  "limits": [
+    "The 11-case scripted integration test supplies fixed external model responses; it is not a 102-case live-model result.",
+    "Every case uses a fresh real service and simulator; mutation and confirmation entrypoints are blocked and counted.",
+    "Multiple-action samples cover only the first preview.",
+    "The live report preserves timeout, error, missing and uncertain rows in the full denominator.",
+    "Original proposal v1 reports are not overwritten or treated as service-level A/B results."
+  ]
+}

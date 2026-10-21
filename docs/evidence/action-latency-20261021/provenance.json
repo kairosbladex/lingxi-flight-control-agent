@@ -1,0 +1,40 @@
+{
+  "runtime_sha": "309bb03c4a607c8eb5b71d438e2b7176b0b881e1",
+  "baseline_head": "9e49a4f7f6cb4798306c49492d3189a44f9b6a86",
+  "model_metadata": [
+    {
+      "version": "0.21.0"
+    },
+    {
+      "tags": [
+        {
+          "name": "qwen3.5:9b",
+          "digest": "6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7",
+          "size_vram": null,
+          "context_length": null
+        }
+      ]
+    },
+    {
+      "ps": [
+        {
+          "name": "qwen3.5:9b",
+          "digest": "6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7",
+          "size_vram": 10008863360,
+          "context_length": 32768
+        }
+      ]
+    }
+  ],
+  "source_sha256": {
+    "src/lingxi_flight_control/cockpit.py": "eb7e9526862f9d8ee8780e05b7d6cfaa2e221c4f43fbf69cc8b1ba701a304007",
+    "src/lingxi_flight_control/browser_gateway.py": "dc12d8f21953a70a7104b0fdf2a12b2840c4787d178e85fe82d7a34679efeb1d",
+    "src/lingxi_flight_control/ollama_decider.py": "4835e20296b476d60e9867ff328919049b8a131ccb8dc6148082750cada6351f",
+    "src/lingxi_flight_control/platform_runtime.py": "568bc9a3607362e42245e6a5dff5804b3d750275346487c72a5d0ba70ed2c029",
+    "tools/platform_cockpit_server.py": "1038299d11705c4d0547bc98423ecf3b9f9e6c84e87a52c07f93a0d8a246b6a2",
+    "tools/bench/action_latency_smoke.py": "0271a308e956ad5f5e9a222711f3de2bb0015a1111da03908eecbf666e233e00",
+    "tests/test_browser_gateway.py": "96817f88a4aefca5ac585194c3a1a7f8ffe274e180fd2f91915061509115b7d9"
+  },
+  "offline_tests": 747,
+  "scope": "isolated gateway and synthetic Java; shared existing Ollama model service; no flight control or confirmations"
+}

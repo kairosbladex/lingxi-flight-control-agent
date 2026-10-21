@@ -1,0 +1,45 @@
+{
+  "schema_version": "simple-cockpit-instruments-source/v1",
+  "source_repository": "/Users/wangxiaolin/PycharmProjects/onegismap_a-b4-20260910",
+  "source_commit": "35574cba46d498e0992de05504756bccf7014ade",
+  "read_method": "git show only; conflicted working tree is not a source and is not modified",
+  "sources": [
+    {"path": "src/views/hangar/components/dashboard.vue", "sha256": "e7707c01fe7cb640c03431ba9688df597ca3a6863dc2db727151df376b9be803", "references": ["158-207: flight height, independent ASL/ALT and simple SPD", "209-303: heading dial, rotating course and instrument1/instrument4 assets", "304-325: camera pitch scale and simple VS", "1018-1055: flex/space-evenly row, height170 and speed typography", "1059-1186: height geometry, 120px heading dial", "1243-1313: camera pitch scale height110 and vertical speed placement"]},
+    {"path": "src/views/hangar/index.vue", "sha256": "eaf4bd4837f6116b15da1d04b141e85e4dfd817e996ba21f251b8e727b3ddc05", "references": ["1754-1767: simple .uav-instrument fixed bottom43/right439/width313/height184/padding6px0/border-box and high width110"]},
+    {"path": "src/store/modules/trail.ts", "sha256": "b0b0ebeccb9e619ded22ffefa29ca0be1bf01e8f36eefa74dd1eab339a25abbb", "references": ["79-81: source courseRaw and normalized heading display", "86-89: camera pitch percentage round(100*(tilt+180)/360)", "97-115: vertical speed, ground speed, altitude and relative height are separate fields"]}
+  ],
+  "geometry": {
+    "units": "CSS pixels; x,y,width,height independently derived from fixed source",
+    "viewport_1920x1080": [1168, 853, 313, 184],
+    "viewport_1280x900": [778.6666666667, 748.6666666667, 208.6666666667, 122.6666666667],
+    "derivation": "1920 x=1920-439-313,y=1080-43-184; 1280 source rem dimensions scale2/3 while viewport height stays900",
+    "tolerance_css_px": 1,
+    "columns": "Source basis widths110/120/100 total330 exceeds313; original flex-shrink applies. Do not assert those basis widths as actual column rectangles."
+  },
+  "field_mapping": {
+    "ASL_source_altitude": "existing readTelemetry.altitude from altitude_m; absolute height only; vertical datum unavailable and no sea-level conversion",
+    "ALT_source_height": "existing readTelemetry.relativeHeight from height_m; independent of absolute height",
+    "heading_source_course": "existing readTelemetry.heading from heading_deg/yaw_deg; signed value retained",
+    "SPD_source_groundSpeed": "existing readTelemetry.groundSpeed from ground_speed_mps",
+    "camera_pitch_source_tilt": "existing readTelemetry.gimbalPitch from gimbal_pitch_deg",
+    "VS_source_verticalSpeed": "existing readTelemetry.verticalSpeed from vertical_speed_mps"
+  },
+  "assets": [
+    {"source": "src/assets/hangar2/instrument1.png", "existing_target": "src/assets/cockpit/hangar2-instrument1.png", "sha256": "4ac65f09709824462c1f04ab403b437caed46eb78598444a5913391d0118b6d2"},
+    {"source": "src/assets/hangar2/instrument4.png", "existing_target": "src/assets/cockpit/hangar2-instrument4.png", "sha256": "5dd877c7ae357f811dba28b05ee2b5508a333c2a4d79030ab39a7b8d7518e94e"}
+  ],
+  "boundaries": [
+    "Strict platform snapshot has no speed/gimbal/obstacle fields; absent values remain unavailable. The UI Record type does not widen the backend schema.",
+    "Unknown heading or camera pitch draws no current-value pointer. Missing height is never derived from the other height.",
+    "No obstacle regions, levels or safety conclusion are drawn.",
+    "Geometry is source-derived and checked on the real product Vue/Chrome page, not full original runtime pixel equality."
+  ],
+  "adaptations": [
+    "Existing execution mode, snapshot status and explicit vertical-datum note remain visible in the telemetry header.",
+    "Existing signed snapshot heading is drawn and displayed directly: raw-45deg remains-45.0deg, not the old trail store normalized315deg. No source continuous-course history or second state model is introduced.",
+    "Local instrument projection accepts heading[-360,360] and camera pitch[-180,180]. Unknown, non-numeric or out-of-axis angles remain unavailable with no pointer;999deg is not normalized into a plausible value. Valid camera pitch uses the source percentage formula without rewriting the reading.",
+    "Unavailable SPD/VS text uses14px source-scaled type instead of the20px numeric type so the explicit unknown label fits inside the fixed frame.",
+    "When a valid camera pitch reaches the upper20percent or lower20percent of the axis, the corresponding fixed endpoint text is hidden to avoid overlap with the current-value text. The axis extent, measured value and pointer position are unchanged; missing values still show both endpoint labels and no pointer.",
+    "Existing session, confirmation, map and media lifecycle are reused; no new API, telemetry schema, dependency or business controller is added."
+  ]
+}

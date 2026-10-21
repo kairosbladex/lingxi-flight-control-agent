@@ -1,0 +1,49 @@
+{
+  "checkedAt": "2026-10-16T11:04:29.733Z",
+  "basis": "Independent archived ordinary deployed CSS geometry at 1920x1080",
+  "sourceEvidence": "cockpit-test-ordinary-static-20261016.json",
+  "sourceCssSha256": "b40022ede6d887c16b4f80db90c4b37999d3e5bc4bd0033e2a24ab8533b24670",
+  "check": "Static product DOM shell with actual current product CSS; all assets and script/network APIs blocked. This checks geometry only, not complete Vue UI behavior.",
+  "results": [
+    {
+      "mode": "professional",
+      "expected": {
+        "x": 360,
+        "y": 824,
+        "width": 1200,
+        "height": 216
+      },
+      "actual": {
+        "x": 360,
+        "y": 824,
+        "width": 1200,
+        "height": 216
+      },
+      "pass": true
+    },
+    {
+      "mode": "simple",
+      "expected": {
+        "x": 825,
+        "y": 813,
+        "width": 1085,
+        "height": 224
+      },
+      "actual": {
+        "x": 825,
+        "y": 813,
+        "width": 1085,
+        "height": 224
+      },
+      "pass": true
+    }
+  ],
+  "requests": 1,
+  "businessEntrypointExecuted": false,
+  "businessRequests": 0,
+  "deviceActions": 0,
+  "limitations": [
+    "Prior ordinary source screenshots and temporary extraction artifacts were lost before archival. Root had visually reviewed both; only source geometry evidence remains persisted.",
+    "Full product build and browser workflow regression are performed separately by root."
+  ]
+}

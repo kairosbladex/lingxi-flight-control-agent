@@ -1,0 +1,73 @@
+{
+  "schema_version": "cockpit-vendor-ui-root-evidence/v1",
+  "date": "2026-10-17",
+  "repository": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui",
+  "baseline": "77639f2f335019440b37a14d19a1ca21cef95868",
+  "commit": "21b9239a0e81e194e771bcacfa408f624d87efdd",
+  "branch": "feature/natural-language-cockpit",
+  "remote_sha_verified": "21b9239a0e81e194e771bcacfa408f624d87efdd",
+  "worktree_clean": true,
+  "scope": "Typed vendor cards and independent manual results in the existing cockpit conversation; original59 actions and control buttons unchanged",
+  "root_verification": {
+    "unit_command": "npm test",
+    "unit_tests": 140,
+    "unit_failures": 0,
+    "build_command": "npm run build",
+    "build_result": "passed",
+    "build_advisory": "Existing HLS bundle exceeds500kB; no new dependency or bundling change",
+    "diff_check": "passed",
+    "independently_ran_browser_runner": false,
+    "reviewed_final_browser_json": true,
+    "independently_viewed_pngs": 3,
+    "indexed_committed_payload_files_verified": 11,
+    "selected_payload_plus_index_files": 12,
+    "selected_payload_plus_index_bytes": 2360722,
+    "source_run_build_hash_checks": 67,
+    "archived_raw_file_hash_checks": 193,
+    "archived_raw_bytes": 120891053
+  },
+  "browser_evidence": {
+    "path": "artifacts/vendor-control-ui-20261017/frozen/run-h0OQTq/evidence.json",
+    "sha256": "9f5d198abcec1cd1be116a7bf2b0b90c09be8d55ef8ef15cbaf93766df01b61a",
+    "source": "offline-http-fixture",
+    "scenarios": 115,
+    "prior_scenarios_preserved": 102,
+    "vendor_scenarios": 13,
+    "agent_fixture_api_requests": 224,
+    "fixture_confirmation_requests": 31,
+    "forbidden_requests": 0,
+    "physical_device_requests": 0,
+    "browser_errors": 0,
+    "vendor_automatic_queries": 0,
+    "vendor_automatic_resends": 0,
+    "vendor_continuation_credit": false,
+    "historical_runs_are_not_final": ["red/run-bdCIfz", "green/run-UHaqmG", "final/run-wwOBjO"]
+  },
+  "provenance": {
+    "path": "artifacts/vendor-control-ui-20261017/provenance.json",
+    "sha256": "310d632a9699576fc4380bdbccb9a9b2c272b6a9d86d39791302147618b37776",
+    "index_path": "artifacts/vendor-control-ui-20261017/delivery-index.json",
+    "index_sha256": "8925574ab2356da17f204016b3493f9bcb9d9e096935f27dea8e3f3a76025a9f",
+    "raw_archive_root": "/tmp/lingxi-vendor-ui-20261017.6TxuXx",
+    "recovery": "Copy any indexed archived_path back to its original_path after verifying SHA256; non-selected raw files were moved recoverably, never deleted or overwritten",
+    "cross_host_limit": "Only final raw JSON,3 vendor PNGs and indexes/red records are committed. Full inherited raw screenshots remain in the explicit local archive, with193 exact hashes and recovery paths."
+  },
+  "source_sha256": {
+    "src/flightControl.ts": "ab16680318b035d1f2542938d225437b8d6e8011912466aacae35cbe8cfb0675",
+    "src/CockpitPanel.vue": "abf6f300774e0355a280cb2b1c450a0577f81498b3c537d10a5c9b97b4b4fb71",
+    "scripts/cockpit-e2e.mjs": "a8951d3e75378a89f93ecd7507e6182557547382315df4e9622997e3ae71cc5b",
+    "tests/vendorControl.test.mjs": "d60443fd6cf6983ac0129a119ba925d2b7c68e87eb0938d2793babc80adcf234",
+    "README.md": "29c1440474ecb8fba151468c7bc40b75d3d56b5ff2e7924b5d55e1022a9ab898"
+  },
+  "visual_review": [
+    "1920px vendor confirmation: same assistant and five-field lifecycle, readable method and send/cancel buttons",
+    "414px request success: independently typed result with result0, unknown authority/link and no continue button",
+    "Mismatched-method query: previous report retained with explicit error and no resubmission"
+  ],
+  "limitations": [
+    "Synthetic UI responses validate browser behavior; they are not actual Java or device execution",
+    "The UI fixture deliberately retains control_owned=false to verify that a vendor result never upgrades ownership; actual backend preview independently requires current owner",
+    "Root reran unit/build and verified raw evidence and committed bytes; browser runner was executed by the UI agent",
+    "Real model accuracy, sustained vendor authority/DRC, complete online UI comparison, metadata/weather and physical flight remain unverified"
+  ]
+}
