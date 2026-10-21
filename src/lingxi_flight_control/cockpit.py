@@ -182,6 +182,8 @@ def build_proposal_registry(executor):
             side_effect=mutating, requires_confirmation=mutating,
         ))
     vendor_methods = getattr(runtime, 'vendor_request_methods', ())
+    for definition in getattr(runtime, 'java_tool_definitions', ()):
+        registry.register(replace(definition, handler=forbidden))
     if vendor_methods:
         registry.register(ToolDefinition(
             'request_vendor_control',
@@ -381,6 +383,9 @@ def _ordered_motion_steps(text):
 
 def grounded_parameters(action, parameters, text):
     """A conservative evidence check, not an intent parser or replacement LLM."""
+    from .java_tools import TOOLS as JAVA_TOOLS, grounded as java_grounded
+    if action in JAVA_TOOLS:
+        return java_grounded(action, parameters, text)
     if action in {'gimbal_up', 'gimbal_down', 'gimbal_left', 'gimbal_right'}:
         if 'angle_deg' not in parameters or re.search(r'调到|转到|设为|设置为|俯角|仰角|绝对', text):
             return False
@@ -809,10 +814,12 @@ class CockpitService:
             available = available()
         tools = []
         for definition in definitions:
+            from .java_tools import TOOLS as JAVA_TOOLS
             vendor = definition.name == 'request_vendor_control'
             enabled = vendor or available is None or definition.name in available
             tools.append({'action': definition.name,
-                'domain': 'vendor_request' if vendor else ACTION_SPECS[FlightControlAction(definition.name)].domain,
+                'domain': ('vendor_request' if vendor else JAVA_TOOLS[definition.name].domain
+                    if definition.name in JAVA_TOOLS else ACTION_SPECS[FlightControlAction(definition.name)].domain),
                 'description': definition.description,
                 'parameters': {key: parameter_json_schema(value) for key, value in definition.schema.properties.items()},
                 'required': list(definition.schema.required), 'available': enabled,
@@ -1235,7 +1242,9 @@ class CockpitService:
                 request = VendorControlRequest(command, command, call.arguments['method'], self.binding.context_version)
                 receipt = self.executor.preview_vendor_request(request).to_dict()
             else:
-                request = FlightControlActionRequest(command, command, call.name, dict(call.arguments), self.binding.context_version)
+                from .java_tools import TOOLS as JAVA_TOOLS, JavaActionRequest
+                request_type = JavaActionRequest if call.name in JAVA_TOOLS else FlightControlActionRequest
+                request = request_type(command, command, call.name, dict(call.arguments), self.binding.context_version)
                 receipt = self.executor.preview(request).to_dict()
             if receipt['status'] != 'preview_required':
                 return self._base(**{**receipt, **common})
@@ -1278,7 +1287,8 @@ class CockpitService:
                 return response
             if not cancel:
                 vendor = card.get('kind') == 'vendor_control_request'
-                action = None if vendor else FlightControlAction(card['action'])
+                from .java_tools import TOOLS as JAVA_TOOLS
+                action = None if vendor else card['action'] if card['action'] in JAVA_TOOLS else FlightControlAction(card['action'])
                 raw_state = self.executor.read_state()
                 if ((vendor or action not in _CONTROL_FREE_ACTIONS and action != FlightControlAction.READ_STATE)
                         and raw_state.get('control_owner') != self.binding.actor_id):

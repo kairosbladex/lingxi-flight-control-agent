@@ -3,7 +3,7 @@ import io
 import json
 from types import SimpleNamespace
 import unittest
-from lingxi_flight_control.audit import gateway_event, digest, numbers
+from lingxi_flight_control.audit import gateway_event, digest, numbers, tool_parameters
 
 
 class FlightAuditTests(unittest.TestCase):
@@ -26,6 +26,11 @@ class FlightAuditTests(unittest.TestCase):
     def test_parameters_are_small_fixed_numeric_projection(self):
         self.assertEqual(numbers({'angle_deg':10,'value':float('nan'),
             'body':{'password':'secret'},'param':'secret'}),{'angle_deg':10})
+
+    def test_registered_enums_are_auditable_without_raw_text_or_coordinates(self):
+        self.assertEqual(tool_parameters('camera_live_quality',{'quality':'hd','token':'private'}),{'quality':'hd'})
+        self.assertEqual(tool_parameters('camera_point_focus',{'lens':'zoom','x':0.2,'y':0.3}),{'lens':'zoom'})
+        self.assertEqual(tool_parameters('camera_live_quality',{'quality':'private'}),{})
 
     def test_reader_filters_by_task_and_never_claims_device_completion(self):
         import importlib.util

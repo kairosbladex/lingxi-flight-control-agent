@@ -20,6 +20,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base-url')
     parser.add_argument('--offline-scripted', action='store_true', help='固定模型建议，仅本地HTTP与合成Java')
+    parser.add_argument('--java-tools', action='store_true', help='验证新增Java具名工具')
     parser.add_argument('--model', default='qwen3.5:9b')
     parser.add_argument('--precision-only', action='store_true',
                         help='仅验证精确距离/云台角度理解；云台旧速度接口必须拒绝精确角度')
@@ -32,6 +33,10 @@ def main():
              ('帮我拍张照', 'camera_photo')]
     if args.precision_only:
         cases = [('往前飞10米', 'move_forward'), ('云台向下调10度', 'gimbal_down')]
+    from lingxi_flight_control.java_tools import TOOLS as JAVA_TOOLS
+    if args.java_tools:
+        cases=[(JAVA_TOOLS[name].example,name) for name in
+               ('camera_night_mode','camera_live_quality','camera_point_focus','thermal_palette','gimbal_yaw_center','uav_night_light')]
     rows = []
     for phrase, expected in cases:
         fixture = BrowserGatewayTests()
@@ -39,6 +44,8 @@ def main():
         fixture.action=expected
         fixture.parameters=({'value':5} if expected=='camera_zoom' else
                             {'angle_deg':10} if expected=='gimbal_down' else None)
+        if expected in JAVA_TOOLS:
+            fixture.parameters=dict(JAVA_TOOLS[expected].arguments)
         server = None
         try:
             if not args.offline_scripted:

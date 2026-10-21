@@ -24,6 +24,21 @@ def numbers(values):
         and isinstance(value, (int, float)) and math.isfinite(value)}
 
 
+def tool_parameters(action, values):
+    result=numbers(values)
+    from .java_tools import TOOLS
+    spec=TOOLS.get(action)
+    if spec and isinstance(values,dict):
+        # 仅保留注册枚举/布尔，不记录地理位置、图像目标坐标或任意文本。
+        for key,parameter in spec.parameters.items():
+            value=values.get(key)
+            if parameter.enum is not None and isinstance(value,str) and value in parameter.enum:
+                result[key]=value
+            elif parameter.type=='boolean' and type(value) is bool:
+                result[key]=value
+    return result
+
+
 def emit(event, **fields):
     # 上层只传固定字段，stdout由服务管理器持久化；失败不触发业务重发。
     try:
@@ -54,7 +69,8 @@ def gateway_event(operation, body, headers, response, elapsed_ms):
         command_id=identifier(card.get('command_id') or payload.get('command_id') or request.get('command_id')),
         trace_id=identifier(payload.get('trace_id')),
         action=identifier(card.get('action') or payload.get('action')),
-        parameters=numbers(card.get('parameters') or payload.get('parameters')),
+        parameters=tool_parameters(card.get('action') or payload.get('action'),
+                                   card.get('parameters') or payload.get('parameters')),
         device_effect=identifier(payload.get('device_effect')),
         platform_ui_distance_mode=payload.get('platform_ui_distance_mode') is True,
         elapsed_ms=elapsed_ms)

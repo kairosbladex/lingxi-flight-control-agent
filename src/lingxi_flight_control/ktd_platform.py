@@ -22,6 +22,7 @@ from uuid import uuid4
 
 from .full_control import ACTION_SPECS, FlightControlAction, FlightControlActionRequest, FlightControlStatus, RuntimeBinding
 from .models import ExecutionContext
+from .java_tools import TOOLS as JAVA_TOOLS, JavaActionRequest, encode as encode_java_tool
 
 
 _MOVE_TYPES = {"move_forward": 202, "move_backward": 203, "move_left": 204,
@@ -49,9 +50,9 @@ _LENS_MODES = {"camera_electro_optical": 6, "camera_infrared": 2, "camera_wide":
 _EXTRA_CAMERA = frozenset(_LENS_MODES) | {"camera_zoom", "camera_panorama", "infrared_set_limits"}
 SUPPORTED_ACTIONS = (frozenset(_MOVE_TYPES) | frozenset(_TURN_TYPES)
                      | frozenset(_GIMBAL_TYPES) | frozenset(_ROUTE_TYPES)
-                     | frozenset(_CAMERA_TYPES) | _EXTRA_CAMERA | {"read_state"})
+                     | frozenset(_CAMERA_TYPES) | _EXTRA_CAMERA | frozenset(JAVA_TOOLS) | {"read_state"})
 _PATHS = frozenset({"/screen/uav/operation/control", "/screen/uav/route/control",
-                    "/screen/uav/camera/control", "/screen/uav/gimbal/control"})
+                    "/screen/uav/camera/control", "/screen/uav/gimbal/control", "/screen/uav/fly/control"})
 _STATE_FIELDS = frozenset({"online", "airborne", "longitude", "latitude", "altitude_m",
                           "height_m", "yaw_deg", "battery_percent", "flight_status", "route_status"})
 
@@ -584,6 +585,7 @@ class KtdPlatformExecutor:
         self._enable_vendor_requests = enable_vendor_requests
         self._allowed_vendor_methods = tuple(allowed_vendor_methods)
         self._legacy_read_api = legacy_read_api
+        self._java_tools_enabled = getattr(snapshot_provider, 'java_tools_enabled', False) is True
         self._allow_unverified_pose = allow_unverified_pose
         self._pose_reader = pose_reader
         if self._pose_reader is None:
@@ -671,6 +673,12 @@ class KtdPlatformExecutor:
         if snapshot.state.get('online') is not True:
             raise KtdPlatformError('DEVICE_NOT_ONLINE')
 
+    @property
+    def java_tool_definitions(self):
+        if not self._java_tools_enabled or self._track_commands:
+            return ()
+        return tuple(spec.definition(name) for name,spec in JAVA_TOOLS.items())
+
     def available_actions(self) -> frozenset[str]:
         """仅列出当前权威资源、权限、能力和状态允许预览的已支持动作。"""
         try:
@@ -684,7 +692,9 @@ class KtdPlatformExecutor:
             try:
                 self._validate_snapshot(snapshot, action)
                 if action != "read_state":
-                    if action in _MOVE_TYPES:
+                    if action in JAVA_TOOLS:
+                        parameters = dict(JAVA_TOOLS[action].arguments)
+                    elif action in _MOVE_TYPES:
                         parameters = {"distance_m": 0.01}
                     elif action in _TURN_TYPES:
                         parameters = {"angle_deg": 1}
@@ -694,7 +704,8 @@ class KtdPlatformExecutor:
                         parameters = {'min_c': 0, 'max_c': 50}
                     else:
                         parameters = {}
-                    request = FlightControlActionRequest("capability-check", "capability-check", action,
+                    request_type = JavaActionRequest if action in JAVA_TOOLS else FlightControlActionRequest
+                    request = request_type("capability-check", "capability-check", action,
                                                          parameters, self.binding.context_version)
                     self._compile(request, snapshot)
                 available.add(action)
@@ -767,6 +778,14 @@ class KtdPlatformExecutor:
                              message=message)
 
     def _compile(self, request: FlightControlActionRequest, snapshot: KtdSnapshot) -> KtdCommand:
+        if isinstance(request, JavaActionRequest):
+            if not self._java_tools_enabled or self._track_commands or snapshot.profile != 'DJI_HANGAR':
+                raise KtdPlatformError('JAVA_TOOL_UNAVAILABLE')
+            if request.action in {'point_flight_stop','point_orbit_stop'} and snapshot.state.get('airborne') is not True:
+                raise KtdPlatformError('FLIGHT_STATE_UNAVAILABLE')
+            endpoint, values = encode_java_tool(request)
+            return KtdCommand(endpoint, {'terminalId':self.binding.drone_id,'siteId':self.site_id,
+                **({'taskId':self.task_id} if self.task_id is not None else {}),**values})
         action = FlightControlAction(request.action).value
         if self._track_commands:
             if action not in _MOVE_TYPES or snapshot.profile != 'DJI_HANGAR':
@@ -858,6 +877,8 @@ class KtdPlatformExecutor:
             if action in _LENS_MODES:
                 body.update(type=105, cameraMode=_LENS_MODES[action])
             elif action == "camera_zoom":
+                if int(request.parameters['value']) != request.parameters['value']:
+                    raise KtdPlatformError('INTEGER_ZOOM_REQUIRED')
                 body.update(type=103, cameraMode=6, param=request.parameters["value"])
             elif action == "camera_panorama":
                 if snapshot.state.get("legacy_pose_verified") is not True:
@@ -1135,7 +1156,8 @@ class KtdPlatformExecutor:
             request = VendorControlRequest(receipt.command_id, receipt.idempotency_key,
                                            receipt.parameters['method'], receipt.context_version)
         elif receipt.kind is None:
-            request = FlightControlActionRequest(receipt.command_id, receipt.idempotency_key,
+            request_type = JavaActionRequest if receipt.action in JAVA_TOOLS else FlightControlActionRequest
+            request = request_type(receipt.command_id, receipt.idempotency_key,
                 receipt.action, dict(receipt.parameters), receipt.context_version)
         else:
             raise KtdPlatformError('CONFIRMATION_MISMATCH')
@@ -1150,10 +1172,15 @@ class KtdPlatformExecutor:
                 request.validate()
                 if not _identifier(request.command_id) or not _identifier(request.idempotency_key):
                     raise ValueError("invalid identifiers")
-                action = FlightControlAction(request.action)
-                spec = ACTION_SPECS[action]
-                if set(request.parameters) - set(spec.parameters) or any(key not in request.parameters for key in spec.required):
-                    raise ValueError("invalid schema")
+                if isinstance(request, JavaActionRequest):
+                    action = request.action
+                    if not self._java_tools_enabled:
+                        raise ValueError('Java tools disabled')
+                else:
+                    action = FlightControlAction(request.action)
+                    spec = ACTION_SPECS[action]
+                    if set(request.parameters) - set(spec.parameters) or any(key not in request.parameters for key in spec.required):
+                        raise ValueError("invalid schema")
             except (ValueError, TypeError, AttributeError, OverflowError):
                 if not isinstance(request, FlightControlActionRequest):
                     request = FlightControlActionRequest("invalid", "invalid", "read_state")
@@ -1162,10 +1189,11 @@ class KtdPlatformExecutor:
                 return self._reject(request, "STALE_CONTEXT")
             if action != FlightControlAction.READ_STATE and not self._enabled:
                 return self._reject(request, "PLATFORM_DISABLED")
-            if action.value not in SUPPORTED_ACTIONS:
+            action_value = action.value if isinstance(action, FlightControlAction) else action
+            if action_value not in SUPPORTED_ACTIONS:
                 return self._reject(request, "ACTION_UNSUPPORTED")
             try:
-                snapshot = self._snapshot(action.value)
+                snapshot = self._snapshot(action_value)
                 if action == FlightControlAction.READ_STATE:
                     return self._receipt(request, "observed", snapshot=snapshot, message="已读取权威状态")
                 command = self._compile(request, snapshot)
@@ -1236,7 +1264,7 @@ class KtdPlatformExecutor:
                     self._validate_vendor_snapshot(snapshot)
                     command = self._compile_vendor_request(request, snapshot, pending.receipt.trace_id, pending.deadline)
                 else:
-                    snapshot = self._snapshot(FlightControlAction(request.action).value)
+                    snapshot = self._snapshot(request.action.value if isinstance(request.action, FlightControlAction) else request.action)
                     command = self._compile(request, snapshot)
                 if self._snapshot_hash(snapshot) != pending.snapshot_hash or command != pending.command:
                     self._pending.pop(confirmation_id)

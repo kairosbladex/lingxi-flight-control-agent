@@ -18,13 +18,15 @@ def require_task(transport, project, site, drone, task):
 
 class BrowserSnapshotProvider(LegacyKtdSnapshotProvider):
     """以已核验DJI实现映射动作；页面操作模式不作为硬件能力证明。"""
+    java_tools_enabled = True
     def supported_hangar_brands(self):
         # Java AbstractUavDevProvider明确将草莓机场交给DJHangarOperation。
         # 不顺带开放其普宙分支，后者的高度/环绕语义不同。
         return frozenset({'207601', '207616'})
 
     def write_actions(self):
-        return super().write_actions() | {'route_pause', 'route_resume', 'emergency_stop',
+        from .java_tools import TOOLS
+        return super().write_actions() | set(TOOLS) | {'route_pause', 'route_resume', 'emergency_stop',
             'return_home', 'cancel_return_home', 'camera_electro_optical', 'camera_infrared',
             'camera_wide', 'camera_zoom', 'camera_panorama', 'infrared_set_limits'}
 
@@ -47,11 +49,14 @@ class BrowserSnapshotProvider(LegacyKtdSnapshotProvider):
         # 实现独立于页面UAV_MOVE_DISTANCE开关，仍要求下面的新鲜完整位姿。
         actions = {'read_state', 'route_pause', 'route_resume', 'emergency_stop',
                    'return_home', 'cancel_return_home', 'move_forward', 'move_backward',
-                   'move_left', 'move_right', 'move_up', 'move_down'}
+                   'move_left', 'move_right', 'move_up', 'move_down',
+                   'uav_night_light','uav_stealth','point_flight_stop','point_orbit_stop'}
         if uav.get('UAV_MOVE_STICK') is True:
             actions.update(('turn_left', 'turn_right'))
         camera = (raw.get('loadInfoCode') or {}).get('1001') is True and bool(load.get('optoelecPodParamList'))
         if camera:
+            from .java_tools import TOOLS
+            actions.update(name for name,spec in TOOLS.items() if spec.domain=='camera')
             actions.update(('camera_photo', 'camera_start_recording', 'camera_stop_recording',
                             'camera_electro_optical', 'camera_infrared', 'camera_wide',
                             'camera_zoom', 'camera_panorama', 'infrared_set_limits'))
