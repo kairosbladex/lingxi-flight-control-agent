@@ -105,11 +105,8 @@ class BrowserGateway:
         operation = path.split('?', 1)[0]
         if not re.fullmatch(r'/api/flight-control/(context|state|agent/(messages|confirm|cancel|reset|receipt))', operation):
             operation = 'other'
-        print(json.dumps({'event': 'flight_gateway', 'operation': operation,
-              'status': response.status_code, 'error_code': response.payload.get('error_code'),
-              'platform_ui_distance_mode': response.payload.get('platform_ui_distance_mode'),
-              'trace_id': response.payload.get('trace_id'),
-              'elapsed_ms': round((time.monotonic() - started) * 1000)}), flush=True)
+        from .audit import gateway_event
+        gateway_event(operation, body, headers, response, round((time.monotonic()-started)*1000))
         return response
 
     def _handle(self, method, path, body=b'', headers=None):

@@ -28,8 +28,8 @@ _MOVE_TYPES = {"move_forward": 202, "move_backward": 203, "move_left": 204,
                "move_right": 205, "move_up": 201, "move_down": -201}
 _TURN_TYPES = {"turn_left": -206, "turn_right": 206}
 #: gimbal action -> (type, controlMode, param, stepPercentage)
-#: 相对俯仰用 5/3 的步进百分比得到一次 5°（KTD 默认 3°），并避开其连续发送线程；
-#: 相对偏航保持 1 次 5° 后由 Agent 显式发送停止。
+#: 原Java把stepPercentage换算为deg/s，不是角位移；仅保留旧手动步进兼容。
+#: 指定精确角度的请求不可使用这些默认值。
 _GIMBAL_TYPES = {
     "gimbal_up": (401, 2, 1, 5.0 / 3.0),
     "gimbal_down": (401, 2, 2, 5.0 / 3.0),
@@ -351,7 +351,20 @@ class KtdHttpTransport:
             headers["timestamp"] = str(self._next_timestamp())
         request = Request(self._base_url + command.path, data=_json(command.body).encode(), method="POST",
                           headers=headers)
-        return self._read_response(request, strict_json='tracking' in command.body)
+        from .audit import emit, digest, numbers
+        fields = dict(trace_id=context.trace_id, request_ref=digest(context.idempotency_key),
+            task_ref=digest(command.body.get('taskId')), drone_ref=digest(command.body.get('terminalId')),
+            endpoint=command.path, parameters=numbers(dict(command.body)))
+        emit('flight_java', phase='attempt', **fields)
+        try:
+            response = self._read_response(request, strict_json='tracking' in command.body)
+        except Exception:
+            emit('flight_java', phase='outcome_unknown', **fields)
+            raise
+        code = response.payload.get('code') if isinstance(response.payload, Mapping) else None
+        emit('flight_java', phase='response', http_status=response.status_code,
+             java_code=code if type(code) is int else None, device_effect='not_verified', **fields)
+        return response
 
     def read_snapshot(self, binding: RuntimeBinding, *, site_id: str,
                       task_id: str | None) -> KtdHttpResponse:
