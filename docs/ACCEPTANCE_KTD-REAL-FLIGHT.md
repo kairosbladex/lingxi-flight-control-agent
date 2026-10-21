@@ -1,4 +1,23 @@
-# 原 ktd_backend 飞控助手接入候选
+# Python直连原ktd接口：当前交付
+
+2026-10-21最新要求：只改Python/前端，不改Java。**以下当前记录替代文末历史Java候选方案，无需发布Java或执行其历史发布步骤。**
+
+- 10086已切换真实助手，经同源`/flight-control-api/`连接独立Python，复用原Java登录、站点、任务、权限及控制接口。Python `311c3f9`，UI `08fb3e5`，console入口 `0eaeff6`。修复嵌入组件样式丢失，真实页面可见。
+- 登录凭据仅转交原平台鉴权，不送模型或日志。服务端核验项目/设备/任务，确认前重验；不自动取权、不自动重试。旧接口权限标记legacy-read-api，不冒充厂商持续航权。
+- 验证：Python唯一离线入口713/713（含socket守护），UI150/150、构建通过；console前序263/263。夹具覆盖相机提交、重复确认不重发、权限/任务变化与未知结果。
+- 真实页面：天健湖草莓机库登录与设备范围检查通过，返回409 `TASK_REQUIRED`，输入/发送禁用；只读刷新仍正确阻塞。**无执行中任务，原权限接口`UAV_MOVE_DISTANCE=false`，所以“前飞10米再拍照”尚未全链路验收。** 不覆盖能力标志，不开启无位姿降级；旧控制提交仅submitted/not_verified，不能据此自动执行下一步。
+- 没有发送真实控制指令，真实位移/媒体/转向/云台效果及实际模型指令链未验证。Java候选未改动、未合并发布，8088/共享Java服务未操作。监控保持暂停。
+
+## 当前保留实例与回滚
+
+- 入口`http://192.168.110.17:10086/afmap/`；独立服务`lingxi-flight-browser-10086.service`，端口18974，MemoryMax384M、MemorySwapMax0、CPUQuota50%、TasksMax32，未开机启用。
+- 远端根目录`/home/zhuoyi/ktd/flight-browser-20261021/`，私有Python3.12、`source-direct-fix`及0700权限journal目录。为用户验收保留服务、审计、发布及回滚文件；本地临时18976已停止。
+- 停止命令：`ssh test-front 'systemctl --user stop lingxi-flight-browser-10086.service'`。
+- 当前静态版本`/home/zhuoyi/ktd/dsm-frontend-10086/releases/python-flight-visible`；回滚将site链接恢复到`/home/zhuoyi/ktd/dsm-frontend-10086/releases/http-draft-hash-20261020-d290f76`。nginx原配置位于`/home/zhuoyi/ktd/flight-browser-20261021/nginx-before.conf`，恢复后先检查再仅重载10086独立nginx。保留账本，不重发unknown命令，不动8088。
+
+---
+
+# 历史方案：原 ktd_backend 飞控助手接入候选（已被替代，不执行）
 
 日期：2026-10-21。用户选择沿用原 ktd_backend；本轮不修改共享 Java 实例、不发送设备命令。
 
