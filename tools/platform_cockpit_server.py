@@ -19,6 +19,8 @@ def main(argv=None):
     parser.add_argument('--model', default=DEFAULT_MODEL)
     parser.add_argument('--model-timeout', type=int, default=45,
                         help='单次模型理解超时秒数，范围1至60，不重试')
+    parser.add_argument('--model-keep-alive', choices=('30m', '-1'), default='30m',
+                        help='模型驻留；专用实例可选-1，默认仍为30m')
     parser.add_argument('--base-url', default=DEFAULT_BASE_URL, help='模型服务地址')
     parser.add_argument('--enable-direct-commands', action='store_true',
                         help='仅浏览器网关：明确单句拍照/水平定距移动不调用模型，仍逐项确认')
@@ -59,7 +61,8 @@ def main(argv=None):
         config = PlatformRuntimeConfig.from_environment(environment)
         decider = lambda: OllamaDecider(
             model=args.model, base_url=args.base_url, system_prompt=COCKPIT_SYSTEM_PROMPT,
-            timeout=args.model_timeout, max_attempts=1, max_output_tokens=2048, keep_alive='30m')
+            timeout=args.model_timeout, max_attempts=1, max_output_tokens=2048,
+            keep_alive=args.model_keep_alive)
         if args.browser_gateway:
             from lingxi_flight_control.browser_gateway import BrowserGateway
             service = BrowserGateway(config, decider, enable_control=args.enable_platform_control,

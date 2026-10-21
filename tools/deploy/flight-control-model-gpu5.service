@@ -1,0 +1,21 @@
+[Unit]
+Description=Dedicated flight control model on GPU5
+After=default.target
+StartLimitIntervalSec=600
+StartLimitBurst=3
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/docker run --rm --name flight-control-ollama-gpu5 --label owner=agent --label purpose=flight-control-10086 --memory=16g --memory-swap=16g --cpus=4 --pids-limit=256 --gpus device=GPU-867d3056-9e2e-2b5e-90e2-b7f0d866aa74 -p 192.168.130.238:11438:11434 -v /data/workspace/flight-control-model-20261021/models:/models:ro -e OLLAMA_MODELS=/models -e OLLAMA_NOPRUNE=1 -e OLLAMA_NO_CLOUD=1 -e OLLAMA_KEEP_ALIVE=-1 -e OLLAMA_MAX_LOADED_MODELS=1 -e OLLAMA_NUM_PARALLEL=1 -e OLLAMA_CONTEXT_LENGTH=32768 -e OLLAMA_MAX_QUEUE=4 --log-opt max-size=10m --log-opt max-file=2 sha256:013cbb5ffadc4b6672bf6c86f81a63c4ddf83c1c25168cccee877b5ae7942895
+ExecStartPost=/usr/bin/python3 /data/workspace/flight-control-model-20261021/warm_flight_model.py
+ExecStop=/usr/bin/docker stop -t 15 flight-control-ollama-gpu5
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=180
+TimeoutStopSec=30
+MemoryMax=192M
+CPUQuota=50%
+TasksMax=64
+
+[Install]
+WantedBy=default.target

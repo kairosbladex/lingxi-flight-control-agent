@@ -33,6 +33,7 @@ def main():
     parser.add_argument('--offline-scripted', action='store_true')
     parser.add_argument('--direct-commands', action='store_true')
     parser.add_argument('--fallback-paraphrases', action='store_true')
+    parser.add_argument('--model-keep-alive', choices=('30m', '-1'), default='30m')
     args = parser.parse_args()
     cases = ([('帮我拍摄一张照片', 'camera_photo', {}),
               ('机头方向向前平移3米', 'move_forward', {'distance_m': 3})]
@@ -82,7 +83,7 @@ def main():
     fixture.gateway = BrowserGateway(fixture.gateway.config,
         lambda: OllamaDecider(model=args.model, base_url=base,
             system_prompt=COCKPIT_SYSTEM_PROMPT, timeout=45, max_attempts=1,
-            max_output_tokens=2048, keep_alive='30m', transport=transport),
+            max_output_tokens=2048, keep_alive=args.model_keep_alive, transport=transport),
         enable_control=True, opener=ReadOnlyJava(), clock=lambda: 1000,
         enable_direct_commands=args.direct_commands,
         allowed_drone_sns=['uav-sn-1'])
@@ -93,6 +94,7 @@ def main():
     print(json.dumps({'event': 'probe_start', 'time': datetime.now(timezone.utc).isoformat(),
         'model': args.model, 'offline_scripted': args.offline_scripted,
         'direct_commands': args.direct_commands,
+        'model_keep_alive': args.model_keep_alive,
         'cases_sha256': hashlib.sha256(json.dumps(cases, ensure_ascii=False).encode()).hexdigest(),
         'prompt_sha256': hashlib.sha256(COCKPIT_SYSTEM_PROMPT.encode()).hexdigest(),
         'budgets': {'seconds': 360, 'calls': 12, 'request_timeout': 45, 'run_timeout': 65,
