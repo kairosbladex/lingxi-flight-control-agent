@@ -58,6 +58,7 @@ class BrowserGatewayTests(unittest.TestCase):
                                    b'' if body is None else json.dumps(body).encode(), self.headers)
     def proposal(self):
         text={'move_forward':'向前飞10米', 'camera_zoom':'光学变焦设置为5倍',
+              'gimbal_down':'云台向下调10度',
               'infrared_set_limits':'红外温度下限10摄氏度，上限40摄氏度'}.get(self.action, '拍张照')
         return self.call('/agent/messages', {'text':text, 'request_id':'r-1', 'context_version':1})
     def confirmation(self, card):
@@ -197,6 +198,19 @@ class BrowserGatewayTests(unittest.TestCase):
         self.assertTrue(grounded_parameters('infrared_set_limits',{'min_c':10,'max_c':40},phrase))
         self.assertFalse(grounded_parameters('infrared_set_limits',{'min_c':40,'max_c':10},phrase))
         self.assertFalse(grounded_parameters('infrared_set_limits',{'min_c':10,'max_c':40},'温度10度和40度'))
+    def test_numeric_gimbal_does_not_silently_execute_a_speed_or_default_step(self):
+        self.action='gimbal_down'
+        self.parameters={'angle_deg':10}
+        result=self.proposal()
+        self.assertEqual(result.payload['status'],'rejected',result.payload)
+        self.assertEqual(result.payload['error_code'],'GIMBAL_EXACT_ANGLE_UNAVAILABLE')
+        self.assertEqual(self.java.posts,[])
+    def test_model_cannot_drop_explicit_gimbal_angle(self):
+        self.action='gimbal_down'
+        self.parameters={}
+        result=self.proposal()
+        self.assertEqual(result.payload['status'],'clarification',result.payload)
+        self.assertEqual(self.java.posts,[])
     def test_unexpected_confirmation_failure_does_not_claim_unsent(self):
         def failed(*args): raise RuntimeError('private error')
         self.gateway.runtime.handle=failed

@@ -394,6 +394,10 @@ def _validate_parameters(action: FlightControlAction, parameters: Mapping[str, A
         FlightControlAction.PAYLOAD_DYNAMIC: ("payload", "enabled"),
     }
     optional: dict[FlightControlAction, tuple[str, ...]] = {
+        FlightControlAction.GIMBAL_UP: ("angle_deg",),
+        FlightControlAction.GIMBAL_DOWN: ("angle_deg",),
+        FlightControlAction.GIMBAL_LEFT: ("angle_deg",),
+        FlightControlAction.GIMBAL_RIGHT: ("angle_deg",),
         FlightControlAction.CONTINUE_FROM_BREAKPOINT: ("index",),
         FlightControlAction.PAYLOAD_DROPPER: ("payload",),
         FlightControlAction.PAYLOAD_MEGAPHONE: ("enabled",),
@@ -401,6 +405,9 @@ def _validate_parameters(action: FlightControlAction, parameters: Mapping[str, A
         FlightControlAction.PAYLOAD_METHANE: ("enabled",),
     }
     allowed = set(required.get(action, ())) | set(optional.get(action, ()))
+    if action in {FlightControlAction.GIMBAL_UP, FlightControlAction.GIMBAL_DOWN,
+                  FlightControlAction.GIMBAL_LEFT, FlightControlAction.GIMBAL_RIGHT} and 'angle_deg' in parameters:
+        _number(parameters['angle_deg'], 'angle_deg', 0.1, 90)
     extras = sorted(set(parameters) - allowed)
     if extras:
         raise ValueError(f"{action.value} does not accept parameters: {extras}")
@@ -538,6 +545,19 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             return "ROUTE_STATE_MISMATCH", "当前模拟航线状态不支持此动作，请核对启动、暂停或恢复意图"
         return None
 
+    def _precise_gimbal_error(self, request):
+        if 'angle_deg' not in request.parameters or request.action not in {
+                'gimbal_up','gimbal_down','gimbal_left','gimbal_right'}:
+            return None
+        if self.state.control_owner != self.binding.actor_id:
+            return 'CONTROL_NOT_OWNED', '模拟控制权已变化，请重新检查'
+        if request.action in {'gimbal_up','gimbal_down'}:
+            target = self.state.gimbal_pitch_deg + request.parameters['angle_deg'] * (
+                1 if request.action == 'gimbal_up' else -1)
+            if not -90 <= target <= 90:
+                return 'GIMBAL_TARGET_OUT_OF_RANGE', '目标超出模拟云台角度范围，不截断请求角度'
+        return None
+
     def preview(self, request: FlightControlActionRequest) -> FlightControlReceipt:
         request.validate()
         if request.context_version is not None and request.context_version != self.binding.context_version:
@@ -567,7 +587,7 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         if action not in _CONTROL_FREE_ACTIONS and self.state.control_owner != self.binding.actor_id:
             return _status_receipt(FlightControlStatus.REJECTED, request, self.binding, self.state,
                                    error_code="CONTROL_NOT_OWNED", message="请先获取模拟控制权")
-        error = self._route_precondition_error(action)
+        error = self._precise_gimbal_error(request) or self._route_precondition_error(action)
         if error is not None:
             return _status_receipt(FlightControlStatus.REJECTED, request, self.binding, self.state,
                                    error_code=error[0], message=error[1])
@@ -624,6 +644,11 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
                                        confirmation_id=confirmation_id,
                                        confirmation_binding=pending.confirmation_binding,
                                        error_code=error[0], message=error[1])
+        error = self._precise_gimbal_error(request)
+        if error is not None:
+            self._pending.pop(confirmation_id, None)
+            return _status_receipt(FlightControlStatus.REJECTED, request, self.binding, self.state,
+                                   error_code=error[0], message=error[1])
         result = self._apply(request)
         result = _status_receipt(FlightControlStatus.ACCEPTED, request, self.binding, self.state,
                                  confirmation_id=confirmation_id, confirmation_binding=pending.confirmation_binding,
@@ -751,10 +776,10 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             if action == FlightControlAction.CAMERA_INFRARED: s.infrared["enabled"] = True
         elif action == FlightControlAction.CAMERA_ZOOM: s.camera["zoom"] = float(p["value"])
         elif action == FlightControlAction.GIMBAL_DIGITAL_ZOOM: s.camera["digital_zoom"] = float(p["value"])
-        elif action == FlightControlAction.GIMBAL_UP: s.gimbal_pitch_deg = min(90.0, s.gimbal_pitch_deg + 5)
-        elif action == FlightControlAction.GIMBAL_DOWN: s.gimbal_pitch_deg = max(-90.0, s.gimbal_pitch_deg - 5)
-        elif action == FlightControlAction.GIMBAL_LEFT: s.gimbal_yaw_deg -= 5
-        elif action == FlightControlAction.GIMBAL_RIGHT: s.gimbal_yaw_deg += 5
+        elif action == FlightControlAction.GIMBAL_UP: s.gimbal_pitch_deg = min(90.0, s.gimbal_pitch_deg + p.get('angle_deg', 5))
+        elif action == FlightControlAction.GIMBAL_DOWN: s.gimbal_pitch_deg = max(-90.0, s.gimbal_pitch_deg - p.get('angle_deg', 5))
+        elif action == FlightControlAction.GIMBAL_LEFT: s.gimbal_yaw_deg -= p.get('angle_deg', 5)
+        elif action == FlightControlAction.GIMBAL_RIGHT: s.gimbal_yaw_deg += p.get('angle_deg', 5)
         elif action == FlightControlAction.GIMBAL_RESET: s.gimbal_pitch_deg = s.gimbal_yaw_deg = 0.0
         elif action == FlightControlAction.GIMBAL_45: s.gimbal_pitch_deg = -45.0
         elif action == FlightControlAction.GIMBAL_90: s.gimbal_pitch_deg = -90.0
@@ -967,10 +992,14 @@ ACTION_SPECS: dict[FlightControlAction, ActionSpec] = {
                                            {"value": _P_ZOOM}, ("value",)),
     FlightControlAction.CAMERA_INFRARED: _spec("camera", "切换为红外热成像镜头"),
     FlightControlAction.CAMERA_WIDE: _spec("camera", "切换为广角镜头"),
-    FlightControlAction.GIMBAL_UP: _spec("camera", "云台向上转动"),
-    FlightControlAction.GIMBAL_DOWN: _spec("camera", "云台向下转动"),
-    FlightControlAction.GIMBAL_LEFT: _spec("camera", "云台向左转动"),
-    FlightControlAction.GIMBAL_RIGHT: _spec("camera", "云台向右转动"),
+    FlightControlAction.GIMBAL_UP: _spec("camera", "云台相对向上调整指定角度；请提供angle_deg；不是调到绝对角度",
+        {"angle_deg": ToolParameter("number", minimum=0.1, maximum=90)}),
+    FlightControlAction.GIMBAL_DOWN: _spec("camera", "云台相对向下调整指定角度；请提供angle_deg；不是调到绝对角度",
+        {"angle_deg": ToolParameter("number", minimum=0.1, maximum=90)}),
+    FlightControlAction.GIMBAL_LEFT: _spec("camera", "云台相对向左调整指定角度；请提供angle_deg；不是调到绝对角度",
+        {"angle_deg": ToolParameter("number", minimum=0.1, maximum=90)}),
+    FlightControlAction.GIMBAL_RIGHT: _spec("camera", "云台相对向右调整指定角度；请提供angle_deg；不是调到绝对角度",
+        {"angle_deg": ToolParameter("number", minimum=0.1, maximum=90)}),
     FlightControlAction.GIMBAL_DIGITAL_ZOOM: _spec("camera", "设置云台数字变焦倍数",
                                                    {"value": _P_ZOOM}, ("value",)),
     FlightControlAction.GIMBAL_RESET: _spec("camera", "云台回中复位"),

@@ -381,6 +381,20 @@ def _ordered_motion_steps(text):
 
 def grounded_parameters(action, parameters, text):
     """A conservative evidence check, not an intent parser or replacement LLM."""
+    if action in {'gimbal_up', 'gimbal_down', 'gimbal_left', 'gimbal_right'}:
+        if 'angle_deg' not in parameters or re.search(r'调到|转到|设为|设置为|俯角|仰角|绝对', text):
+            return False
+        direction = {'gimbal_up': r'向上|往上|上抬|抬高|调高',
+                     'gimbal_down': r'向下|往下|下压|调低|降低',
+                     'gimbal_left': r'向左|往左|左转',
+                     'gimbal_right': r'向右|往右|右转'}[action]
+        if not re.search(direction, text):
+            return False
+        exact_text, _ = _exact_quantity_evidence(text)
+        matches = re.findall('(?:' + direction + r')\s*(?:调|调整|转动|旋转|转|压|抬)?\s*'
+            r'([负-]?(?:\d+(?:\.\d+)?|[零〇一二两三四五六七八九十百千点]+))\s*(?:度|°)', exact_text)
+        if len(matches) != 1 or not math.isclose(_number(matches[0]), parameters['angle_deg'], abs_tol=1e-8):
+            return False
     if action == 'infrared_set_limits':
         # 此动作的上下限就是精确参数，不是移动距离的模糊限制。
         # 按角色分别绑定，防止模型把上下限颠倒或从其他数字中补猜。
@@ -1203,7 +1217,11 @@ class CockpitService:
             if not _motion_agrees(call.name, call.arguments, grounding_text, parameter_reply, session.motion_source):
                 return self._base(status='clarification', message='动作建议与明确的方向或对应数值不一致，请重新说明本次动作。', **common)
             if not grounded_parameters(call.name, call.arguments, grounding_text):
-                return self._base(status='clarification', message='请明确动作所需的数值和单位；我不会补猜参数。', **common)
+                message = ('请明确云台相对调整的方向和角度，例如“云台向下调10度”；'
+                           '“调到负10度”是绝对角度，不能替换成相对下调10度。'
+                           if call.name in {'gimbal_up','gimbal_down','gimbal_left','gimbal_right'} else
+                           '请明确动作所需的数值和单位；我不会补猜参数。')
+                return self._base(status='clarification', message=message, **common)
             ordered = session.ordered_steps
             completed = list(session.completed_steps.values())
             if ordered is not None and (completed != ordered[:len(completed)]

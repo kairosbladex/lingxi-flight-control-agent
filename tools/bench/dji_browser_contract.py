@@ -20,11 +20,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base-url', required=True)
     parser.add_argument('--model', default='qwen3.5:9b')
+    parser.add_argument('--precision-only', action='store_true',
+                        help='仅验证精确距离/云台角度理解；云台旧速度接口必须拒绝精确角度')
     args = parser.parse_args()
     cases = [('往前飞10米', 'move_forward'), ('开始录像', 'camera_start_recording'),
              ('停止录像', 'camera_stop_recording'), ('光学变焦设置为5倍', 'camera_zoom'),
              ('切换到广角镜头', 'camera_wide'), ('暂停当前航线', 'route_pause'),
              ('帮我拍张照', 'camera_photo')]
+    if args.precision_only:
+        cases = [('往前飞10米', 'move_forward'), ('云台向下调10度', 'gimbal_down')]
     rows = []
     for phrase, expected in cases:
         fixture = BrowserGatewayTests()
@@ -49,7 +53,7 @@ def main():
             proposal = fixture.call('/agent/messages',
                 {'text': phrase, 'request_id': 'bench-1', 'context_version': 1})
             card = proposal.payload.get('card') or {}
-            action = card.get('action')
+            action = card.get('action') or proposal.payload.get('action')
             row = {'expected': expected, 'action': action, 'status': proposal.payload.get('status'),
                    'before_confirm_posts': len(fixture.java.posts), 'device_requests': 0}
             if row['status'] == 'preview_required' and action == expected:
@@ -58,6 +62,12 @@ def main():
                            device_effect=confirmed.payload.get('device_effect'),
                            fixture_posts=len(fixture.java.posts))
             row['passed'] = row.get('result') == 'submitted' and row['before_confirm_posts'] == 0
+            if args.precision_only and expected == 'gimbal_down':
+                row.update(error_code=proposal.payload.get('error_code'),
+                           parameters=proposal.payload.get('parameters'))
+                row['passed'] = (action == expected and row['status'] == 'rejected'
+                    and row['error_code'] == 'GIMBAL_EXACT_ANGLE_UNAVAILABLE'
+                    and row['parameters'] == {'angle_deg':10} and len(fixture.java.posts) == 0)
             rows.append(row)
             print(json.dumps(row, ensure_ascii=False), flush=True)
         finally:

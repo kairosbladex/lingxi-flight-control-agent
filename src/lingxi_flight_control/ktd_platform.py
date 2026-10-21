@@ -746,8 +746,12 @@ class KtdPlatformExecutor:
                           receipt_tracking=vendor or self._track_commands and action in _MOVE_TYPES, **fields)
 
     def _reject(self, request, code):
+        message = ("已理解指定的云台调整角度，但原Java接口发送的是转动速度；"
+                   "缺少可靠角度设定及停止闭环，本次未下发，不会替换成默认步进。"
+                   if code == 'GIMBAL_EXACT_ANGLE_UNAVAILABLE' else
+                   "请求未执行，请核对能力、权限和当前状态")
         return self._receipt(request, FlightControlStatus.REJECTED, error_code=code,
-                             message="请求未执行，请核对能力、权限和当前状态")
+                             message=message)
 
     def _compile(self, request: FlightControlActionRequest, snapshot: KtdSnapshot) -> KtdCommand:
         action = FlightControlAction(request.action).value
@@ -810,6 +814,10 @@ class KtdPlatformExecutor:
             body.update(type=_TURN_TYPES[action], mode=3, param=10)
             return KtdCommand("/screen/uav/operation/control", body)
         if action in _GIMBAL_TYPES:
+            if action in _RELATIVE_GIMBAL and 'angle_deg' in request.parameters:
+                # DJUtil.camera_screen_drag使用deg/s；stepPercentage不是目标角度。
+                # param=0仅停Java循环，未发送零速度，不能以时间乘速度冒充精确角度。
+                raise KtdPlatformError('GIMBAL_EXACT_ANGLE_UNAVAILABLE')
             if self._track_commands and action != "gimbal_reset":
                 raise KtdPlatformError("TRACKING_UNSUPPORTED")
             gimbal_type, control_mode, param, step = _GIMBAL_TYPES[action]
