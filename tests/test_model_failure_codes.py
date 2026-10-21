@@ -122,9 +122,9 @@ class CockpitModelFailureTests(unittest.TestCase):
         self.service = CockpitService(self.binding, self.simulator,
             factory or (lambda: self.decider), store=self.store, **budgets)
 
-    def message(self):
+    def message(self, text='向前飞10米'):
         return self.service.handle('POST', '/api/flight-control/agent/messages',
-            json.dumps({'text': '向前飞10米', 'request_id': 'r1', 'context_version': 1}),
+            json.dumps({'text': text, 'request_id': 'r1', 'context_version': 1}),
             {'X-Agent-Session': 'failure-tab', 'X-Trace-Id': 'failure-trace'})
 
     def assert_failure(self, response, code):
@@ -237,6 +237,26 @@ class CockpitModelFailureTests(unittest.TestCase):
         self.assertEqual(result.payload['card']['parameters'], {'distance_m': 10})
         self.assertEqual(self.simulator.state.to_dict(), self.initial_state)
         self.assertEqual(transport.call_count, 1)
+
+    def test_photo_and_short_move_timeouts_never_offer_card_or_retry(self):
+        for text, action, arguments in (
+                ('拍一张照片', 'camera_photo', {}),
+                ('向前飞2米', 'move_forward', {'distance_m': 2})):
+            for late in (False, True):
+                with self.subTest(text=text, late=late):
+                    self.configure(timeout_sec=1)
+                    with mock.patch('lingxi_flight_control.cockpit.time.monotonic', return_value=10) as clock:
+                        def response(*args, **kwargs):
+                            if not late:
+                                raise TimeoutError('synthetic timeout')
+                            clock.return_value = 12
+                            return http_response({'done_reason': 'stop', 'message': {'tool_calls': [
+                                {'function': {'name': action, 'arguments': arguments}}]}})
+                        with mock.patch('urllib.request.urlopen', side_effect=response) as transport:
+                            result = self.message(text)
+                            self.assert_failure(result, 'RUN_TIMEOUT' if late else 'MODEL_TIMEOUT')
+                            self.assertEqual(self.message(text).payload, result.payload)
+                            self.assertEqual(transport.call_count, 1)
 
 
 if __name__ == '__main__':
