@@ -1,0 +1,38 @@
+{
+  "backend_sha": "309bb03c4a607c8eb5b71d438e2b7176b0b881e1",
+  "ui_sha": "427dd86b0a6290325ffdcce3aebe165bb8d6e832",
+  "offline_tests": 746,
+  "ui_tests": 154,
+  "http_synthetic": {
+    "cases": [
+      {
+        "case": 0,
+        "status": "final",
+        "elapsed_ms": 58
+      },
+      {
+        "case": 1,
+        "status": "final",
+        "elapsed_ms": 2
+      },
+      {
+        "case": 2,
+        "status": "final",
+        "elapsed_ms": 1
+      }
+    ],
+    "passed": 3,
+    "model_calls": 0,
+    "java_control_posts": 0,
+    "device_requests": 0,
+    "port": 57777,
+    "server_stopped": true
+  },
+  "browser_scenarios": 27,
+  "browser_errors": [],
+  "browser_forbidden_requests": 0,
+  "physical_device_requests": 0,
+  "deployed_bundle_sha256": "226df20b559301604a8265d887cdc9dbdfb8ae9e0557d02dd7597beccb4b72f1",
+  "live_authenticated_state_query": "not_verified",
+  "live_unauthenticated_query_http": 401
+}
