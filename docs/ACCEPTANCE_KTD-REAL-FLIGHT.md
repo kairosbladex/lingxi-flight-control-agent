@@ -1,5 +1,7 @@
 # Python直连原ktd接口：当前交付
 
+最新部署：2026-10-21已更新至ca10023并迁移独立系统服务，详见[10086审计发布记录](ACCEPTANCE_FLIGHT-AUDIT-10086.md)。以下为此前版本历史，停止命令及工作目录以最新记录为准。
+
 后续纠正：下文`UAV_MOVE_DISTANCE=false`只表示平台页面模式，不能据此断言无人机不支持定距移动。原Java已有实现，Python修正开发见[DJI动作映射](ACCEPTANCE_DJI-ACTION-MAPPING.md)；该新版本尚未替换本页记录的线上版本。
 
 2026-10-21最新要求：只改Python/前端，不改Java。**以下当前记录替代文末历史Java候选方案，无需发布Java或执行其历史发布步骤。**
