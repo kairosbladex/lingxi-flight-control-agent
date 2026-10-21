@@ -1,0 +1,565 @@
+{
+  "schema_version": "cockpit-simple-instruments-root-verification/v1",
+  "recorded_at": "2026-10-16T14:56:18.671Z",
+  "scope": "Source-derived simple cockpit height/speed, heading and camera-pitch/vertical-speed instrument layout and passive interaction. Not full original runtime pixel/business or real-device acceptance.",
+  "ui_repository": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui",
+  "ui_branch": "feature/natural-language-cockpit",
+  "ui_baseline": "e8096317ed885ce255c77667f238e6743d0ce8c7",
+  "ui_commit": "7f14780eb2fca94dca4fa664d26edd246c11d780",
+  "git": {
+    "commit": "7f14780eb2fca94dca4fa664d26edd246c11d780",
+    "remote_sha": "7f14780eb2fca94dca4fa664d26edd246c11d780",
+    "source_hashes_match_commit": 9,
+    "clean": true
+  },
+  "source_repository": "/Users/wangxiaolin/PycharmProjects/onegismap_a-b4-20260910",
+  "source_commit": "35574cba46d498e0992de05504756bccf7014ade",
+  "source_read_method": "git show only; original conflicted working tree preserved",
+  "independently_verified_reference_hashes": {
+    "sources": {
+      "src/views/hangar/components/dashboard.vue": "e7707c01fe7cb640c03431ba9688df597ca3a6863dc2db727151df376b9be803",
+      "src/views/hangar/index.vue": "eaf4bd4837f6116b15da1d04b141e85e4dfd817e996ba21f251b8e727b3ddc05",
+      "src/store/modules/trail.ts": "b0b0ebeccb9e619ded22ffefa29ca0be1bf01e8f36eefa74dd1eab339a25abbb"
+    },
+    "assets": {
+      "src/assets/cockpit/hangar2-instrument1.png": "4ac65f09709824462c1f04ab403b437caed46eb78598444a5913391d0118b6d2",
+      "src/assets/cockpit/hangar2-instrument4.png": "5dd877c7ae357f811dba28b05ee2b5508a333c2a4d79030ab39a7b8d7518e94e"
+    }
+  },
+  "source_before_root_tests": {
+    "README.md": "3f0edafbfa32d5cea64bae7506a5e0676432a8887352ada7bee375bdb0dd6407",
+    "src/CockpitWorkspace.vue": "ba232cc7db9419d77b3636cc8defc8cee0f415c1e780edec9842b591c9a12ad2",
+    "src/cockpitWorkspace.css": "a695b2d92a533e50f79945cf3efacc7e16209aaf4c478ff88f2cc68497ba1b47",
+    "src/cockpitControls.ts": "09aee1b217d7b1231e2980dd838c0e3ff25dd42f25b3953240e846f3fbb4c18f",
+    "tests/cockpitControls.test.mjs": "dfe2054c7db9836a6313b49509184c4edb629dbb571c3dd5e432b9438f3c74c2",
+    "scripts/cockpit-e2e.mjs": "c6b317922b7c4bc24e888998735af5ea7503242dc674d341fd2f4eeb25b17121",
+    "package.json": "8e8579ad3250051fe3137f60416fa45cf8d97fe3b76d83c99a73719c590fd413",
+    "package-lock.json": "14116b4f8bc0885bcacf5008bcea9c2a5b3c9fb95e1e44e5907abc3ac8fe6227",
+    "src/assets/cockpit/SOURCE.json": "87f3a823ee1c39f28945610cf7a9f5ed53bff0607f753c17c6d915716fd72b68"
+  },
+  "source_after_root_tests": {
+    "README.md": "3f0edafbfa32d5cea64bae7506a5e0676432a8887352ada7bee375bdb0dd6407",
+    "src/CockpitWorkspace.vue": "ba232cc7db9419d77b3636cc8defc8cee0f415c1e780edec9842b591c9a12ad2",
+    "src/cockpitWorkspace.css": "a695b2d92a533e50f79945cf3efacc7e16209aaf4c478ff88f2cc68497ba1b47",
+    "src/cockpitControls.ts": "09aee1b217d7b1231e2980dd838c0e3ff25dd42f25b3953240e846f3fbb4c18f",
+    "tests/cockpitControls.test.mjs": "dfe2054c7db9836a6313b49509184c4edb629dbb571c3dd5e432b9438f3c74c2",
+    "scripts/cockpit-e2e.mjs": "c6b317922b7c4bc24e888998735af5ea7503242dc674d341fd2f4eeb25b17121",
+    "package.json": "8e8579ad3250051fe3137f60416fa45cf8d97fe3b76d83c99a73719c590fd413",
+    "package-lock.json": "14116b4f8bc0885bcacf5008bcea9c2a5b3c9fb95e1e44e5907abc3ac8fe6227",
+    "src/assets/cockpit/SOURCE.json": "87f3a823ee1c39f28945610cf7a9f5ed53bff0607f753c17c6d915716fd72b68"
+  },
+  "all_9_hashes_match_ui_commit": true,
+  "root_checks": {
+    "unit": {
+      "command": "npm test",
+      "exit_code": 0,
+      "passed": 120,
+      "failures": 0,
+      "skipped": 0,
+      "returned_console_tail": "..\n# Subtest: 外观：指定设计上的文案原样保留\nok 114 - 外观：指定设计上的文案原样保留\n  ---\n  duration_ms: 0.413833\n  type: 'test'\n  ...\n# Subtest: 外观：界面里不允许出现「模拟 / mock」字样\nok 115 - 外观：界面里不允许出现「模拟 / mock」字样\n  ---\n  duration_ms: 0.137375\n  type: 'test'\n  ...\n# Subtest: 外观：scripts/ui-e2e.mjs 依赖的选择器仍然存在\nok 116 - 外观：scripts/ui-e2e.mjs 依赖的选择器仍然存在\n  ---\n  duration_ms: 0.131083\n  type: 'test'\n  ...\n# Subtest: 外观：缺少操作者凭证时面板锁定（不发请求）\nok 117 - 外观：缺少操作者凭证时面板锁定（不发请求）\n  ---\n  duration_ms: 0.055625\n  type: 'test'\n  ...\n# Subtest: 外观：预览卡渲染真实业务字段\nok 118 - 外观：预览卡渲染真实业务字段\n  ---\n  duration_ms: 0.132667\n  type: 'test'\n  ...\n# Subtest: 外观：设计稿上的样式数值未被改动\nok 119 - 外观：设计稿上的样式数值未被改动\n  ---\n  duration_ms: 0.068625\n  type: 'test'\n  ...\n# Subtest: 外观：两张素材与设计稿逐字节一致\nok 120 - 外观：两张素材与设计稿逐字节一致\n  ---\n  duration_ms: 1.219584\n  type: 'test'\n  ...\n1..120\n# tests 120\n# suites 0\n# pass 120\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 226.713625\n"
+    },
+    "build": {
+      "command": "npm run build",
+      "exit_code": 0,
+      "result": "Vue/TypeScript/Vite build passed; existing media dependency chunk warning remains",
+      "returned_console": "> vue-tsc -b && vite build\nvite v8.3.4 building client environment for production...\ntransforming...\n✓ 61 modules transformed.\nrendering chunks...\ncomputing gzip size...\ndist/index.html                            0.43 kB │ gzip:   0.30 kB\ndist/assets/hangar2-dbg-CnqbJtGc.png       4.17 kB\ndist/assets/aiTalkBg-Cgp_mIGm.png         13.69 kB\ndist/assets/aiEmpty-B5OSth28.png          16.19 kB\ndist/assets/general-sys_bg-BFKphwO3.png   25.47 kB\ndist/assets/general-bg1-B0NsJNR8.png     126.40 kB\ndist/assets/index-CXx0aPYN.css            49.84 kB │ gzip:  15.30 kB\ndist/assets/index-DGercZpj.js            192.06 kB │ gzip:  79.95 kB\ndist/assets/mpegts-DD7TPLin.js           272.39 kB │ gzip:  61.78 kB\ndist/assets/hls-DmiZoos-.js              574.42 kB │ gzip: 178.98 kB\n✓ built in 326ms\n[plugin builtin:vite-reporter] \n(!) Some chunks are larger than 500 kB after minification. Consider:\n- Using dynamic import() to code-split the application\n- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting\n- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.\n"
+    },
+    "format": {
+      "command": "git diff --cached --check",
+      "exit_code": 0
+    },
+    "review": "Read six-file changes and public projection tests, actual browser driver and raw instrument checks. Independently hashed three original source files, two original/existing assets, all 55 archived files, raw report and three red records; checked browser counts, source-derived rectangles and zero endpoint-text overlaps."
+  },
+  "browser": {
+    "raw_json": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/evidence.json",
+    "sha256": "80b57cb4a59ba3ebace6786ae61ee239fc9b4f2c27d9d4795e6c5194ac71848b",
+    "scenarios": 96,
+    "fixture_api_requests": 175,
+    "fixture_confirmations": 21,
+    "forbidden_requests": 0,
+    "physical_device_requests": 0,
+    "browser_errors": []
+  },
+  "geometry": {
+    "scenario": "simple-three-instrument-source-layout",
+    "sourceCommit": "35574cba46d498e0992de05504756bccf7014ade",
+    "reference": {
+      "viewport1920": {
+        "x": 1168,
+        "y": 853,
+        "width": 313,
+        "height": 184
+      },
+      "viewport1280": {
+        "x": 778.6666666666666,
+        "y": 748.6666666666666,
+        "width": 208.66666666666666,
+        "height": 122.66666666666667
+      }
+    },
+    "actual": {
+      "viewport1920": {
+        "panel": {
+          "x": 1168.03125,
+          "y": 853.03125,
+          "width": 312.984375,
+          "height": 183.984375
+        },
+        "instruments": [
+          {
+            "x": 1168.03125,
+            "y": 859.015625,
+            "width": 104.328125,
+            "height": 169.984375
+          },
+          {
+            "x": 1272.359375,
+            "y": 859.015625,
+            "width": 113.8125,
+            "height": 169.984375
+          },
+          {
+            "x": 1386.171875,
+            "y": 859.015625,
+            "width": 94.84375,
+            "height": 169.984375
+          }
+        ],
+        "titles": [
+          "飞行高度",
+          "飞行航向",
+          "云台角度"
+        ],
+        "speedReadouts": [
+          {
+            "x": 1184.078125,
+            "y": 1009,
+            "width": 66.296875,
+            "height": 20
+          },
+          {
+            "x": 1406.15625,
+            "y": 1005.015625,
+            "width": 63.296875,
+            "height": 20
+          }
+        ]
+      },
+      "viewport1280": {
+        "panel": {
+          "x": 778.6875,
+          "y": 748.6875,
+          "width": 208.65625,
+          "height": 122.65625
+        },
+        "instruments": [
+          {
+            "x": 778.6875,
+            "y": 752.671875,
+            "width": 69.546875,
+            "height": 113.328125
+          },
+          {
+            "x": 848.234375,
+            "y": 752.671875,
+            "width": 75.875,
+            "height": 113.328125
+          },
+          {
+            "x": 924.109375,
+            "y": 752.671875,
+            "width": 63.234375,
+            "height": 113.328125
+          }
+        ],
+        "titles": [
+          "飞行高度",
+          "飞行航向",
+          "云台角度"
+        ],
+        "speedReadouts": [
+          {
+            "x": 788.890625,
+            "y": 852.65625,
+            "width": 44.6875,
+            "height": 13.34375
+          },
+          {
+            "x": 937.4375,
+            "y": 850,
+            "width": 42.671875,
+            "height": 13.34375
+          }
+        ]
+      }
+    },
+    "screenshots": [
+      "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/05f-simple-instruments-1920-observed.png",
+      "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/05g-simple-instruments-1280-observed.png"
+    ]
+  },
+  "boundary_readability": [
+    {
+      "pitch": 180,
+      "labels": {
+        "value": {
+          "x": 1419.125,
+          "y": 882.03125,
+          "width": 45.109375,
+          "height": 14
+        },
+        "ticks": [
+          {
+            "x": 1420.15625,
+            "y": 987,
+            "width": 38.765625,
+            "height": 16
+          }
+        ],
+        "overlaps": 0
+      },
+      "screenshot": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/12e-simple-gimbal-upper-boundary.png"
+    },
+    {
+      "pitch": -180,
+      "labels": {
+        "value": {
+          "x": 1419.125,
+          "y": 988.015625,
+          "width": 51.5625,
+          "height": 14
+        },
+        "ticks": [
+          {
+            "x": 1420.15625,
+            "y": 889,
+            "width": 30.109375,
+            "height": 16
+          }
+        ],
+        "overlaps": 0
+      },
+      "screenshot": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/12e-simple-gimbal-lower-boundary.png"
+    }
+  ],
+  "visual_review": {
+    "final_screenshots": [
+      "run-nrD1Gh/12e-simple-gimbal-upper-boundary.png",
+      "run-nrD1Gh/12e-simple-gimbal-lower-boundary.png",
+      "run-nrD1Gh/12d-simple-negative-angle-1280.png"
+    ],
+    "observed": "Actual camera-pitch values remain readable at both ends without duplicate tick text. Signed negative heading/pitch and speed appear separately at1280, with original confirmation still present.",
+    "earlier_images": "Before endpoint-only change, root also viewed platform-missing-fields and1280 negative-angle images from run-2b23Ha; the recoverable mapping is in provenance."
+  },
+  "archive": {
+    "counts": {
+      "png": 43,
+      "json": 12
+    },
+    "bytes": 29364020,
+    "files": [
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/provenance.json",
+        "bytes": 8751,
+        "sha256": "d04baac4740455fdf9066078c88db049a191a434ae8e345a60cc0d7eb666dded"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/00-header-geometry-observed.png",
+        "bytes": 1166704,
+        "sha256": "f1ffd9468433798b6eb50645e465ef2faa36a5ec611d00771dc6f6b20018021e"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/00-professional-stage-observed.png",
+        "bytes": 534494,
+        "sha256": "cc056a5bb8b3c2eee75311bd4f1c27e290078a3797e068229e8640b9c8013552"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/01-ready.png",
+        "bytes": 88475,
+        "sha256": "d77802f75364a47906ae4477f9801e1f6d39c1321d43cd072f38e7b71ff0b99d"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/02-confirmation.png",
+        "bytes": 93197,
+        "sha256": "7082c50ffa82faa7a6d44de831384d4d4bb0d6c6b54d0d40fd14ab4247ab515e"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/03-model-timeout.png",
+        "bytes": 82803,
+        "sha256": "ba4b269250378258b97ecdea9b913dfb16501cb9017b00e7cc42e9d30b7dbe5c"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/04-desktop-professional.png",
+        "bytes": 1536870,
+        "sha256": "681c38abd2f1138e016f7ab45cc175ac26928796aebf01cfeff5a709ee98e525"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/04b-professional-video-mini-map.png",
+        "bytes": 630078,
+        "sha256": "12a5770607bcfe2cef057e7fa47270676d04b0a8888568dc6537bd743bff933e"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/05-desktop-simple.png",
+        "bytes": 1147100,
+        "sha256": "117e1c72578ce868e84298dea1e21991b0c2ee8604ac4bdeaa0ed34f2a396fa1"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/05-simple-stage-observed.png",
+        "bytes": 1147100,
+        "sha256": "117e1c72578ce868e84298dea1e21991b0c2ee8604ac4bdeaa0ed34f2a396fa1"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/05b-simple-distance-settings.png",
+        "bytes": 1160429,
+        "sha256": "f3e41eae2f99fb2037636f494d5db28f73b80954dc13d4c8155f2ea10518332b"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/05c-simple-1280-observed.png",
+        "bytes": 567885,
+        "sha256": "0aada3af0722245109052c5426bc6a4c0ad319c8287cfa254ed5cbde077fc660"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/05c-simple-1280.png",
+        "bytes": 567885,
+        "sha256": "0aada3af0722245109052c5426bc6a4c0ad319c8287cfa254ed5cbde077fc660"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/05d-simple-1280-settings.png",
+        "bytes": 575483,
+        "sha256": "9e26ef93b3beb62f875ffe9b4ef9ef4c7e0ef204c1b0d4fb9dadf992492d98c3"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/05e-simple-mobile-assistant.png",
+        "bytes": 89580,
+        "sha256": "d8b9f3d581b7d64683ec4cf81873f722dd5d22d0d60160c3ac5cc547c2a75f01"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/05f-simple-instruments-1920-observed.png",
+        "bytes": 1147100,
+        "sha256": "117e1c72578ce868e84298dea1e21991b0c2ee8604ac4bdeaa0ed34f2a396fa1"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/05g-simple-instruments-1280-observed.png",
+        "bytes": 567885,
+        "sha256": "0aada3af0722245109052c5426bc6a4c0ad319c8287cfa254ed5cbde077fc660"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/06-desktop-confirmation.png",
+        "bytes": 911423,
+        "sha256": "4fd6c76726d47627ab16a6749667fcde9372c2c8f6c8f26f814abf8860917271"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/06b-simple-existing-confirmation.png",
+        "bytes": 640221,
+        "sha256": "74da9810c38b402f14d3ae8ce40b56089b1e905be2906c2fe48571b08bf9e44a"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/06c-simple-confirmation-1280.png",
+        "bytes": 404281,
+        "sha256": "da1ecd495f981b8c0fb3d0ea01f12fd77f9260b7bd7ee569c5f8d25a7dd280de"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/06d-simple-zero-coordinates.png",
+        "bytes": 636584,
+        "sha256": "a8ef3de9d275356de5d6ef39c27d9c2f629f75b98d7c1da14182e895688fcf37"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/06e-simple-authority-confirmation.png",
+        "bytes": 633265,
+        "sha256": "c587ab3ee7e6d2208525ca8bbf7e4fb9ebc8bf2f3150a303e4e75cb7cf8d1d23"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/07-telemetry-read-failure.png",
+        "bytes": 922932,
+        "sha256": "e23ea4a3886a594e98f8403dd23101defa9c1d6e8d01e0b3d6051ecbc39c4793"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/08-device-receipt-completed.png",
+        "bytes": 922494,
+        "sha256": "58a5b759af8e56af38375c5f579abfe485450bbbc442273eae75e28a69c426ca"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/08-device-receipt-mobile.png",
+        "bytes": 92922,
+        "sha256": "59f45de32ae57854dff61eefba3c703eb63eb7f4be75002340580a6f39145212"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/09-confirm-timeout-receipt.png",
+        "bytes": 921586,
+        "sha256": "8bc8998024619524b9901496453e669425350b7480840174499622642e958f31"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/10-dual-height-instruments.png",
+        "bytes": 914201,
+        "sha256": "5c9e1382132cd7fa5abe0445a33623373278cdfa7cbe74761f35606081a57cca"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/11-dual-height-simulator.png",
+        "bytes": 913932,
+        "sha256": "fa1bb95c7d95d6c756fd9b851a6ef27e7ab6766550fc410357371c82597a37ee"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/12-offline-map-workspace.png",
+        "bytes": 934813,
+        "sha256": "8b70ba0be95adabbf0097ad6a61bdfcdbc9056b930bfb50e40372330aac871a7"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/12a-simple-platform-missing-fields.png",
+        "bytes": 639202,
+        "sha256": "c257d07fe926268c0fa1c5d29ac85f2c3061beb70aeb996561f888ce70cf0d20"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/12b-simple-zero-instruments.png",
+        "bytes": 629823,
+        "sha256": "68e8bba759b29ffe1bd301b5e5c412ccdbfba6f4c8054c70c612e3630c2021ef"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/12c-simple-negative-angle-instruments.png",
+        "bytes": 632674,
+        "sha256": "d2156b674f04b1fc716ac6325955479d100aeacd16904c2e7b5c54610ff0497c"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/12d-simple-negative-angle-1280.png",
+        "bytes": 404244,
+        "sha256": "9dbc2647a381f1a07a198cc38ebec2b222bcfb90610956c1d2511a2ff9e1b49d"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/12e-simple-gimbal-lower-boundary.png",
+        "bytes": 631462,
+        "sha256": "ea1d4b4c19def61a95655ecb895ea2165ae3d8f5830ecf494b240c2b7647d2b3"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/12e-simple-gimbal-upper-boundary.png",
+        "bytes": 631686,
+        "sha256": "94a6e91a8fdadb274c697e0cf7c9f34eb1565ef8354f74cbcf0b77ee72dd6100"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/13-video-sources-1280.png",
+        "bytes": 481949,
+        "sha256": "70d8cfa56d1255784fdf99b2d9134ad8ca133ea6021095755419d88a7ecd0343"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/13-video-sources-desktop.png",
+        "bytes": 568442,
+        "sha256": "abfa46f4b075075fe6984c5c3088f07d20bd47a0a93765f3e14be7331dabce41"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/13-video-sources-mobile.png",
+        "bytes": 68063,
+        "sha256": "ed208e10178563e43660e4a01bb0bc972f456dccc3e54825ed6815eac3a28ae5"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/evidence.json",
+        "bytes": 36245,
+        "sha256": "80b57cb4a59ba3ebace6786ae61ee239fc9b4f2c27d9d4795e6c5194ac71848b"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/header-geometry-observed.json",
+        "bytes": 493,
+        "sha256": "c6357f62a0b92ce44e7e37ae96d71ff4734b5887a054b890a38d1f86d4c74a70"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/simple-1280-observed.json",
+        "bytes": 639,
+        "sha256": "2f5c819f83a257416b5d37af149b4d1151e278b3bd92041e3ce330f72a724407"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/simple-instrument-boundary-labels.json",
+        "bytes": 1040,
+        "sha256": "6b3bf58cf7aed6361aba0f365f276ac13563db081a00eadfa84cdfbbfafe99de"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/simple-instruments-observed.json",
+        "bytes": 2692,
+        "sha256": "3f199dbeb167ca6120fbb51b70b0ab18be504ab42346867ead43b0d732a65be0"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/simple-stage-observed.json",
+        "bytes": 897,
+        "sha256": "1701be705b87febede07c2a74b1650279259397c551f8323be693e9e707e71ad"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/stage-geometry-observed.json",
+        "bytes": 407,
+        "sha256": "5e79acc444bf93787c4caf63e92887bf618443390256c9694e918c7bb00d3e1b"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-OgIPoF/05f-simple-instruments-1920-observed.png",
+        "bytes": 1127882,
+        "sha256": "b477acd5ce852f9ba82e934948081335ba4c8bcf12481515e602ef708d4efe45"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-OgIPoF/05g-simple-instruments-1280-observed.png",
+        "bytes": 556140,
+        "sha256": "cd84da9b8a65dba029a9bd7dc1424cc7b0d1d344d896e7b8932a1b4c435cb0ce"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-OgIPoF/simple-instruments-observed.json",
+        "bytes": 1015,
+        "sha256": "3525dae96990aac951e1aea928bc29f8fc5c52c06a1faff3b50cecb15e9c0a4a"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-ZR28wo/12e-simple-gimbal-lower-boundary.png",
+        "bytes": 631948,
+        "sha256": "5d8611f7f004dd7b258376be4355204a01a67209b67a057dc1a7d905275a55b9"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-ZR28wo/12e-simple-gimbal-upper-boundary.png",
+        "bytes": 632253,
+        "sha256": "785b3f6df5780b35e7c1b4b85d882a71719a5d456e5ed2dabc86ebe991055873"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-ZR28wo/simple-instrument-boundary-labels.json",
+        "bytes": 1282,
+        "sha256": "2087aa4df9ce30d46f4332725b3c51befa0dff4d4cf2d867cd75bfaaddcdbfde"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-zWy53r/05f-simple-instruments-1920-observed.png",
+        "bytes": 1147264,
+        "sha256": "892283c5cdcc4228e9bbe1f686ccd1f438824bda432814fe817001aed3a9e300"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-zWy53r/05g-simple-instruments-1280-observed.png",
+        "bytes": 568234,
+        "sha256": "1edff235aaa543a45c046b2e4c6de0ace740f6ae61d2e1d1c70e052a70cb9356"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/run-zWy53r/simple-instruments-observed.json",
+        "bytes": 2692,
+        "sha256": "604625e28662f591b4829307d732d41d17a113d79be975b8d516421641109f50"
+      },
+      {
+        "path": "docs/evidence/cockpit-simple-instruments-20261016/source-contract.json",
+        "bytes": 4879,
+        "sha256": "e72baffe5d1fa62b4d28a5bd2c1203fcfbc97df1240acabfa324961578b88aba"
+      }
+    ]
+  },
+  "provenance": "docs/evidence/cockpit-simple-instruments-20261016/provenance.json",
+  "source_contract": "docs/evidence/cockpit-simple-instruments-20261016/source-contract.json",
+  "recoverable_intermediate_directory": "/tmp/cockpit-simple-instruments-intermediate-bLQ69c",
+  "adaptations": [
+    "Signed raw heading text is retained (-45deg, not normalized315deg); no old continuous-course store is imported.",
+    "Execution mode, snapshot status and vertical-datum explanation stay visible in the card header.",
+    "Unavailable speed text is smaller than numeric text to fit inside the fixed frame.",
+    "A fixed endpoint label is hidden in its top/bottom20percent region to keep the actual pitch reading clear; axis limits and pointer position are retained.",
+    "Only finite heading[-360,360]/camera pitch[-180,180] is drawn; unknown or invalid angles have no current-value pointer, and no obstacle levels are invented."
+  ],
+  "limits": [
+    "Strict platform snapshot still lacks speed/gimbal/weather/obstacle fields; UI Record typing does not add authoritative data.",
+    "ASL is an inherited label for absolute altitude_m; vertical datum is unspecified and no sea-level conversion is claimed.",
+    "Nonzero speed, pitch and malformed-value cases are synthetic simulator HTTP fixtures.",
+    "414px acceptance remains the assistant workflow; simultaneous mobile instruments/media are not claimed.",
+    "No real model, decoded live stream, business API/database, MQTT, deployed Java receipt or device effect was verified.",
+    "Agent product2284ee6/573 and Java0eb831b/208 are separate frozen slices; this UI change does not establish a new cross-language online acceptance."
+  ],
+  "effects": {
+    "real_model_calls": 0,
+    "business_database_writes": 0,
+    "real_mqtt_connections": 0,
+    "device_actions": 0,
+    "shared_deployments_or_restarts": 0,
+    "ui_development_branch_push": 1
+  },
+  "rollback": "Independent revert of UI commit7f14780, preserving source contracts, screenshots, prior model evidence and journal history. Do not replay commands."
+}

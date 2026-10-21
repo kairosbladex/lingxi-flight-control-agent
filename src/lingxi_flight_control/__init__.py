@@ -1,4 +1,4 @@
-"""灵犀飞行执行与任务下发 Agent 的最小核心。"""
+"""灵犀无人机飞控 Agent 的核心；保留旧任务下发类型的导入兼容。"""
 
 from .agent import BoundedAgentLoop, FlightExecutionAgent, ModelDecider, TaskDispatchAgent, ToolRegistry, parse_relative_move
 from .ollama_decider import (
@@ -103,6 +103,14 @@ from .session import (
     validate_session_id,
 )
 from .service import AgentService, ServiceResponse, build_http_server, decode_json_body
+from .standalone_preview import (
+    DEFAULT_CARD_TTL_SEC,
+    DEFAULT_POSE_TTL_SEC,
+    StandalonePreviewError,
+    StandalonePreviewService,
+    StandaloneResponse,
+    build_standalone_server,
+)
 from .tool_selector import (
     ALWAYS_INCLUDED,
     DOMAIN_KEYWORDS,
@@ -218,6 +226,12 @@ __all__ = [
     "ServiceResponse",
     "build_http_server",
     "decode_json_body",
+    "DEFAULT_CARD_TTL_SEC",
+    "DEFAULT_POSE_TTL_SEC",
+    "StandalonePreviewError",
+    "StandalonePreviewService",
+    "StandaloneResponse",
+    "build_standalone_server",
     "ALWAYS_INCLUDED",
     "DOMAIN_KEYWORDS",
     "PREREQUISITES",

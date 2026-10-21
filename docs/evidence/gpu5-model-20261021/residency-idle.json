@@ -1,0 +1,13 @@
+{
+  "time": "2026-10-21T07:21:57.519198+00:00",
+  "models": [
+    {
+      "name": "qwen3.5:9b",
+      "digest": "6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7",
+      "size_vram": 10008863360,
+      "context_length": 32768,
+      "expires_at": "2319-01-31T07:08:21.454913577Z"
+    }
+  ],
+  "processes": "PID                 COMMAND\n2038427             ollama\n2038944             ollama\n"
+}

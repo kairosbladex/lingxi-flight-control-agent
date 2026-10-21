@@ -1,0 +1,17 @@
+{
+  "source": "local-simulator-service",
+  "initialScreenshot": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-S4vOuG/01-ready.png",
+  "confirmationScreenshot": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-S4vOuG/02-confirmation.png",
+  "apiRequests": 10,
+  "confirmedRequests": 2,
+  "forbiddenRequests": 0,
+  "browserErrors": [],
+  "physicalDeviceRequests": 0,
+  "scenarios": [
+    "clarification",
+    "confirmation",
+    "cancel",
+    "refresh-retains-card",
+    "reset"
+  ]
+}

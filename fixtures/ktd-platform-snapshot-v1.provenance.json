@@ -1,0 +1,30 @@
+{
+  "fixture_kind": "synthetic-java-controller-response",
+  "recorded_date": "2026-10-16",
+  "source_repository": "ktd_backend",
+  "source_branch": "feature/flight-agent-platform-snapshot",
+  "source_base_commit": "98a8da4bf13f4ba623fb816da1a5cb9b09f8453a",
+  "source_state": "locally-committed-candidate",
+  "source_commit": "c06398bb8d84dfd0d07dbaf64ced4ab64f80ee55",
+  "generator": "PlatformSnapshotTest.validReadUsesEmployeeIdentityAndProducesSharedContractFixture",
+  "construction": "Real PlatformSnapshotController and PlatformSnapshotService with FakeSource and a fixed UTC clock; Fastjson PrettyFormat and WriteMapNullValue serialization of R.ok(data). No HTTP server, database, device or live platform call.",
+  "synthetic_clock_epoch_seconds": 1700000000,
+  "source_output": "target/flight-agent-platform-snapshot-v1.json",
+  "source_output_sha256": "74fef2f684ae5466e2aa36d9d6f7c94e1f3587e3508baee1b47ab5bbcce6030a",
+  "fixture_sha256": "ea035c5db81a50f54829644764a9be5e7b0b7344cfaabd3bccd720dbf0f148cc",
+  "shared_sorted_compact_json_sha256": "78675a97a51490550c10020285c4ced02fc0affce600c8767a4fd6b4ad74c22e",
+  "shared_json_hash_command": "jq -S -c . <fixture> | shasum -a 256",
+  "copy_change": "Added one trailing LF; JSON fields and values are unchanged.",
+  "source_sha256": {
+    "biz-inspection/src/main/java/com/fan/framework/inspection/platformsnapshot/PlatformSnapshotController.java": "5f40b48acfb68cabd6b395835a2bcc1a4ec94698ba40932cedbeb8de8a42acfa",
+    "biz-inspection/src/main/java/com/fan/framework/inspection/platformsnapshot/PlatformSnapshotService.java": "75845ccd7d03ef7452c98930a9f7220b35805efa486c0aef3ca6cb30f32fbdf1",
+    "biz-inspection/src/main/java/com/fan/framework/inspection/platformsnapshot/PlatformSnapshotVO.java": "642dbcd6d2b98898f09233ad50711d83628add48bae8836925e7e1112befea94",
+    "biz-inspection/src/main/java/com/fan/framework/inspection/platformsnapshot/PlatformSnapshotRepository.java": "2dd1b892ef28ddecfd1d44937bdca7228210866b624682f9b2cd459d9b6bcf5e",
+    "biz-inspection/src/main/java/com/fan/framework/inspection/platformsnapshot/PlatformSnapshotSource.java": "b139eabc83028b820b85dd7baf74ec5fd3792cef3cf8a82196687df1914f89f8",
+    "biz-inspection/src/main/java/com/fan/framework/inspection/platformsnapshot/PlatformSnapshotRequest.java": "3a3687e8bed1695fabc918bdd26a1b692adec857e7d5b49187324878ba377041",
+    "biz-inspection/src/main/java/com/fan/framework/inspection/platformsnapshot/PlatformSnapshotException.java": "fdc2dd7db7ee8cf022204e2cee3ffd5bd67e17ce32deba24adfda9a6d5497f8d",
+    "biz-inspection/src/test/java/com/fan/framework/inspection/platformsnapshot/PlatformSnapshotTest.java": "b283a41cebe7d0daa32807ad8d6df414e7baef1a221c0ff980b7b36a314d928b",
+    "sys-core/src/main/java/com/fan/framework/common/UdpDatas.java": "7df0be511b3a8228650596c06af94c15e8fbfaffe99cfd0f499b0523ab54575a",
+    "sys-core/src/main/java/com/fan/framework/common/UavTelemetrySnapshot.java": "109adf74323a79757bd6ada41243e1b2c84970bcb948d02872ed180260a3435a"
+  }
+}

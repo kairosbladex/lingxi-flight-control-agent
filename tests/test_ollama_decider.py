@@ -211,7 +211,8 @@ class DecideTests(unittest.TestCase):
         decider, _ = self.make({"error": "model not found"})
         with self.assertRaises(ValueError) as ctx:
             decider.decide("x", checkpoint(), ())
-        self.assertIn("model not found", str(ctx.exception))
+        self.assertEqual(str(ctx.exception), "model server returned an error response")
+        self.assertIsNone(decider.last_raw_response)
 
     def test_bad_tool_call_shapes_are_rejected(self):
         for response in (
@@ -753,7 +754,7 @@ class HttpTransportTests(unittest.TestCase):
             data = http_transport("http://host/api/chat", {"model": "m"}, 5.0)
         self.assertEqual(data["message"]["content"], "ok")
 
-    def test_http_error_reports_status_and_body(self):
+    def test_http_error_reports_status_without_body(self):
         import urllib.error
         error = urllib.error.HTTPError(
             "http://host", 404, "Not Found", {}, io.BytesIO(b'{"error":"model not found"}'))
@@ -762,7 +763,7 @@ class HttpTransportTests(unittest.TestCase):
                 http_transport("http://host/api/chat", {}, 5.0)
         message = str(ctx.exception)
         self.assertIn("HTTP 404", message)
-        self.assertIn("model not found", message)
+        self.assertNotIn("model not found", message)
 
     def test_timeout_is_distinguishable_from_unreachable(self):
         import urllib.error

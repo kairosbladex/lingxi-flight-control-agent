@@ -1,0 +1,283 @@
+{
+  "schema_version": "cockpit-ordinary-ui-verification/v1",
+  "recorded_at": "2026-10-16T11:25:29.776Z",
+  "run_id": "flight-cockpit-e2e-PNzNUu",
+  "source": "offline-http-fixture",
+  "operator": "local-development-synthetic-actor",
+  "repository": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-agent-ui",
+  "branch": "feature/natural-language-cockpit",
+  "baseline_commit": "b3a29d877a20d7b12f57eaa86eb6a3f4463268bf",
+  "implementation_commit": "ff2b91b6d54524044c5ce97f6af3641b52dfd1c0",
+  "remote_branch_sha_verified": "ff2b91b6d54524044c5ce97f6af3641b52dfd1c0",
+  "working_tree_at_verification": "Task changes uncommitted; exact runtime and script sources frozen by SHA256. README is edited separately after verification.",
+  "source_sha256": {
+    "src/CockpitWorkspace.vue": "431590fb721efa086ea0a4a2568c99fc70bc040c706735f5da853544bc8eeaa9",
+    "src/cockpitWorkspace.css": "b593fb94e57e7e09390df811ea59e5d1b6ed48de45b527cf459dd4ee2cfa1a9a",
+    "src/cockpitControls.ts": "d2c05ef64b29d16093f0b036db1bbba20232342cc60d12ef5e5f1f1bff11bef5",
+    "src/flightControl.ts": "6c05e02293da7db90686bfd554812fc0c692481530e4ca1471c162a0915b9613",
+    "src/CockpitAction.vue": "29a41447606a0435abc42e759185a53843dbf6144aad2434c2273509aaf16106",
+    "scripts/cockpit-e2e.mjs": "8520fe27627f9cfb356db79628bd105b1d13c9e91157f2167290f7036addd492",
+    "package-lock.json": "14116b4f8bc0885bcacf5008bcea9c2a5b3c9fb95e1e44e5907abc3ac8fe6227",
+    "tests/cockpitControls.test.mjs": "59d5a1fbe6b751e915bbd9c240e629df7a4520294b856add8e20a6c5ab8c3485"
+  },
+  "frozen_sources_rechecked_after_run": true,
+  "runtime": {
+    "node": "v22.22.3",
+    "platform": "darwin",
+    "arch": "arm64",
+    "browser": "Local Google Chrome via existing offline cockpit-e2e runner"
+  },
+  "verification": [
+    {
+      "command": "npm test",
+      "passed": 116,
+      "failed": 0,
+      "scope": "Frontend contracts and state tests; no actual model or device."
+    },
+    {
+      "command": "npm run build",
+      "result": "passed",
+      "scope": "vue-tsc and Vite build of the frozen source."
+    },
+    {
+      "command": "node scripts/cockpit-e2e.mjs",
+      "result": "passed",
+      "scenarios": 77,
+      "fixture_api_requests": 152,
+      "fixture_confirmations": 21,
+      "forbidden_requests": 0,
+      "browser_errors": [],
+      "physical_device_requests": 0
+    }
+  ],
+  "raw_evidence": {
+    "path": "cockpit-ordinary-ui-20261016.json",
+    "sha256": "11ea31f057072edb78bad4cb1851404d35600ba2a9364551f81b039809551fac",
+    "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-PNzNUu/evidence.json",
+    "archive_policy": "Raw JSON preserved, including original temporary paths. Screenshot mappings below resolve them to persistent files."
+  },
+  "screenshot_mapping": [
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-PNzNUu/01-ready.png",
+      "archived_path": "cockpit-ordinary-ui-20261016/01-ready.png",
+      "bytes": 71357,
+      "sha256": "bf552d1b65baa9b5a6579b8b53b247469743d094209e201a62759d5f1a1abecd"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-PNzNUu/02-confirmation.png",
+      "archived_path": "cockpit-ordinary-ui-20261016/02-confirmation.png",
+      "bytes": 76430,
+      "sha256": "56f0d196da3f6c9ba94c7c92f9a9a2201908abda466489d6f2fff181356eda01"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-PNzNUu/03-model-timeout.png",
+      "archived_path": "cockpit-ordinary-ui-20261016/03-model-timeout.png",
+      "bytes": 65739,
+      "sha256": "d6d99df157a0dbe8dd208ec3ba113e4ecd9f68cdf145c36b22f2f088bb7cc489"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-PNzNUu/04-desktop-professional.png",
+      "archived_path": "cockpit-ordinary-ui-20261016/04-desktop-professional.png",
+      "bytes": 348266,
+      "sha256": "827c8f3664d1c352192e079516a529ae307197f2f3f4e6b74cea236a9d287582"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-PNzNUu/05-desktop-simple.png",
+      "archived_path": "cockpit-ordinary-ui-20261016/05-desktop-simple.png",
+      "bytes": 1268843,
+      "sha256": "4a637aad3ee6de0a38fa2dc234015aba08cb3bc84932b8df9311651d8fd98539"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-PNzNUu/05b-simple-distance-settings.png",
+      "archived_path": "cockpit-ordinary-ui-20261016/05b-simple-distance-settings.png",
+      "bytes": 1242116,
+      "sha256": "0ecb94d50a4059a479d479b67fe47a2dc0825813545c768f8136aa107ab9794b"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-PNzNUu/06-desktop-confirmation.png",
+      "archived_path": "cockpit-ordinary-ui-20261016/06-desktop-confirmation.png",
+      "bytes": 718458,
+      "sha256": "1eff6c958653c5fb5e367dcc6632c43b8eb40165702862b68d080b5b41258e26"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-PNzNUu/07-telemetry-read-failure.png",
+      "archived_path": "cockpit-ordinary-ui-20261016/07-telemetry-read-failure.png",
+      "bytes": 731892,
+      "sha256": "2d47e162aae0ffb3b30b0afdcb1c757340e3ab7b0c86103b6c2aa82caf020452"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-PNzNUu/08-device-receipt-completed.png",
+      "archived_path": "cockpit-ordinary-ui-20261016/08-device-receipt-completed.png",
+      "bytes": 727115,
+      "sha256": "1e1196cb768249a4c97903e71ba2429a9b1ba3015385c176620e86c49c608e6f"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-PNzNUu/08-device-receipt-mobile.png",
+      "archived_path": "cockpit-ordinary-ui-20261016/08-device-receipt-mobile.png",
+      "bytes": 77855,
+      "sha256": "0fd9545455d5e1d019c965aa8211733fd17b02e84764a6b7dd62bc86256627f9"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-PNzNUu/09-confirm-timeout-receipt.png",
+      "archived_path": "cockpit-ordinary-ui-20261016/09-confirm-timeout-receipt.png",
+      "bytes": 725520,
+      "sha256": "bce735980bd7272f5bcc4b080c54270b7c1a9ad66207ea234f7282404333c032"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-PNzNUu/10-dual-height-instruments.png",
+      "archived_path": "cockpit-ordinary-ui-20261016/10-dual-height-instruments.png",
+      "bytes": 718160,
+      "sha256": "cc99c44343cf79268131f09a71669e180d25de5296f6c2beb976808b5b028ff9"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-PNzNUu/11-dual-height-simulator.png",
+      "archived_path": "cockpit-ordinary-ui-20261016/11-dual-height-simulator.png",
+      "bytes": 718464,
+      "sha256": "7958c854c3bd8c94c4d7799b2f12885bb5d1fe8d08ea0e5e26f4e622948aa82b"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-PNzNUu/12-offline-map-workspace.png",
+      "archived_path": "cockpit-ordinary-ui-20261016/12-offline-map-workspace.png",
+      "bytes": 762374,
+      "sha256": "6d4847aa9422f4103fd192c445aeb6996661107e5b868f04706b5ee56ab6ce69"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-PNzNUu/13-video-sources-1280.png",
+      "archived_path": "cockpit-ordinary-ui-20261016/13-video-sources-1280.png",
+      "bytes": 352081,
+      "sha256": "19f526d527f1e0638aec86000c8992d81afe40cb3853475842550558ad245adb"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-PNzNUu/13-video-sources-desktop.png",
+      "archived_path": "cockpit-ordinary-ui-20261016/13-video-sources-desktop.png",
+      "bytes": 387335,
+      "sha256": "51c20b7f6f11d89147f512f9afe832e984c0bbd8b73f01d03377f400698ced1a"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-PNzNUu/13-video-sources-mobile.png",
+      "archived_path": "cockpit-ordinary-ui-20261016/13-video-sources-mobile.png",
+      "bytes": 52965,
+      "sha256": "d033b4db1c47338c55b56543bf3c7afd59537b45b3ffcd837a2b0730f833c493"
+    }
+  ],
+  "root_visual_review": [
+    "04-desktop-professional.png",
+    "05-desktop-simple.png",
+    "05b-simple-distance-settings.png",
+    "06-desktop-confirmation.png"
+  ],
+  "reference": {
+    "type": "Ordinary deployed control-center structure and CSS geometry",
+    "evidence": "cockpit-test-ordinary-static-20261016.json",
+    "css_sha256": "b40022ede6d887c16b4f80db90c4b37999d3e5bc4bd0033e2a24ab8533b24670",
+    "component_module_sha256": "910e306d176c350fa033e63f730e1b8ca6140d327f8d91fe3a30ae9c85d39e3b"
+  },
+  "behavior": [
+    "Professional bottom console uses vertical tabs and movement, action and payload areas.",
+    "Simple bottom console uses aircraft operations, telemetry and payload cards; the movement settings reuse the same session and proposal path.",
+    "Distance, yaw and zoom intersect server schema bounds with the existing 20m, 360 degree and 30x contracts. Invalid ranges disable manual proposals.",
+    "Gimbal direction actions omit angle promises because their existing tool schemas have no angle parameter.",
+    "Keyboard, joystick, point-flight and orbit remain disabled; no new dispatch path.",
+    "Shared distance/yaw input bounds cover the available valid direction ranges; individual action checks continue to reject values outside that action's own bounds."
+  ],
+  "geometry_checks": [
+    {
+      "mode": "professional",
+      "bounds": {
+        "id": "flight-console",
+        "x": 360,
+        "y": 824.015625,
+        "width": 1200,
+        "height": 216,
+        "right": 1560,
+        "bottom": 1040.015625
+      },
+      "reference": "ordinary deployed CSS at 1920x1080"
+    },
+    {
+      "mode": "simple",
+      "bounds": {
+        "x": 825,
+        "y": 813.015625,
+        "width": 1085.015625,
+        "height": 224
+      },
+      "reference": "ordinary deployed CSS at 1920x1080"
+    }
+  ],
+  "range_checks": [
+    {
+      "scenario": "simple-movement-settings-are-local",
+      "bounds": {
+        "x": 825,
+        "y": 602.1875,
+        "width": 331.984375,
+        "height": 184.84375,
+        "right": 1156.984375,
+        "bottom": 787.03125
+      },
+      "apiRequests": 0
+    },
+    {
+      "scenario": "visible-control-ranges-match-tool-contract",
+      "limits": [
+        {
+          "id": "move-distance",
+          "min": "0.01",
+          "max": "20"
+        },
+        {
+          "id": "yaw-angle",
+          "min": "0.01",
+          "max": "360"
+        },
+        {
+          "id": "camera-zoom",
+          "min": "1",
+          "max": "30"
+        }
+      ],
+      "yawInputPromisesGimbalAngle": false
+    },
+    {
+      "scenario": "narrowed-tool-range-prevents-manual-request",
+      "min": 2,
+      "max": 8,
+      "proposedRequests": 0
+    },
+    {
+      "scenario": "asymmetric-direction-ranges-preserve-editing",
+      "malformedForwardDisabled": true,
+      "validLeftEnabled": true,
+      "validRightRange": [
+        5,
+        270
+      ],
+      "proposedRequests": 0
+    }
+  ],
+  "limits": [
+    "Synthetic local browser fixture; not online Java deployment or real flight acceptance.",
+    "Ordinary deployed source-render screenshots and temporary extraction ledger disappeared before archival; only the already archived structure/CSS provenance remains. The screenshots archived here are current product screenshots, not reconstructed source screenshots.",
+    "The geometry comparison covers only bottom consoles at 1920x1080. Outer sidebars, complete pixel equality, all viewports and current online business state remain unverified.",
+    "Unicode direction icons and fixed-distance proposal semantics are adaptations; they do not claim continuous keyboard or joystick control.",
+    "The full-page media fixture exercises request lifecycle, not decoding. No new model evaluation was run."
+  ],
+  "effects": {
+    "real_model_requests": 0,
+    "business_api_requests": 0,
+    "business_database_calls": 0,
+    "mqtt_connections": 0,
+    "device_actions": 0,
+    "deployments": 0
+  },
+  "red_green_followup": {
+    "reproduced_through": "Real built Vue app in the existing offline browser harness",
+    "red_assertion": "Invalid forward range must not disable valid left-distance editing: actual true, expected false.",
+    "fixture_synchronization": "Waited until the malformed schema's disabled reason appeared before asserting the input state.",
+    "fix": "Shared distance/yaw inputs cover valid available directions; malformed/unavailable directions do not restrict them. Each action keeps its own strict validation.",
+    "additional_unit_tests": 3,
+    "final_unit_tests": 116,
+    "final_browser_scenarios": 77
+  }
+}

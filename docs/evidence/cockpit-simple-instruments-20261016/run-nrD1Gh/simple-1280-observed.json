@@ -1,0 +1,29 @@
+{
+  "actual": {
+    "map": {
+      "x": 0,
+      "y": 95.328125,
+      "width": 539.984375,
+      "height": 776.015625
+    },
+    "video": {
+      "x": 549.984375,
+      "y": 95.328125,
+      "width": 723.359375,
+      "height": 624
+    },
+    "console": {
+      "x": 550,
+      "y": 722.015625,
+      "width": 723.34375,
+      "height": 149.328125
+    },
+    "headerBackground": {
+      "x": 0,
+      "y": 0,
+      "width": 1280,
+      "height": 60.65625
+    }
+  },
+  "screenshot": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-instruments-20261016/run-nrD1Gh/05c-simple-1280-observed.png"
+}

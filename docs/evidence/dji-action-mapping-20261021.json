@@ -1,0 +1,22 @@
+{
+  "scope": "Python browser gateway, unchanged Java, no device requests",
+  "offline_tests": {"passed": 719, "failed": 0, "command": "bash tools/ci/offline_tests.sh"},
+  "model_http_contract": {
+    "model": "qwen3.5:9b",
+    "prompt": "COCKPIT_SYSTEM_PROMPT",
+    "max_output_tokens": 2048,
+    "timeout_seconds": 45,
+    "max_attempts": 1,
+    "passed": 7,
+    "total": 7,
+    "actions": ["move_forward", "camera_start_recording", "camera_stop_recording", "camera_zoom", "camera_wide", "route_pause", "camera_photo"],
+    "before_confirmation_posts": 0,
+    "java_transport": "synthetic OldJava fixture",
+    "result": "submitted",
+    "device_effect": "not_verified",
+    "device_requests": 0
+  },
+  "live_service_replaced": false,
+  "all_java_actions_covered": false,
+  "cleanup": "HTTP servers closed and temporary journals cleaned in finally"
+}

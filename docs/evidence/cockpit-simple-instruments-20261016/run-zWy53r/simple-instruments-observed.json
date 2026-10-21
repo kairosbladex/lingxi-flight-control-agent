@@ -1,0 +1,117 @@
+{
+  "sourceCommit": "35574cba46d498e0992de05504756bccf7014ade",
+  "reference": {
+    "viewport1920": {
+      "x": 1168,
+      "y": 853,
+      "width": 313,
+      "height": 184
+    },
+    "viewport1280": {
+      "x": 778.6666666666666,
+      "y": 748.6666666666666,
+      "width": 208.66666666666666,
+      "height": 122.66666666666667
+    }
+  },
+  "actual": {
+    "viewport1920": {
+      "panel": {
+        "x": 1168.03125,
+        "y": 853.03125,
+        "width": 312.984375,
+        "height": 183.984375
+      },
+      "instruments": [
+        {
+          "x": 1168.03125,
+          "y": 859.015625,
+          "width": 104.328125,
+          "height": 169.984375
+        },
+        {
+          "x": 1272.359375,
+          "y": 859.015625,
+          "width": 113.8125,
+          "height": 169.984375
+        },
+        {
+          "x": 1386.171875,
+          "y": 859.015625,
+          "width": 94.84375,
+          "height": 169.984375
+        }
+      ],
+      "titles": [
+        "飞行高度",
+        "飞行航向",
+        "云台角度"
+      ],
+      "speedReadouts": [
+        {
+          "x": 1166.078125,
+          "y": 1009,
+          "width": 84.296875,
+          "height": 20
+        },
+        {
+          "x": 1406.15625,
+          "y": 1005.015625,
+          "width": 81.296875,
+          "height": 20
+        }
+      ]
+    },
+    "viewport1280": {
+      "panel": {
+        "x": 778.6875,
+        "y": 748.6875,
+        "width": 208.65625,
+        "height": 122.65625
+      },
+      "instruments": [
+        {
+          "x": 778.6875,
+          "y": 752.671875,
+          "width": 69.546875,
+          "height": 113.328125
+        },
+        {
+          "x": 848.234375,
+          "y": 752.671875,
+          "width": 75.875,
+          "height": 113.328125
+        },
+        {
+          "x": 924.109375,
+          "y": 752.671875,
+          "width": 63.234375,
+          "height": 113.328125
+        }
+      ],
+      "titles": [
+        "飞行高度",
+        "飞行航向",
+        "云台角度"
+      ],
+      "speedReadouts": [
+        {
+          "x": 776.890625,
+          "y": 852.65625,
+          "width": 56.6875,
+          "height": 13.34375
+        },
+        {
+          "x": 937.4375,
+          "y": 850,
+          "width": 54.671875,
+          "height": 13.34375
+        }
+      ]
+    }
+  },
+  "screenshots": [
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-instruments-20261016/run-zWy53r/05f-simple-instruments-1920-observed.png",
+    "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-simple-instruments-20261016/run-zWy53r/05g-simple-instruments-1280-observed.png"
+  ]
+}

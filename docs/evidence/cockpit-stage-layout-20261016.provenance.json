@@ -1,0 +1,362 @@
+{
+  "schema_version": "cockpit-layout-provenance/v1",
+  "recorded_at": "2026-10-16T13:18:42.996Z",
+  "scope": "Actual designated Vue UI in an isolated local browser with HTTP fixtures. Professional stage and header geometry matched fixed original sources; not full live visual/business acceptance.",
+  "baseline": {
+    "agent": "98178f821bd860e9f71bdfc7aa16195144f75eac",
+    "ui_before": "ff2b91b6d54524044c5ce97f6af3641b52dfd1c0",
+    "ui_after": "be3a0b03b439803e9a55df058fcda8c9b330beba",
+    "ui_branch": "feature/natural-language-cockpit",
+    "java_unchanged": "5f4ce20710606fde7c2730ee6c6a5b0de27cc743"
+  },
+  "reference": {
+    "repository": "/Users/wangxiaolin/PycharmProjects/onegismap_a-b4-20260910",
+    "commit": "35574cba46d498e0992de05504756bccf7014ade",
+    "read_method": "git show <fixed-commit>:<path> only; conflicted/dirty working files preserved",
+    "source_sha256": {
+      "src/layout/map.vue": "8a0dbc5d2c80f2442b79a1e8df8eae0536f905d305af7d55cef1fc1164221ca7",
+      "src/layout/topBar.vue": "522f1d372c2f152cfe7dfc916d106648ee592303d9f34dc40ab74b374bb51897",
+      "src/layout/sysTask.vue": "6a14901520fe74cbaf7cb9adae1e3caf69edf0ead8ec5f0eb89d7c079cb2029d",
+      "src/views/dashboard/components/Map.vue": "0985afc2f5e6c82193cf9199038f8244cf3044afb58ae1da01da266a6f1d10e4",
+      "src/views/hangar/index.vue": "eaf4bd4837f6116b15da1d04b141e85e4dfd817e996ba21f251b8e727b3ddc05",
+      "src/views/hangar/components/videos.vue": "424604f016b0defa08c7df433d803773f2a5bba4f4513c30a882ef0f0423cb21",
+      "src/styles/index.scss": "ff305ea8b77fe22c803d41f27de24b2471c5990c5b8543e4b9f380805ac04862"
+    },
+    "background": {
+      "source": "src/assets/general/sys_bg.png",
+      "destination": "src/assets/cockpit/general-sys_bg.png",
+      "sha256": "27275d804c1bc78266a04a2343c87a5ce54a9cd4bf6b4cd029628cc15ff18a6e",
+      "asset_count": 17
+    }
+  },
+  "final_run": {
+    "source": "offline-http-fixture",
+    "scenarios": 82,
+    "fixture_api_requests": 152,
+    "fixture_confirmations": 21,
+    "forbidden_requests": 0,
+    "browser_errors": [],
+    "physical_device_requests": 0,
+    "report": "docs/evidence/cockpit-stage-layout-20261016/final/evidence.json",
+    "report_sha256": "48d6ab4ba8f53c47444e166bdf04138e79259853af78f412217a610b857f7b92",
+    "artifact_count": 23,
+    "png_count": 20,
+    "json_count": 3,
+    "intermediate_81_scenario_result_superseded": true
+  },
+  "source_freeze": {
+    "before": {
+      "recorded_at": "2026-10-16T13:05:22.469Z",
+      "head": "ff2b91b6d54524044c5ce97f6af3641b52dfd1c0",
+      "source_sha256": {
+        "package-lock.json": "14116b4f8bc0885bcacf5008bcea9c2a5b3c9fb95e1e44e5907abc3ac8fe6227",
+        "package.json": "8e8579ad3250051fe3137f60416fa45cf8d97fe3b76d83c99a73719c590fd413",
+        "scripts/cockpit-e2e.mjs": "324e3e368ae21760b8d4ea52c7e57ad2f935153d1dc7d753a7d58eaade3c3793",
+        "scripts/import-cockpit-assets.mjs": "06040a8d904e5a33262cb1f328769bfb250ac4533294c421231955333dd372ef",
+        "src/CockpitHeader.vue": "ad6eee688bc19e53d23a666d22c3da0acfb373d04b4f7d0c745848cf001e9881",
+        "src/CockpitMap.vue": "57b930a5c75cf1af4cb9017a9fef684c84aa00d9c0f270c42b2bbfe9ef384c46",
+        "src/CockpitWorkspace.vue": "91a1e65a97b6774e77ed950d8f39509dd1159a689acca80e3e9fbec7e73afc72",
+        "src/assets/cockpit/SOURCE.json": "87f3a823ee1c39f28945610cf7a9f5ed53bff0607f753c17c6d915716fd72b68",
+        "src/assets/cockpit/general-sys_bg.png": "27275d804c1bc78266a04a2343c87a5ce54a9cd4bf6b4cd029628cc15ff18a6e",
+        "src/cockpitHeader.css": "1a9545ba99a5f9e6f5564f12836a9be268d521b349e6beb80f45af18dfc7f451",
+        "src/cockpitWorkspace.css": "81d3d563058feb742911d01543f2314c91326d1f21a273637f0d125831bb4919",
+        "tests/cockpitAssets.test.mjs": "12248901581c45da21b8489d9d2a99e2f8746d8de311fe96055871e7cb17cfbc"
+      }
+    },
+    "after": {
+      "recorded_at": "2026-10-16T13:08:14.655Z",
+      "head": "ff2b91b6d54524044c5ce97f6af3641b52dfd1c0",
+      "source_sha256": {
+        "package-lock.json": "14116b4f8bc0885bcacf5008bcea9c2a5b3c9fb95e1e44e5907abc3ac8fe6227",
+        "package.json": "8e8579ad3250051fe3137f60416fa45cf8d97fe3b76d83c99a73719c590fd413",
+        "scripts/cockpit-e2e.mjs": "324e3e368ae21760b8d4ea52c7e57ad2f935153d1dc7d753a7d58eaade3c3793",
+        "scripts/import-cockpit-assets.mjs": "06040a8d904e5a33262cb1f328769bfb250ac4533294c421231955333dd372ef",
+        "src/CockpitHeader.vue": "ad6eee688bc19e53d23a666d22c3da0acfb373d04b4f7d0c745848cf001e9881",
+        "src/CockpitMap.vue": "57b930a5c75cf1af4cb9017a9fef684c84aa00d9c0f270c42b2bbfe9ef384c46",
+        "src/CockpitWorkspace.vue": "91a1e65a97b6774e77ed950d8f39509dd1159a689acca80e3e9fbec7e73afc72",
+        "src/assets/cockpit/SOURCE.json": "87f3a823ee1c39f28945610cf7a9f5ed53bff0607f753c17c6d915716fd72b68",
+        "src/assets/cockpit/general-sys_bg.png": "27275d804c1bc78266a04a2343c87a5ce54a9cd4bf6b4cd029628cc15ff18a6e",
+        "src/cockpitHeader.css": "1a9545ba99a5f9e6f5564f12836a9be268d521b349e6beb80f45af18dfc7f451",
+        "src/cockpitWorkspace.css": "81d3d563058feb742911d01543f2314c91326d1f21a273637f0d125831bb4919",
+        "tests/cockpitAssets.test.mjs": "12248901581c45da21b8489d9d2a99e2f8746d8de311fe96055871e7cb17cfbc"
+      },
+      "source_unchanged": true
+    },
+    "committed": {
+      "commit": "be3a0b03b439803e9a55df058fcda8c9b330beba",
+      "source_sha256": {
+        "package-lock.json": "14116b4f8bc0885bcacf5008bcea9c2a5b3c9fb95e1e44e5907abc3ac8fe6227",
+        "package.json": "8e8579ad3250051fe3137f60416fa45cf8d97fe3b76d83c99a73719c590fd413",
+        "scripts/cockpit-e2e.mjs": "324e3e368ae21760b8d4ea52c7e57ad2f935153d1dc7d753a7d58eaade3c3793",
+        "scripts/import-cockpit-assets.mjs": "06040a8d904e5a33262cb1f328769bfb250ac4533294c421231955333dd372ef",
+        "src/CockpitHeader.vue": "ad6eee688bc19e53d23a666d22c3da0acfb373d04b4f7d0c745848cf001e9881",
+        "src/CockpitMap.vue": "57b930a5c75cf1af4cb9017a9fef684c84aa00d9c0f270c42b2bbfe9ef384c46",
+        "src/CockpitWorkspace.vue": "91a1e65a97b6774e77ed950d8f39509dd1159a689acca80e3e9fbec7e73afc72",
+        "src/assets/cockpit/SOURCE.json": "87f3a823ee1c39f28945610cf7a9f5ed53bff0607f753c17c6d915716fd72b68",
+        "src/assets/cockpit/general-sys_bg.png": "27275d804c1bc78266a04a2343c87a5ce54a9cd4bf6b4cd029628cc15ff18a6e",
+        "src/cockpitHeader.css": "1a9545ba99a5f9e6f5564f12836a9be268d521b349e6beb80f45af18dfc7f451",
+        "src/cockpitWorkspace.css": "81d3d563058feb742911d01543f2314c91326d1f21a273637f0d125831bb4919",
+        "tests/cockpitAssets.test.mjs": "12248901581c45da21b8489d9d2a99e2f8746d8de311fe96055871e7cb17cfbc"
+      }
+    },
+    "all_12_files_unchanged_during_run_and_match_commit": true,
+    "agent_count_11_excludes_unchanged_package_json": true
+  },
+  "geometry_1920x1080": {
+    "professional_map": {
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 1080
+    },
+    "left_card": {
+      "x": 10,
+      "y": 85,
+      "width": 335
+    },
+    "right_card": {
+      "x": 1575,
+      "y": 85,
+      "width": 335
+    },
+    "main_video": {
+      "x": 356,
+      "y": 120,
+      "width": 1208,
+      "height": 698
+    },
+    "thumbnail_map": {
+      "x": 10,
+      "y": 120,
+      "width": 335,
+      "height": 188
+    },
+    "header_height": 68,
+    "header_background_height": 91,
+    "header_project_id_center_x": 960,
+    "red_map": {
+      "x": 378,
+      "y": 127,
+      "width": 1164,
+      "height": 642
+    },
+    "red_header": {
+      "height": 72,
+      "title_center_x": 133.3828125,
+      "original_background": false
+    }
+  },
+  "behavioral_checks": [
+    "Pointer clicks switch the professional main scene and thumbnail without remounting Cesium canvas",
+    "Scene switch preserves pending confirmation and the same session",
+    "Layout changes produce zero API/playback requests or automatic confirmations",
+    "Resizing and unmounting clean up canvas",
+    "Existing simple bottom controls, 414px mobile receipt and 1280px media layout remain covered"
+  ],
+  "validation": [
+    {
+      "command": "npm test",
+      "result": "117/117 passed",
+      "independently_repeated_by": "root",
+      "root_log": "/tmp/flight-stage-ui-root-unit-20261016.log"
+    },
+    {
+      "command": "npm run build",
+      "result": "passed (Vue/TypeScript/Vite), existing chunk-size warning",
+      "independently_repeated_by": "root",
+      "root_log": "/tmp/flight-stage-ui-root-build-20261016.log"
+    },
+    {
+      "command": "env -u COCKPIT_API_URL npm run e2e:cockpit",
+      "result": "82 scenarios passed",
+      "root_review": "Archived original JSON, source hashes and professional/video/mobile PNGs independently reviewed"
+    }
+  ],
+  "archive": [
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/00-header-geometry-observed.png",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/00-header-geometry-observed.png",
+      "bytes": 1168096,
+      "sha256": "91fd154c9a71f7c24c5da9063f3360ed78846939e33699d027acba4ff6663bf4"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/00-professional-stage-observed.png",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/00-professional-stage-observed.png",
+      "bytes": 535007,
+      "sha256": "a4e3d999b32f3d3303a289255e16902d5ccbf89f1f57c42c6771ff6896fa4021"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/01-ready.png",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/01-ready.png",
+      "bytes": 88475,
+      "sha256": "d77802f75364a47906ae4477f9801e1f6d39c1321d43cd072f38e7b71ff0b99d"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/02-confirmation.png",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/02-confirmation.png",
+      "bytes": 93197,
+      "sha256": "7082c50ffa82faa7a6d44de831384d4d4bb0d6c6b54d0d40fd14ab4247ab515e"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/03-model-timeout.png",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/03-model-timeout.png",
+      "bytes": 82803,
+      "sha256": "ba4b269250378258b97ecdea9b913dfb16501cb9017b00e7cc42e9d30b7dbe5c"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/04-desktop-professional.png",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/04-desktop-professional.png",
+      "bytes": 1539150,
+      "sha256": "2c987ff3928afdedfcb7b6423b2016faaec4ea7eafe4abc9b12be147038008bc"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/04b-professional-video-mini-map.png",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/04b-professional-video-mini-map.png",
+      "bytes": 630663,
+      "sha256": "e92b090ced9027d4765a74dd29b07e46ef42f827e86f894b7943e1b43e3b9ef2"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/05-desktop-simple.png",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/05-desktop-simple.png",
+      "bytes": 1325835,
+      "sha256": "7bbdb124ba39ffa40b9f604330391cc5d8d38e6f56e6826bda06a7152dd0e922"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/05b-simple-distance-settings.png",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/05b-simple-distance-settings.png",
+      "bytes": 1274797,
+      "sha256": "eb1dcc04d80d91f7c4eed01dc074700af95903996d1f96db30af185f54b60151"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/06-desktop-confirmation.png",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/06-desktop-confirmation.png",
+      "bytes": 912400,
+      "sha256": "f31c087575d049438d2dd70faebf9e2f0389829f974e3411d2de603a2c859eb3"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/07-telemetry-read-failure.png",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/07-telemetry-read-failure.png",
+      "bytes": 923557,
+      "sha256": "8f2818bc6f9ec8bd2a99cadf5f1c7cf4d3314e30693e0850405b4aa9e9e6988a"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/08-device-receipt-completed.png",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/08-device-receipt-completed.png",
+      "bytes": 922941,
+      "sha256": "648b92cd7ddbef028a880d5551a7cea933676a160359cd2eb6cd3c275ec88fd1"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/08-device-receipt-mobile.png",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/08-device-receipt-mobile.png",
+      "bytes": 94349,
+      "sha256": "67a17725035312221591207f25f9a76f9a90c1aa73292d353ad8c41bdedbba20"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/09-confirm-timeout-receipt.png",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/09-confirm-timeout-receipt.png",
+      "bytes": 922158,
+      "sha256": "2d549b525c323ec3b1419148b221354f7d5664feeab9314d4fa478387333bac2"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/10-dual-height-instruments.png",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/10-dual-height-instruments.png",
+      "bytes": 916899,
+      "sha256": "5495df577dfef9e67a20be0fc362e84bcc55826b9650d8930bb3ab9653abfce4"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/11-dual-height-simulator.png",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/11-dual-height-simulator.png",
+      "bytes": 912746,
+      "sha256": "3728aad9ea64b1936f04a175a6c0d8dafa58c29c94a3ed3055281eb9a1284838"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/12-offline-map-workspace.png",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/12-offline-map-workspace.png",
+      "bytes": 935486,
+      "sha256": "fdfe7bfe787d45748bc1ce9d94e4cd063800e36058c2918b16c2e05cce5a80ef"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/13-video-sources-1280.png",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/13-video-sources-1280.png",
+      "bytes": 480504,
+      "sha256": "5f48a8d9d9f734ef5fb82366f67ea08e05f0e555efb48d735807f70192b090dd"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/13-video-sources-desktop.png",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/13-video-sources-desktop.png",
+      "bytes": 569023,
+      "sha256": "f82583966d513e6a09cb8b8b6740ffbc5ed1fd8c4d129d1997557ace2a54b673"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/13-video-sources-mobile.png",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/13-video-sources-mobile.png",
+      "bytes": 69373,
+      "sha256": "d7ebb38091c8398dddab58913c6fd0ff36f6fba1c48129be8e6848951e8134a6"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/evidence.json",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/evidence.json",
+      "bytes": 23105,
+      "sha256": "48d6ab4ba8f53c47444e166bdf04138e79259853af78f412217a610b857f7b92"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/header-geometry-observed.json",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/header-geometry-observed.json",
+      "bytes": 444,
+      "sha256": "601a4655c551c949cadbebc7524e67606755e2a76a5fbb3795791df034ee2622"
+    },
+    {
+      "original_path": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-5ZSxEg/stage-geometry-observed.json",
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/final/stage-geometry-observed.json",
+      "bytes": 358,
+      "sha256": "776ba7b05a4433c1186431ebabea8ebf86ce6b7dcec94eb4c13d30f870f3cd11"
+    }
+  ],
+  "red_artifacts": [
+    {
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/red-header-geometry.json",
+      "bytes": 482,
+      "sha256": "0a9ba20da3661e622fd2e8ef2a0ba8cd74ba8d0009b4a0046d4bf51a18a0e2d7"
+    },
+    {
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/red-header.png",
+      "bytes": 1163739,
+      "sha256": "dac096aa7a7c51973da536e401675aecf43ccd135084b63c9d009610562f4c88"
+    },
+    {
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/red-professional-stage.png",
+      "bytes": 402871,
+      "sha256": "b97db59274ee641a662e034dc673771407229a076aa2c9fbf0409ae0aff09a48"
+    },
+    {
+      "archived_path": "docs/evidence/cockpit-stage-layout-20261016/red-stage-geometry.json",
+      "bytes": 361,
+      "sha256": "36274713c7155045ef04a115db8802d41ba5d222c437f9d10c21ee48301935c4"
+    }
+  ],
+  "raw_artifact_policy": "Original JSON bytes and temporary screenshot paths preserved. Use archived_path for review; temporary paths are historical and not required for delivery.",
+  "root_review": {
+    "source_and_committed_hashes": "verified",
+    "archive_hashes_and_geometry": "verified",
+    "screenshots": "professional full map, main video/thumbnail map and mobile receipt inspected",
+    "ui_remote_sha": "be3a0b03b439803e9a55df058fcda8c9b330beba",
+    "ui_push": "succeeded and ls-remote matched"
+  },
+  "incomplete": [
+    "Full simple outer layout with left 810px map and right video",
+    "Original device carousel and content",
+    "Complete three-column instruments",
+    "Full test-environment visual/business parity",
+    "Real stream/device acceptance"
+  ],
+  "effects": {
+    "business_api_calls": 0,
+    "business_database_calls": 0,
+    "model_calls": 0,
+    "mqtt_connections": 0,
+    "device_actions": 0,
+    "shared_deployments_or_restarts": 0,
+    "ui_development_branch_push": 1
+  },
+  "rollback": "Independent revert of be3a0b0; preserve historical evidence, session and permission boundaries."
+}

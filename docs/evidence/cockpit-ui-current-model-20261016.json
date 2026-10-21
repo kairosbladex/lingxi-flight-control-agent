@@ -1,0 +1,32 @@
+{
+  "source": "local-simulator-service",
+  "initialScreenshot": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-Y7HUoS/01-ready.png",
+  "confirmationScreenshot": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-Y7HUoS/02-confirmation.png",
+  "modelFailureScreenshot": null,
+  "modelFailureChecks": [],
+  "desktopScreenshots": [],
+  "desktopChecks": null,
+  "telemetryChecks": null,
+  "instrumentChecks": [],
+  "instrumentScreenshots": [],
+  "mapChecks": null,
+  "mapRequests": [],
+  "deviceReceiptChecks": [],
+  "receiptScreenshots": [],
+  "mediaChecks": [],
+  "mediaScreenshots": [],
+  "mediaRequests": [],
+  "apiRequests": 10,
+  "confirmedRequests": 2,
+  "forbiddenRequests": 0,
+  "browserErrors": [],
+  "physicalDeviceRequests": 0,
+  "mediaDecoding": "not_evaluated_by_this_integration_fixture",
+  "scenarios": [
+    "clarification",
+    "confirmation",
+    "cancel",
+    "refresh-retains-card",
+    "reset"
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "schema_version": "simple-cockpit-source-contract/v1",
+  "source_repository": "/Users/wangxiaolin/PycharmProjects/onegismap_a-b4-20260910",
+  "source_commit": "35574cba46d498e0992de05504756bccf7014ade",
+  "read_method": "git show only; the conflicted working tree was not used or modified",
+  "sources": [
+    {
+      "path": "src/views/hangar/index.vue",
+      "sha256": "eaf4bd4837f6116b15da1d04b141e85e4dfd817e996ba21f251b8e727b3ddc05",
+      "references": [
+        "applyHangarModelType calls mapVideoSwitch('map') when entering simple mode and mapVideoSwitch('video') when returning to professional mode",
+        ".hangar.simple .left-panel: left825/top143/right0, padding 0 10px 0 0, height calc(100vh - 137px)",
+        ".hangar.simple .left-panel .videos: flex1, margin-bottom277px; .hangar-player becomes absolute inset0",
+        "#app.simple #map3dContainer: width810px, top143px, bottom43px, height auto",
+        ".simple-top: top95px, height48px; SimpleCoord uses margin-left800px",
+        "#app.simple .sys-top .right-btn: left100px, top25px, justify-content flex-start; source before-label is control authority",
+        ".hangar.simple hides Devices and collapses the regular right sidebar"
+      ]
+    },
+    {
+      "path": "src/views/hangar/components/videos.vue",
+      "sha256": "424604f016b0defa08c7df433d803773f2a5bba4f4513c30a882ef0f0423cb21",
+      "references": [
+        "mapVideoSwitch('map') means small-map/main-video and applies show-screen-one",
+        ".videos has width100%; .hangar-player.show-screen-one .uav-player uses width/height100%"
+      ]
+    },
+    {
+      "path": "src/styles/index.scss",
+      "sha256": "ff305ea8b77fe22c803d41f27de24b2471c5990c5b8543e4b9f380805ac04862",
+      "references": [".left-panel uses flex-direction column and box-sizing border-box"]
+    },
+    {
+      "path": "src/layout/sysTask.vue",
+      "sha256": "6a14901520fe74cbaf7cb9adae1e3caf69edf0ead8ec5f0eb89d7c079cb2029d",
+      "references": [
+        "lines18-48 show apply/release control authority entry according to controlPrower",
+        ".right-btn base width30%/height40px plus simple overrides produce x100/y25/width576/height40 at 1920"
+      ]
+    },
+    {
+      "path": "postcss.config.cjs",
+      "references": ["postcss-pxtorem rootValue192, all properties except border"]
+    },
+    {
+      "path": "src/main.ts",
+      "references": ["imports amfe-flexible/index.js; viewport root scaling is also retained in the previously archived deployment provenance"]
+    }
+  ],
+  "derived_geometry": {
+    "units": "x,y,width,height in CSS pixels; independently derived from the fixed source rules, not from product CSS",
+    "viewport_1920x1080": {
+      "map": [0, 143, 810, 894],
+      "video": [825, 143, 1085, 666],
+      "video_height_derivation": "(1080 - 137) flex panel minus 277 margin = 666",
+      "coordinate_strip": [0, 95, 1920, 48],
+      "control_authority": [100, 25, 576, 40],
+      "existing_bottom_console": [825, 813, 1085, 224]
+    },
+    "viewport_1280x900": {
+      "scale": "1280/1920 for source rem dimensions; viewport height remains 900",
+      "map": [0, 95.3333333333, 540, 776],
+      "video": [550, 95.3333333333, 723.3333333333, 624],
+      "control_authority": [66.6666666667, 16.6666666667, 384, 26.6666666667],
+      "existing_bottom_console": [550, 722, 723.3333333333, 149.3333333333]
+    },
+    "rounding_tolerance_css_px": 1
+  },
+  "data_scope": {
+    "used_existing_snapshot_fields": ["battery_percent", "longitude", "latitude", "height_m"],
+    "unknown_values": "remain explicitly unavailable; zero is preserved",
+    "not_added": ["hangar hatch", "push rod", "charging", "air conditioning", "distance to home", "weather", "synthetic sea-level conversion"]
+  },
+  "assistant": "The fixed hangar source has no independent flight-control Agent panel. Keeping this panel inside the left map is an explicit adaptation, not original-source pixel equality.",
+  "control_authority": "The unique existing Agent apply/release button instances move to the source authority slot in simple mode, sharing the same session/proposal/confirmation path. Original business controller/applyPower/forced authority behavior is not imported. Existing mode label moves into the left coordinate strip to avoid overlap; this is an explicit adaptation. Control owner text uses only the existing control_owned boolean, not an invented identity.",
+  "limits": [
+    "Source-derived geometry and actual product browser regression only; no full original-source screenshot is asserted.",
+    "The reference is the ordinary cockpit shell, not Hybrid control screenshots.",
+    "No original business controller, credentials, API, stream-start interface or MQTT module was executed.",
+    "414px acceptance covers the Agent assistant workflow, not simultaneous mobile video/map playback."
+  ]
+}

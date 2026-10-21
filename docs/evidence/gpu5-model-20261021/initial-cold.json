@@ -1,0 +1,36 @@
+[
+  {
+    "event": "probe_start",
+    "time": "2026-10-21T07:10:53.588432+00:00",
+    "model": "qwen3.5:9b",
+    "offline_scripted": false,
+    "direct_commands": false,
+    "cases_sha256": "1b73f3ef27770d1960a0cb7a424406d8094d5494b35f9e34989848a8aaa1b185",
+    "prompt_sha256": "1674d12cad0a6bcbe027877b5931ca6c8354bb1fca74ebe04dde6d30458021c4",
+    "budgets": {
+      "seconds": 360,
+      "calls": 12,
+      "request_timeout": 45,
+      "run_timeout": 65,
+      "steps": 3,
+      "num_ctx": 32768,
+      "max_output_tokens": 2048
+    },
+    "session": "one synthetic session; previews only; no confirmations",
+    "port": 32899
+  },
+  {
+    "case": 0,
+    "input": "拍一张照片",
+    "expected_action": "camera_photo",
+    "status": "error",
+    "error_code": "MODEL_TIMEOUT",
+    "action": null,
+    "parameters": null,
+    "elapsed_ms": 45140,
+    "model_calls": 1,
+    "passed": false,
+    "dispatched": false,
+    "idempotent_replay": true
+  }
+]

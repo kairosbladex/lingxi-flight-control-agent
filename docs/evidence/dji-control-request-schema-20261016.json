@@ -1,0 +1,125 @@
+{
+  "schema_version": "dji-control-request-identity-contract-review/v1",
+  "recorded_at": "2026-10-16T12:57:32.134Z",
+  "scope": "Read-only protocol and source verification; Dock2 DRC and M3D control_source only; no device/runtime/configuration access.",
+  "java_commit": "5f4ce20710606fde7c2730ee6c6a5b0de27cc743",
+  "official_sources": [
+    {
+      "id": "dock2-drc",
+      "url": "https://developer.dji.com/doc/cloud-api-tutorial/assets/js/v-14902db9.9eb6fabc.js",
+      "captured_at": "2026-10-16T12:49:34.198Z",
+      "status": 200,
+      "bytes": 240618,
+      "sha256": "8c4032cb0d6748d7bae5f08bd7c1a3517edb8fbd665b43d9ff42ef33543c81aa",
+      "snippets": [
+        {
+          "needle": "flight_authority_grab",
+          "offset": 23192,
+          "excerpt": " aria-hidden=\"true\">#</a> 飞行控制权抢夺</h2><p><strong>Topic:</strong> thing/product/<em>{gateway_sn}</em>/services</p><p><strong>Direction:</strong> down</p><p><strong>Method:</strong> flight_authority_grab</p><p><strong>Data:</strong> null</p><p><strong>Example:</strong></p><div class=\"language-json ext-json line-numbers-mode\"><pre class=\"language-json\"><code><span class=\"token punctuation\">{</span>\\n\\t<span class=\"token property\">&quot;bid&quot;</span><span class=\"token operator\">:</span> <span class=\"token string\">&quot;xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx&quot;</span><span class=\"token punctuation\">,</span>\\n\\t<span class=\"token property\">&quot;data&quot;</span><span class=\"token operator\">:</span> <span class=\"token punctuation\">{</span><span class=\"token punctuation\">}</span><span class=\"token punctuation\">,</span>\\n\\t<span class=\"token property\">&quot;tid&quot;</span>"
+        },
+        {
+          "needle": "可自定义的",
+          "offset": 32204,
+          "excerpt": "tr><td>»address</td><td>服务器连接地址</td><td>text</td><td></td><td>服务器连接地址，例如：192.0.2.1:8883, mqtt.dji.com:8883</td></tr><tr><td>»client_id</td><td>客户端 ID</td><td>text</td><td></td><td>可自定义的 MQTT 客户端 ID。建议使用设备的 SN 码，也可以与具有语义的前缀组合，例如，drc-4J4R101</td></tr><tr><td>»username</td><td>用户名</td><td>text</td><td></td><td>建立连接时使用的用户名</td></tr><tr><td>»password</td><td>密码</td><td>text</td><td></td><td>建立连接时认证所需要的密码</td></tr><tr><td>»expire_time</td><td>认证信息过期时间</td><td>int</td><td>{&quot;unit_name&quot;:&quot;秒 / s&quot;}</td><td>在有效期内认证信息可以重复使用，另外认证信息过期后，并不会影响已建立连接的设备</td></tr><tr><td>»enable_tls</td><td>是否启用 TLS</td><td>bool</td><td></td><td>启用 TLS 即对 MQTT 链路开启加密</td></tr><tr><td>osd_frequency</td><td>OSD 频率</td><td>int</td><td>{&quot;max&quot;:30,&quot;min&quot;:1,&quot;unit_name&quot;:&quot;赫兹 / Hz&quot;}</td><td>设置 OSD 上报频率</td></tr><tr><td>hsi_frequency</td><td>HSI 频率</td><td>i"
+        },
+        {
+          "needle": "心跳",
+          "offset": 12617,
+          "excerpt": "\"drc-链路状态通知-已废弃\" tabindex=\"-1\"><a class=\"header-anchor\" href=\"#drc-链路状态通知-已废弃\" aria-hidden=\"true\">#</a> DRC 链路状态通知（已废弃）</h2><p><strong>注意：本协议不再维护且不准确，通过机场上报的设备属性”drc_state“或使用“DRC-心跳”可感知更准确的DRC链路状态。</strong></p><p><strong>Topic:</strong> thing/product/<em>{gateway_sn}</em>/events</p><p><strong>Direction:</strong> up</p><p><strong>Method:</strong> drc_status_notify</p><p><strong>Data:</strong></p><table><thead><tr><th>Column</th><th>Name</th><th>Type</th><th>constraint</th><th>Description</th></tr></thead><tbody><tr><td>result</td><td>返回码</td><td>int</td><td></td><td>非 0 代表错误</td></tr><tr><td>drc_state</td><td>DRC 状态</td><td>enum_int</td><td>{&quot;0&quot;:&quot;未连接&quot;,&quot;1&quot;:&quot;连接中&quot;,&quot;2&quot;:&quot;已连接&quot;}</td><td></td></tr></tbody></table><p><strong>Example:</strong></p><div class=\"language-json ext-json line-numbers-mode\"><pre class=\"languag"
+        }
+      ]
+    },
+    {
+      "id": "m3d-properties",
+      "url": "https://developer.dji.com/doc/cloud-api-tutorial/assets/js/v-5b73cad5.d307dde7.js",
+      "captured_at": "2026-10-16T12:49:34.192Z",
+      "status": 200,
+      "bytes": 60691,
+      "sha256": "8fed81687087e86c8273c0c1cb3ce7150664bfc37fab8919583ee118a577daf0",
+      "snippets": [
+        {
+          "needle": "control_source",
+          "offset": 2670,
+          "excerpt": "d\",null,\"»»sn\"),(0,n._)(\"td\",null,\"设备sn\"),(0,n._)(\"td\",null,\"text\"),(0,n._)(\"td\"),(0,n._)(\"td\"),(0,n._)(\"td\"),(0,n._)(\"td\",null,\"0\")],-1),h=(0,n._)(\"tr\",null,[(0,n._)(\"td\",null,\"»»control_source_index\"),(0,n._)(\"td\",null,\"控制源序号\"),(0,n._)(\"td\",null,\"int\"),(0,n._)(\"td\",null,'{\"max\":\"2\",\"min\":\"1\",\"step\":\"1\",\"unit_name\":\"无 / \"}'),(0,n._)(\"td\"),(0,n._)(\"td\"),(0,n._)(\"td\",null,\"0\")],-1),x=(0,n._)(\"tr\",null,[(0,n._)(\"td\",null,\"cameras\"),(0,n._)(\"td\",null,\"飞行器相机信息\"),(0,n._)(\"td\",null,\"array\"),(0,n._)(\"td\",null,'{\"size\": -, \"item_type\": struct}'),(0,n._)(\"td\"),(0,n._)(\"td\",null,\"r\"),(0,n._)(\"td\",null,\"0\")],-1),g=(0,n._)(\"tr\",null,[(0,n._)(\"td\",null,\"»remain_photo_num\"),(0,n._)(\"td\",null,\"剩余拍照张数\"),(0,n._)(\"td\",null,\"int\"),(0,n._)(\"td\"),(0,n._)(\"td\",null,\"剩余拍照张数\"),(0,n._)(\"td\"),(0,n._)(\"td\",null,\"0\")],-1),y=(0,n._)(\"tr\",null,[(0,n._)(\"td\",null,\"»remain_record_duration\"),(0,n._)("
+        },
+        {
+          "needle": "浏览器以自生成",
+          "offset": 37249,
+          "excerpt": "Yt=(0,n._)(\"tr\",null,[(0,n._)(\"td\",null,\"control_source\"),(0,n._)(\"td\",null,\"当前控制源\"),(0,n._)(\"td\",null,\"text\"),(0,n._)(\"td\"),(0,n._)(\"td\",null,\"可以为设备，也可以为某个浏览器。设备使用 A/B 表示 A 控，B 控，浏览器以自生成的 uuid 作为标识符\"),(0,n._)(\"td\",null,\"r\"),(0,n._)(\"td\",null,\"1\")],-1),$t=(0,n._)(\"tr\",null,[(0,n._)(\"td\",null,\"wind_direction\"),(0,n._)(\"td\",null,\"当前风向\"),(0,n._)(\"td\",null,\"enum_int\"),(0,n._)(\"td\",null,'{\"1\":\"正北\",\"2\":\"东北\",\"3\":\"东\",\"4\":\"东南\",\"5\":\"南\",\"6\":\"西南\",\"7\":\"西\",\"8\":\"西北\"}'),(0,n._)(\"td\"),(0,n._)(\"td\",null,\"r\"),(0,n._)(\"td\",null,\"0\")],-1),l_=(0,n._)(\"tr\",null,[(0,n._)(\"td\",null,\"wind_speed\"),(0,n._)(\"td\",null,\"风速\"),(0,n._)(\"td\",null,\"float\"),(0,n._)(\"td\",null,'{\"unit_name\":\"0.1 米每秒 / m/s\"}'),(0,n._)(\"td\",null,\"风速估计，该风速是通过飞行器姿态推测出的，有一定的误差，仅供参考，不能作为气象数据使用\"),(0,n._)(\"td\",null,\"r\"),(0,n._)(\"td\",null,\"0\")],-1),t_=(0,n._)(\"tr\",null,[(0,n._)(\"td\",null,\"home_distance\"),(0,n._)(\"td\",null,\"距离 Home "
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "grab_request_has_no_actor_source_field",
+      "source_id": "dock2-drc",
+      "quote": "Method: flight_authority_grab; Data: null",
+      "observed_example": "data:{}",
+      "conclusion": "The reviewed request cannot set an employee, browser UUID or control_source. Correlating bid/tid/gateway/result proves only the result of this particular request."
+    },
+    {
+      "id": "enter_client_is_device_connection",
+      "source_id": "dock2-drc",
+      "quote": "可自定义的 MQTT 客户端 ID。建议使用设备的 SN 码，也可以与具有语义的前缀组合，例如，drc-4J4R101",
+      "conclusion": "mqtt_broker.client_id is configured for the device connecting to the relay broker; not the Java subscriber connection or a documented browser control_source mapping. Reusing one client ID on one broker must not be assumed safe."
+    },
+    {
+      "id": "reported_source_is_distinct",
+      "source_id": "m3d-properties",
+      "quote": "可以为设备，也可以为某个浏览器。设备使用 A/B 表示 A 控，B 控，浏览器以自生成的 uuid 作为标识符",
+      "access": "r",
+      "push_mode": 1,
+      "conclusion": "Record the actual top-level aircraft observation and its original receipt/source facts. No reviewed field maps it to employeeId or mqtt_broker.client_id."
+    },
+    {
+      "id": "broker_expiry_is_not_active_session_lease",
+      "source_id": "dock2-drc",
+      "quote": "认证信息过期后，并不会影响已建立连接的设备",
+      "conclusion": "Do not use authentication expire_time as vendor authority or active DRC session expiry."
+    },
+    {
+      "id": "platform_owner_ttl_has_a_source",
+      "local_sources": [
+        "biz-inspection/src/main/java/com/fan/framework/inspection/task/UavControlPowerTask.java",
+        "biz-inspection/src/main/java/com/platform/mqtt/own/UavControlPowerProcessor.java"
+      ],
+      "verified": "Existing task deletes owner rows after 5 minutes without platform heartbeat; the existing processor updates updateTime for msgType=0 and matching drone/employee.",
+      "conclusion": "updateTime+300 seconds describes the existing platform owner expiry policy; do not remove it as fabricated, and do not relabel it vendor authority or a DRC lease."
+    }
+  ],
+  "local_source_sha256": {
+    "biz-inspection/src/main/java/com/fan/framework/inspection/controller/UavControlPowerController.java": "d47eeaf40f65ef12dd8c406d2031267a70cbb395c1f1815a1bd0ee06099a8568",
+    "biz-inspection/src/main/java/com/fan/framework/inspection/task/UavControlPowerTask.java": "7ab892c5b45817e08caa4c29375b46adf18314965ac8f0c02d34bea80fd0615c",
+    "biz-inspection/src/main/java/com/platform/mqtt/own/UavControlPowerProcessor.java": "5300ee03e0faafb7edb815185f56b0758ddfadd10a52a707cc1c4b479dc8d6d5",
+    "sys-core/src/main/java/com/fan/framework/operation/uav/impl/DJHangarOperation.java": "1e00bf84622fbeaac950e5fafb06051fb813f32fdf40b174fc83f0385561fe3c",
+    "sys-core/src/main/java/com/fan/framework/operation/dJ/DJUtil.java": "87dc31484383faa3cd4ab7186f400664b26a60e1de3821e3bc8bb9f8f37e220e",
+    "sys-core/src/main/java/com/fan/framework/operation/dJ/dto/DrcModeEnterDTO.java": "bf9f676445f9bf2bca934a81f0e75a52efdb5544e1613bc2ffc39b76783d949b"
+  },
+  "implementable_without_device_samples": [
+    "Authenticated actor/resource control-attempt ledger using existing resource checks",
+    "Typed prepare/persist/bound publish for grab/enter/exit with original IDs and no automatic resend",
+    "Strict corresponding result facts, top-level control_source observations and separate heartbeat request/reply observations",
+    "Invalidate applicability on reconnect/owner/resource change/restart without promoting unknown authority"
+  ],
+  "missing_for_authority_permission": [
+    "Version-specific independent contract explaining how a browser UUID is supplied to the device and becomes top-level control_source",
+    "Identity lifecycle under grab, exit, competing sources and reconnect"
+  ],
+  "missing_for_online_acceptance": [
+    "Actual broker routing and supported firmware response/heartbeat samples",
+    "Explicitly scoped device acceptance and deployment authorization"
+  ],
+  "effects": {
+    "static_gets": 2,
+    "downloaded_bytes": 301309,
+    "downloaded_javascript_executed": false,
+    "java_product_changed": false,
+    "business_api_calls": 0,
+    "business_database_calls": 0,
+    "mqtt_connections": 0,
+    "device_actions": 0,
+    "deployment": 0
+  },
+  "limits": "Official schema evidence supports implementing local request/result provenance; it does not establish actual device firmware behavior or current actor authority. No claim is made that the missing browser mapping necessarily belongs to JSBridge or Pilot2."
+}

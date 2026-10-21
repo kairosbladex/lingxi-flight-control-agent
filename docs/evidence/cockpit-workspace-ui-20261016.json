@@ -1,0 +1,132 @@
+{
+  "source": "offline-http-fixture",
+  "initialScreenshot": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-GedNrj/01-ready.png",
+  "confirmationScreenshot": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-GedNrj/02-confirmation.png",
+  "modelFailureScreenshot": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-GedNrj/03-model-timeout.png",
+  "modelFailureChecks": [
+    {
+      "errorCode": "MODEL_TIMEOUT",
+      "renderedMessage": "理解指令超时，操作未执行，请稍后重新提出指令。",
+      "oldCardCleared": true,
+      "rawExceptionVisible": false,
+      "observationWindowMs": 500,
+      "requestPaths": [
+        "/api/flight-control/agent/messages"
+      ]
+    },
+    {
+      "errorCode": "MODEL_OUTPUT_TRUNCATED",
+      "renderedMessage": "模型回答被截断，操作未执行，请简短描述本次动作。",
+      "oldCardCleared": true,
+      "rawExceptionVisible": false,
+      "observationWindowMs": 500,
+      "requestPaths": [
+        "/api/flight-control/agent/messages"
+      ]
+    },
+    {
+      "errorCode": "RUN_BUDGET_EXCEEDED",
+      "renderedMessage": "本轮理解预算已耗尽，操作未执行，请简短描述本次动作。",
+      "oldCardCleared": true,
+      "rawExceptionVisible": false,
+      "observationWindowMs": 500,
+      "requestPaths": [
+        "/api/flight-control/agent/messages"
+      ]
+    },
+    {
+      "errorCode": "MODEL_ERROR",
+      "renderedMessage": "未生成可靠的动作建议，操作未执行，请重新描述本次动作。",
+      "oldCardCleared": true,
+      "rawExceptionVisible": false,
+      "observationWindowMs": 500,
+      "requestPaths": [
+        "/api/flight-control/agent/messages"
+      ]
+    }
+  ],
+  "desktopScreenshots": [
+    "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-GedNrj/04-desktop-professional.png",
+    "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-GedNrj/05-desktop-simple.png",
+    "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-cockpit-e2e-GedNrj/06-desktop-confirmation.png"
+  ],
+  "desktopChecks": {
+    "viewport": {
+      "width": 1920,
+      "height": 1080
+    },
+    "panelBounds": [
+      {
+        "id": "device-column",
+        "x": 10,
+        "y": 84,
+        "width": 355,
+        "height": 952,
+        "right": 365,
+        "bottom": 1036
+      },
+      {
+        "id": "scene-panel",
+        "x": 377,
+        "y": 84,
+        "width": 1166,
+        "height": 686,
+        "right": 1543,
+        "bottom": 770
+      },
+      {
+        "id": "telemetry-column",
+        "x": 1555,
+        "y": 84,
+        "width": 355,
+        "height": 952,
+        "right": 1910,
+        "bottom": 1036
+      },
+      {
+        "id": "flight-console",
+        "x": 377,
+        "y": 782,
+        "width": 1166,
+        "height": 254,
+        "right": 1543,
+        "bottom": 1036
+      }
+    ],
+    "sharedContextRequests": 1,
+    "proposalRequests": 1,
+    "manualIntent": "向前飞7.5米",
+    "automaticConfirmations": 0,
+    "unknownTelemetryPreserved": true,
+    "layoutSwitchRequests": 0
+  },
+  "apiRequests": 37,
+  "confirmedRequests": 3,
+  "forbiddenRequests": 0,
+  "browserErrors": [],
+  "physicalDeviceRequests": 0,
+  "scenarios": [
+    "clarification",
+    "confirmation",
+    "cancel",
+    "refresh-retains-card",
+    "reset",
+    "sequential-confirmation",
+    "expiry",
+    "http-error",
+    "MODEL_TIMEOUT",
+    "MODEL_OUTPUT_TRUNCATED",
+    "RUN_BUDGET_EXCEEDED",
+    "MODEL_ERROR",
+    "changed-context",
+    "late-response",
+    "platform-receipt-label-fixture",
+    "checkpoint-warning-preserves-receipt",
+    "desktop-layout",
+    "professional-simple-toggle",
+    "shared-manual-proposal",
+    "unavailable-controls",
+    "unknown-telemetry",
+    "legacy-preview-entry"
+  ]
+}

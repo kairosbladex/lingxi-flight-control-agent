@@ -1,0 +1,41 @@
+{
+  "fixture_kind": "synthetic-java-controller-raw-frame-response",
+  "recorded_date": "2026-10-16",
+  "source_repository": "ktd_backend",
+  "source_branch": "feature/flight-agent-platform-snapshot",
+  "source_base_commit": "98a8da4bf13f4ba623fb816da1a5cb9b09f8453a",
+  "source_state": "locally-committed-candidate",
+  "source_commit": "8cc7f1452d52c18d659777833053eb1c7cb58eb7",
+  "generator": "PlatformSnapshotTest.rawFrameProducesSeparateControllerFixtureWithoutGrantingControl",
+  "construction": "Real UavTelemetryFrames, PlatformSnapshotController and PlatformSnapshotService with synthetic raw DJI JSON, FakeSource and a fixed UTC clock. No HTTP server, database, live MQTT, platform or device calls.",
+  "synthetic_clock_epoch_seconds": 1700000000,
+  "source_output": "biz-inspection/target/flight-agent-platform-raw-snapshot-v1.json",
+  "source_output_sha256": "72bec6c47588275ed958dadb624beeb6cb6233716ad60c17e863804bd8f1838c",
+  "fixture_sha256": "55428e1babab3b83928c27a7e1b62f1854782ade8097c1767cb3ba8204600fc1",
+  "shared_sorted_compact_json_sha256": "87d67b28d8732e768e989bdc51e4a319e4ca1ab4cb1689bce61144f668ed9357",
+  "shared_json_hash_command": "jq -S -c . <fixture> | shasum -a 256",
+  "copy_change": "Added one trailing LF; JSON fields and values are unchanged.",
+  "limitations": [
+    "Protocol-reported timestamp and processing-entry receive time are not calibrated sensor sampling evidence.",
+    "Complete frame does not grant vendor authority, control-link freshness or flight completion.",
+    "All writes remain denied; UAV_MOVE_DISTANCE is false."
+  ],
+  "source_sha256": {
+    "biz-inspection/src/main/java/com/fan/framework/inspection/platformsnapshot/PlatformSnapshotController.java": "5f40b48acfb68cabd6b395835a2bcc1a4ec94698ba40932cedbeb8de8a42acfa",
+    "biz-inspection/src/main/java/com/fan/framework/inspection/platformsnapshot/PlatformSnapshotException.java": "fdc2dd7db7ee8cf022204e2cee3ffd5bd67e17ce32deba24adfda9a6d5497f8d",
+    "biz-inspection/src/main/java/com/fan/framework/inspection/platformsnapshot/PlatformSnapshotRepository.java": "df1b44259e50f8ed445fd5bdaab1cbfc833d542cfcf31661c38511a10d332a88",
+    "biz-inspection/src/main/java/com/fan/framework/inspection/platformsnapshot/PlatformSnapshotRequest.java": "3a3687e8bed1695fabc918bdd26a1b692adec857e7d5b49187324878ba377041",
+    "biz-inspection/src/main/java/com/fan/framework/inspection/platformsnapshot/PlatformSnapshotService.java": "950472c8da3404405dfd3b4c928564c19379050d6c34c2a6d1f0c05ac91dbe83",
+    "biz-inspection/src/main/java/com/fan/framework/inspection/platformsnapshot/PlatformSnapshotSource.java": "403b05292c33bd844e5f60c8c2fc12f2f6c1246e4842545e5cbc67613380e497",
+    "biz-inspection/src/main/java/com/fan/framework/inspection/platformsnapshot/PlatformSnapshotVO.java": "642dbcd6d2b98898f09233ad50711d83628add48bae8836925e7e1112befea94",
+    "biz-inspection/src/test/java/com/fan/framework/inspection/platformsnapshot/PlatformSnapshotRepositoryTest.java": "1551c0735cdb944f8e93aec51e08446a45c81ad90649d596bdb042ad1e205b30",
+    "biz-inspection/src/test/java/com/fan/framework/inspection/platformsnapshot/PlatformSnapshotTest.java": "c12c10a0cde7f0edcbf6cedc8c14ec1d9862924aad0ad7515fb7888ec48cee57",
+    "biz-inspection/src/test/java/com/fan/framework/inspection/platformsnapshot/TelemetryIngressTest.java": "1596f546f18d15cf4caa8a65a9cbdb2985b876e04447241defa727b7ae2298ac",
+    "biz-inspection/src/test/java/com/fan/framework/inspection/platformsnapshot/UavTelemetryFrameTest.java": "9652764f88c81464107302d56432e46e4e5194ccc1e1bbe1ebf9d6f57775396f",
+    "biz-inspection/src/test/java/com/fan/framework/inspection/platformsnapshot/UavTelemetrySnapshotTest.java": "dfb4ccc70da0e3628a97236cc64e8f96f1cc2e26fe278223523f37362f761bb2",
+    "sys-core/src/main/java/com/fan/framework/common/UavTelemetryFrames.java": "e43052931e9700de84fd32e42e83bfb4c30a58c3b4e6f07f4006121e7b995c51",
+    "sys-core/src/main/java/com/fan/framework/common/UdpDatas.java": "df8bc0e19bf65790c310d73d819a08b892aad1247174d00bd117e993b0eec40a",
+    "biz-inspection/src/main/java/com/platform/mqtt/dj/DJHangarOsdProcessor.java": "56ab90c51f343c07a4d86d76a43b718f0bad1b5962cfd54a7fa8c9c3d72b0967",
+    "biz-inspection/src/main/java/com/platform/mqtt/pz/PZHangarProcessor.java": "5d1650957da18dff66101ed35596f3d6fd6ec883323c0e15772eef9ae131c0d8"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "scope": "Floating conversation widget and existing Agent-to-Java adapter integration, per 2026-10-17 clarified user request",
+  "status": "implemented_and_offline_verified",
+  "baseline": {
+    "agent": "feature/natural-language-cockpit@1adeb9b483935f60f9290e71ce1bb8cccded0552",
+    "ui": "feature/natural-language-cockpit@21b9239a0e81e194e771bcacfa408f624d87efdd",
+    "java_unchanged": "feature/flight-agent-platform-snapshot@e623312c173fd698657a39fa22e4ad98c0630a80",
+    "original_java_unchanged": "858f6deec67d93734242a52845215a4d78736d6d",
+    "initial_dirty_state": "only root-owned task card in docs/natural-language-cockpit.md; UI clean"
+  },
+  "ui_commit": { "sha": "ecc7798e2f3da81c007bfa7031c7f1cc61fd0507", "remote_branch_verified": true, "branch": "feature/natural-language-cockpit" },
+  "runtime": { "identity": "local development user", "python": "3.13.2", "node": "24.13.0", "npm": "11.6.2", "provider_prompt_and_59_actions": "unchanged", "backend_product_source": "unchanged" },
+  "verification_owner": "root independently reran final commands, inspected source and raw reports, verified hashes and desktop/mobile/embedded PNGs",
+  "gates": [
+    { "command": "bash tools/ci/offline_tests.sh", "passed": 619, "failed": 0, "seconds": 5.851, "network_guard": "passed" },
+    { "command": "PYTHONPATH=src python3 tools/bench/test_chat_bubble_platform_fixture.py", "passed": 1, "failed": 0, "seconds": 1.333, "coverage": "real HTTP clarification, 5 confirmation fields and tampering, cross-session, extra field, malformed array, replay, cancel/reset invalidation, manual receipt, environment isolation" },
+    { "repository": "lingxi-flight-agent-ui", "command": "npm test", "passed": 140, "failed": 0 },
+    { "repository": "lingxi-flight-agent-ui", "command": "npm run build", "result": "passed", "note": "existing optional video chunk >500k warning; default chat does not fetch it" },
+    { "repository": "lingxi-flight-agent-ui", "command": "env -u CHAT_API_URL npm run e2e:chat", "scenarios": 27, "api_requests": 32, "explicit_confirmations": 4 },
+    { "repository": "lingxi-flight-agent-ui", "command": "CHAT_API_URL=<owned fixture agent_url> npm run e2e:chat", "scenarios": 22, "api_requests": 12, "explicit_confirmations": 1 },
+    { "repository": "lingxi-flight-agent-ui", "command": "env -u COCKPIT_API_URL npm run e2e:cockpit", "entry": "?mode=cockpit", "scenarios": 115, "api_requests": 224, "explicit_confirmations": 31 },
+    { "command": "git diff --check and staged diff checks in both repositories", "result": "passed" }
+  ],
+  "evidence_in_ui_repository": {
+    "delivery": { "path": "artifacts/chat-bubble-ui-20261017/delivery.json", "sha256": "18a9105605ba0cf442592ec558d317c4a1f1eaafa7b2bb97af10d127d824d9ff" },
+    "default_chat": { "path": "artifacts/chat-bubble-ui-20261017/run-DJDk2I/evidence.json", "sha256": "4a770f871cf72b30f7ce61cd5f74906851288f5de945e2bd7c5bd8fe23abb8d4" },
+    "actual_agent_adapter": { "path": "artifacts/chat-bubble-java-20261017/run-YJtbUs/evidence.json", "sha256": "7f8786dfa371661d6ca42b98771305a87b4222ec14cba40f4cbf247d35118ef0" },
+    "compatibility": { "path": "artifacts/chat-bubble-ui-20261017/cockpit-compatibility.json", "sha256": "cf9ff65066c04ea71a12330fc87a4e3b2a83cf972a8efaf500765ff77b478ea7" },
+    "preservation": "Both new runs including all 10 PNGs and raw JSON are committed. Compatibility raw JSON is committed; its original large screenshots remain in the explicit temporary run directory recorded by delivery.json. No files were removed."
+  },
+  "fixture_sources": {
+    "tools/bench/chat_bubble_platform_fixture.py": "21bc3a88b916d6a2746bc9312a07377d0913ad3832b8e189c60188b087272ac2",
+    "tools/bench/test_chat_bubble_platform_fixture.py": "43e2260cd88ee32f14c4fb7f0864d4d6312a8e34309a616d13f01b3582900d36",
+    "fixtures/ktd-command-receipt-v1.json": "19f13c591e93466f65414a0294851022bfe159b53e8412380d93ab13c7365eaa"
+  },
+  "final_browser_adapter_run": {
+    "runtime": ["CockpitService", "BoundedAgentLoop", "OllamaDecider with scripted transport", "KtdPlatformExecutor"],
+    "model_decisions": 6, "java_snapshot_gets": 22, "java_receipt_gets": 1,
+    "java_posts_before_confirmation": 0, "java_posts_after_cancel": 0, "java_posts_after_confirmation": 1,
+    "path": "/api/screen/uav/operation/control", "body": { "type": 202, "mode": 2, "param": 10 },
+    "confirmation_and_trace_binding": "validated in raw report", "post_valid": true,
+    "receipt_queries_repost": false, "source_freeze_stable": true, "network_connects": 24, "network_blocked": 0
+  },
+  "tdd": "Implementing subagents observed launcher and hidden-result-scroll red assertions, plus HTTP malformed-array disconnect red. Root checked baseline source hashes and independently verified final green. UI delivery explicitly states no red screenshots/full red builds retained.",
+  "limits": { "root_tool_calls_max": 150, "wall_minutes_max": 60, "fixture_lifetime_seconds_max": 300, "paid_model_calls": 0 },
+  "side_effects": { "local_source_and_evidence": true, "owned_fixture_writes": true, "semantic_branch_pushes": true, "live_model_calls": 0, "business_writes": 0, "shared_deployments_or_restarts": 0, "production_mqtt_or_devices": 0, "forbidden_browser_requests": 0, "browser_errors": 0, "owned_fixture_process": "stopped and listener closure verified" },
+  "limits_of_claim": { "model_accuracy": "not_evaluable; prior frozen reports unchanged", "device_effect": "not_verified", "java_platform_deployment": "not_verified", "authority_and_link": "existing production fail-closed gates retained", "scenario_sets_overlap": true },
+  "rollback": "Revert the task's semantic commits without deleting historical journals, fixtures, source evidence or replaying device commands. No deployment rollback is needed."
+}

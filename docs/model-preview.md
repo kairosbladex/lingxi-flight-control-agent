@@ -46,6 +46,33 @@
 这是 `displayed_reference`，不能冒充服务器权威遥测；推理超时导致位置变旧时重新预览。
 本轮仅支持水平位移，高度原样保留，不推断高度基准，也不申请控制权。
 
+## 独立预览服务的错误码
+
+`StandalonePreviewService` 的错误码是前端唯一可依赖的机器可读契约，与
+`docs/service.md` 的约定一致：**循环抛出的 `ValueError` 是「请求不合法」→ 400，
+500 只兜未预期异常**。
+
+| 场景 | HTTP | `error_code` |
+| --- | --- | --- |
+| 请求体非 JSON、字段缺失或多出未知字段 | 400 | `INVALID_REQUEST` |
+| 循环抛出的 `ValueError`（含同一 `idempotency_key` 换指令或位置） | 400 | `INVALID_REQUEST` |
+| 确认卡不存在／已过期／与预览不一致 | 400 | `INVALID_REQUEST` |
+| `confirmation_binding` 不是 64 位摘要 | 400 | `INVALID_CONFIRMATION` |
+| 位置或航向越界、位姿字段非法 | 422 | `INVALID_POSE` |
+| **参考位姿超过 TTL（含模型推理期间过期）** | 409 | `STALE_POSE` |
+| 上下文版本已变化 | 409 | `STALE_CONTEXT` |
+| 该无人机尚未写入位姿 | 404 | `POSE_NOT_FOUND` |
+| 预览卡不存在或已被替代 | 404 | `NOT_FOUND` |
+| 缺少或错误的服务网关凭证 | 401 | `UNAUTHENTICATED` |
+| 方法不支持 | 405 | `METHOD_NOT_ALLOWED` |
+| 未预期异常（兜底） | 500 | `INTERNAL_ERROR` |
+
+**2026-10-15 修正**：模型推理结束后 `preview.py` 会再校验一次位姿，过期时抛出的
+`StaleReferencePose` 原先没有单独映射，落到了 500 `INTERNAL_ERROR`；同一条件在
+`POST /pose`、`GET /pose` 上一直是 409 `STALE_POSE`。现在三处统一为 409，
+源码级类型是 `preview.StaleReferencePose`（`ValueError` 子类，向后兼容）。
+客户端因此可以按文档「推理超时导致位置变旧时重新预览」自动刷新位姿并重试一次。
+
 ## 验证与证据边界
 
 - 飞控项目全量离线：307项通过，包含4个航向、左右后、跨日期线、真实模拟器转向后前进、

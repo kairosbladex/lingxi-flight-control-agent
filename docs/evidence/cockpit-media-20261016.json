@@ -1,0 +1,293 @@
+{
+  "status": "passed",
+  "source": "actual-BrowserMediaPlayer-with-synthetic-local-media",
+  "sourceHashes": {
+    "scripts/media-e2e.mjs": "a5855e609498de098417fe820b6deb34e5f5e18c7cb4360c9431d82dc7dcd492",
+    "src/mediaPlayer.ts": "128caeacf6be193d71311ca9b0f1c8e665d291187fa9883081bc1b6e0ae03497",
+    "src/cockpitMedia.ts": "d9452f63d8cb3d651ef0e1ce69ceccb68ff74f6b45c22b99beb68aef28a3d3b1",
+    "package-lock.json": "14116b4f8bc0885bcacf5008bcea9c2a5b3c9fb95e1e44e5907abc3ac8fe6227"
+  },
+  "browserVersion": {
+    "product": "Chrome/155.0.8059.84",
+    "protocolVersion": "1.3"
+  },
+  "cases": [
+    {
+      "scenario": "mp4-actual-decode",
+      "width": 320,
+      "height": 180,
+      "decodedFrames": 18,
+      "currentTime": 0.594482,
+      "presentedFrames": 15,
+      "screenshot": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-media-e2e-kM0N7H/mp4-actual-decode.png"
+    },
+    {
+      "scenario": "hls-actual-decode",
+      "width": 352,
+      "height": 198,
+      "decodedFrames": 18,
+      "currentTime": 0.576235,
+      "presentedFrames": 32,
+      "screenshot": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-media-e2e-kM0N7H/hls-actual-decode.png"
+    },
+    {
+      "scenario": "flv-actual-decode",
+      "width": 384,
+      "height": 216,
+      "decodedFrames": 18,
+      "currentTime": 0.600915,
+      "presentedFrames": 47,
+      "screenshot": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-media-e2e-kM0N7H/flv-actual-decode.png"
+    },
+    {
+      "scenario": "stop-clears-and-stops-playback",
+      "passed": true
+    },
+    {
+      "scenario": "stop-aborts-active-fetch",
+      "passed": true
+    },
+    {
+      "scenario": "switch-new-source-actual-decode",
+      "width": 320,
+      "height": 180,
+      "decodedFrames": 19,
+      "currentTime": 0.620865,
+      "presentedFrames": 62,
+      "screenshot": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-media-e2e-kM0N7H/switch-new-source-actual-decode.png"
+    },
+    {
+      "scenario": "switch-aborts-active-fetch",
+      "passed": true
+    },
+    {
+      "scenario": "dispose-aborts-active-fetch",
+      "passed": true
+    },
+    {
+      "scenario": "mp4-forbidden",
+      "errorCode": "MEDIA_READ_FAILED",
+      "passed": true
+    },
+    {
+      "scenario": "hls-forbidden",
+      "errorCode": "MEDIA_READ_FAILED",
+      "passed": true
+    },
+    {
+      "scenario": "hls-redirect",
+      "errorCode": "MEDIA_READ_FAILED",
+      "passed": true
+    },
+    {
+      "scenario": "hls-cross-segment",
+      "errorCode": "MEDIA_READ_FAILED",
+      "passed": true
+    },
+    {
+      "scenario": "hls-cross-key",
+      "errorCode": "MEDIA_READ_FAILED",
+      "passed": true
+    },
+    {
+      "scenario": "synthetic-canvas-rtc-recvonly",
+      "width": 400,
+      "height": 224,
+      "decodedFrames": 14,
+      "currentTime": 0.57682,
+      "presentedFrames": 79,
+      "cameraRequests": 0,
+      "microphoneRequests": 0,
+      "signaling": "fetch-boundary-synthetic-answer",
+      "remoteCandidate": "same-literal-ip-as-source-local-host-only",
+      "peerClosed": true,
+      "screenshot": "/var/folders/12/75j12v1n1jqgyhrz7q6jvh8c0000gn/T/flight-media-e2e-kM0N7H/synthetic-rtc-actual-decode.png"
+    },
+    {
+      "scenario": "rtc-external-candidate-rejected-before-peer-application",
+      "errorCode": "MEDIA_ICE_SOURCE_UNVERIFIED",
+      "remoteDescriptionCalls": 0,
+      "testGuardInterceptions": 0,
+      "peerClosed": true,
+      "passed": true
+    },
+    {
+      "scenario": "rtc-missing-candidate-rejected-before-peer-application",
+      "errorCode": "MEDIA_ICE_SOURCE_UNVERIFIED",
+      "remoteDescriptionCalls": 0,
+      "testGuardInterceptions": 0,
+      "peerClosed": true,
+      "passed": true
+    }
+  ],
+  "mediaRequests": [
+    {
+      "path": "/synthetic-media/clip.mp4",
+      "method": "GET",
+      "authorization": false,
+      "cookie": false,
+      "referrer": false,
+      "complete": true,
+      "aborted": false
+    },
+    {
+      "path": "/synthetic-media/playlist.m3u8",
+      "method": "GET",
+      "authorization": false,
+      "cookie": false,
+      "referrer": false,
+      "complete": true,
+      "aborted": false
+    },
+    {
+      "path": "/synthetic-media/segment-000.ts",
+      "method": "GET",
+      "authorization": false,
+      "cookie": false,
+      "referrer": false,
+      "complete": true,
+      "aborted": false
+    },
+    {
+      "path": "/synthetic-media/segment-001.ts",
+      "method": "GET",
+      "authorization": false,
+      "cookie": false,
+      "referrer": false,
+      "complete": true,
+      "aborted": false
+    },
+    {
+      "path": "/synthetic-media/segment-002.ts",
+      "method": "GET",
+      "authorization": false,
+      "cookie": false,
+      "referrer": false,
+      "complete": true,
+      "aborted": false
+    },
+    {
+      "path": "/synthetic-media/segment-003.ts",
+      "method": "GET",
+      "authorization": false,
+      "cookie": false,
+      "referrer": false,
+      "complete": true,
+      "aborted": false
+    },
+    {
+      "path": "/synthetic-media/segment-004.ts",
+      "method": "GET",
+      "authorization": false,
+      "cookie": false,
+      "referrer": false,
+      "complete": true,
+      "aborted": false
+    },
+    {
+      "path": "/synthetic-media/clip.flv",
+      "method": "GET",
+      "authorization": false,
+      "cookie": false,
+      "referrer": false,
+      "complete": true,
+      "aborted": false
+    },
+    {
+      "path": "/synthetic-media/slow-stop.mp4",
+      "method": "GET",
+      "authorization": false,
+      "cookie": false,
+      "referrer": false,
+      "complete": false,
+      "aborted": true
+    },
+    {
+      "path": "/synthetic-media/slow-switch.mp4",
+      "method": "GET",
+      "authorization": false,
+      "cookie": false,
+      "referrer": false,
+      "complete": false,
+      "aborted": true
+    },
+    {
+      "path": "/synthetic-media/clip.mp4",
+      "method": "GET",
+      "authorization": false,
+      "cookie": false,
+      "referrer": false,
+      "complete": true,
+      "aborted": false
+    },
+    {
+      "path": "/synthetic-media/slow-dispose.mp4",
+      "method": "GET",
+      "authorization": false,
+      "cookie": false,
+      "referrer": false,
+      "complete": false,
+      "aborted": true
+    },
+    {
+      "path": "/synthetic-media/forbidden.mp4",
+      "method": "GET",
+      "authorization": false,
+      "cookie": false,
+      "referrer": false,
+      "complete": true,
+      "aborted": false
+    },
+    {
+      "path": "/synthetic-media/forbidden.m3u8",
+      "method": "GET",
+      "authorization": false,
+      "cookie": false,
+      "referrer": false,
+      "complete": true,
+      "aborted": false
+    },
+    {
+      "path": "/synthetic-media/redirect.m3u8",
+      "method": "GET",
+      "authorization": false,
+      "cookie": false,
+      "referrer": false,
+      "complete": true,
+      "aborted": false
+    },
+    {
+      "path": "/synthetic-media/cross-segment.m3u8",
+      "method": "GET",
+      "authorization": false,
+      "cookie": false,
+      "referrer": false,
+      "complete": true,
+      "aborted": false
+    },
+    {
+      "path": "/synthetic-media/cross-key.m3u8",
+      "method": "GET",
+      "authorization": false,
+      "cookie": false,
+      "referrer": false,
+      "complete": true,
+      "aborted": false
+    }
+  ],
+  "canaryRequests": [],
+  "redirectTargets": [],
+  "forbiddenRequests": [],
+  "browserErrors": [],
+  "sensitiveConsoleOutput": false,
+  "cancelledInterceptions": 0,
+  "backgroundBlocked": 11,
+  "flightRequests": 0,
+  "platformRequests": 0,
+  "rtc": "synthetic-real-peerconnection",
+  "syntheticMediaHashes": {
+    "clip.mp4": "b7ae09642cee537db20c9f0ef97c35570523a1008d9a3590d507822bc6622d7b",
+    "playlist.m3u8": "771aa81404e14f9f2bfef1f22b9a0337452bf95ea6bba9278508028b16ea354c",
+    "clip.flv": "d6ea362c2a284e1a8e0f7a69117efb5fc173518967b40d2c261581a45cfe7526"
+  }
+}

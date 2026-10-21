@@ -1,0 +1,140 @@
+{
+  "schema_version": "lingxi-local-dji-control-binding/v1",
+  "recorded_at": "2026-10-16T11:01:55.227Z",
+  "scope": "Read-only source trace; no application startup, business data, runtime configuration, MQTT or device access.",
+  "repositories": {
+    "candidate": {
+      "path": "/Users/wangxiaolin/PycharmProjects/ktd_backend-flight-agent-snapshot",
+      "branch": "feature/flight-agent-platform-snapshot",
+      "commit": "7af3964cc89b35c9371a83c4b37ff26539a7bb48",
+      "clean": true
+    },
+    "primary": {
+      "path": "/Users/wangxiaolin/IdeaProjects/ktd_backend",
+      "branch": "feature/geo-video-sync-recompute",
+      "commit": "858f6deec67d93734242a52845215a4d78736d6d",
+      "clean": true,
+      "latest_remote_prod_verified": false
+    }
+  },
+  "source_sha256": {
+    "biz-inspection/src/main/java/com/fan/framework/inspection/controller/UavControlPowerController.java": "d47eeaf40f65ef12dd8c406d2031267a70cbb395c1f1815a1bd0ee06099a8568",
+    "sys-core/src/main/java/com/fan/framework/operation/uav/impl/DJHangarOperation.java": "1e00bf84622fbeaac950e5fafb06051fb813f32fdf40b174fc83f0385561fe3c",
+    "sys-core/src/main/java/com/fan/framework/operation/dJ/DJUtil.java": "87dc31484383faa3cd4ab7186f400664b26a60e1de3821e3bc8bb9f8f37e220e",
+    "sys-core/src/main/java/com/fan/framework/operation/dJ/dto/DrcModeEnterDTO.java": "bf9f676445f9bf2bca934a81f0e75a52efdb5544e1613bc2ffc39b76783d949b",
+    "sys-core/src/main/java/com/walker/mm/AbstractMessageEngine.java": "e3e5d833507a23646c9bb85f1e3d5e6ed784c78359b37febe7e3ec663edbe97a",
+    "sys-core/src/main/java/com/walker/mm/MessageData.java": "56ca7dc8c9a5fd98d11e83a00bb6dcfd0a943efc3187139d70989f2bd7a3236a",
+    "sys-core/src/main/java/com/walker/mm/impl/DefaultMessageData.java": "e0bbfa4064b704e09b13c98199db016a68e1a2d97d7f71dffb3edaaa61332ef6",
+    "platform-mqtt/src/main/java/com/platform/mqtt/PlatformMessageEngine.java": "4675d70c7f6bc9a857c8a0bdfa5cff2bbac99ff8738d96818bd4ee6cb5fde64b",
+    "platform-mqtt/src/main/java/com/platform/mqtt/AbstractPlatformMessageManager.java": "ef4bfe273d905b963e8b909304f79c93ef5211c4210a93ba60471fa362279e05",
+    "platform-mqtt/src/main/java/com/platform/mqtt/AbstractMqttMessageManager.java": "75918fe56657e3b09900aaf5760c1422d581dfa1c7e938f46db4c38e5e51f6c4",
+    "platform-mqtt/src/main/java/com/platform/mqtt/util/MessageUtils.java": "c32a1efb4d15528fea336009999722fff27c97641629d00206cbe2e9f4edc473",
+    "sys-utils/src/main/java/com/walker/infrastructure/utils/DateUtils.java": "9800e82ad6367b2758aef5db43417569b1a311344a74d890092ad6b5f92dc026"
+  },
+  "findings": [
+    {
+      "id": "authenticated_platform_actor",
+      "path": "biz-inspection/src/main/java/com/fan/framework/inspection/controller/UavControlPowerController.java",
+      "line": 50,
+      "verified": "obtain derives employee identity from SysUtil.currentUser().getEmpId(); platform ownership associates uavId with employeeId.",
+      "not_proven": "This record does not identify a vendor control_source or DRC MQTT session."
+    },
+    {
+      "id": "unbound_drc_client",
+      "path": "sys-core/src/main/java/com/fan/framework/operation/dJ/dto/DrcModeEnterDTO.java",
+      "line": 23,
+      "verified": "MqttBroker.client_id is a new UUID; uavRouteControl builds a new broker DTO from DJDockMqttProperties.",
+      "construction_path": "sys-core/src/main/java/com/fan/framework/operation/uav/impl/DJHangarOperation.java",
+      "construction_line": 224,
+      "not_proven": "No retained employee/resource/control-session association was found on this send path; expire_time is credential expiry, not a session lease."
+    },
+    {
+      "id": "untracked_control_services",
+      "path": "sys-core/src/main/java/com/fan/framework/operation/dJ/DJUtil.java",
+      "line": 883,
+      "verified": "flight_authority_grab, drc_mode_enter and drc_mode_exit return void and publish ServicesReply envelopes. Enter starts local heartbeat after publishing; exit cancels it after publishing.",
+      "enter_line": 904,
+      "exit_line": 914,
+      "not_proven": "No correlated device reply is awaited by these methods; publishing or local heartbeat does not establish device authority."
+    },
+    {
+      "id": "independent_broker_sources",
+      "path": "sys-core/src/main/java/com/walker/mm/AbstractMessageEngine.java",
+      "line": 112,
+      "verified": "publishWithPlatform delegates to the global platformMessageManager. PlatformMessageEngine constructs it from MqManagerEntity records and a managerId plus date-number client ID.",
+      "manager_path": "platform-mqtt/src/main/java/com/platform/mqtt/PlatformMessageEngine.java",
+      "manager_line": 93,
+      "client_line": 131,
+      "broker_adapter_path": "platform-mqtt/src/main/java/com/platform/mqtt/AbstractPlatformMessageManager.java",
+      "broker_adapter_line": 17,
+      "not_proven": "The runtime broker values were not read. Independent configuration sources do not prove that runtime brokers differ or coincide."
+    },
+    {
+      "id": "ingress_lacks_connection_lineage",
+      "path": "platform-mqtt/src/main/java/com/platform/mqtt/AbstractMqttMessageManager.java",
+      "line": 608,
+      "verified": "MQTT messages are converted then queued; consumer submits processing to an executor. MessageUtils.toMessageData drops retained/duplicate flags and manager/client/connection generation information.",
+      "converter_path": "platform-mqtt/src/main/java/com/platform/mqtt/util/MessageUtils.java",
+      "converter_line": 24,
+      "message_interface_path": "sys-core/src/main/java/com/walker/mm/MessageData.java",
+      "consumer_line": 350,
+      "not_proven": "Queued messages cannot be bound to their originating connection generation from the current MessageData contract. A processing-time lookup must not assign a newer generation to an older queued message."
+    },
+    {
+      "id": "reconnect_changes_client",
+      "path": "platform-mqtt/src/main/java/com/platform/mqtt/AbstractMqttMessageManager.java",
+      "line": 252,
+      "verified": "Connection loss schedules reconnect; connectComplete resubscribes asynchronously; connect creates a new date-number client ID. The platform manager adapter explicitly sets cleanSession=true.",
+      "reconnect_client_line": 502,
+      "adapter_path": "platform-mqtt/src/main/java/com/platform/mqtt/AbstractPlatformMessageManager.java",
+      "adapter_line": 17,
+      "not_proven": "No control-session invalidation or old queued-message epoch barrier was found on this path."
+    },
+    {
+      "id": "message_timestamp_is_calendar_number",
+      "path": "sys-core/src/main/java/com/walker/mm/impl/DefaultMessageData.java",
+      "line": 10,
+      "verified": "timeStamp is assigned DateUtils.getDateTimeNumber(), formatted yyyyMMddHHmmss.",
+      "date_utility_path": "sys-utils/src/main/java/com/walker/infrastructure/utils/DateUtils.java",
+      "date_utility_line": 266,
+      "not_proven": "This value is not Unix epoch milliseconds and must not be subtracted from currentTimeMillis as a TTL measurement."
+    }
+  ],
+  "negative_search_scope": {
+    "reported_by_peer": "Both local source trees; operator/DRC/control_source, dynamic subscription and alternate DJApp paths.",
+    "root_reviewed": "Key send, identity, broker-construction, ingress, queue-dispatch, timestamp and reconnect source slices plus 12 candidate source hashes.",
+    "result": "No complete authenticated employee -> DRC session -> reported control_source binding found in the inspected paths.",
+    "limit": "A bounded source audit cannot prove absence in runtime configuration, external services, firmware, unavailable history or uninspected device traffic."
+  },
+  "reusable_paths": [
+    {
+      "path": "biz-inspection/src/main/java/com/fan/framework/inspection/platformsnapshot/PlatformResourceAccess.java",
+      "purpose": "Authenticated project/resource checks"
+    },
+    {
+      "path": "biz-inspection/src/main/java/com/fan/framework/inspection/flightcommand/VerifiedFlightCommand.java",
+      "purpose": "Fixed request identifiers before publication"
+    },
+    {
+      "path": "biz-inspection/src/main/java/com/fan/framework/inspection/flightcommand/FlightCommandService.java",
+      "purpose": "Persist-before-publish command association; currently six-direction fly_to scope"
+    }
+  ],
+  "next_complete_slice": [
+    "Capture manager, client, connection generation, receive epoch time and retained/duplicate metadata at MQTT receipt before queueing.",
+    "At actual control-service send boundaries bind authenticated employee, project/resource, session generation, request IDs, DRC client ID and broker/manager identity; account for old entry points.",
+    "Associate strict service replies, reported control source, link and heartbeat facts; invalidate on failure, timeout, disconnect, changed actor/resource or other control source.",
+    "Keep authority unknown until a protocol contract or independent device sample establishes how the reported control_source identifies the local control session.",
+    "Exercise send-before-reply races, late replies across reconnect, repeated/out-of-order/expired messages, concurrent sessions, ownership changes and restart recovery offline."
+  ],
+  "effects": {
+    "product_code_changed": false,
+    "application_starts": 0,
+    "configuration_values_read": false,
+    "business_api_calls": 0,
+    "business_database_calls": 0,
+    "mqtt_connections": 0,
+    "device_actions": 0,
+    "deployments": 0
+  }
+}

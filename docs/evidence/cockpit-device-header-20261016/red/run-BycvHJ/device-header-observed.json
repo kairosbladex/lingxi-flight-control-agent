@@ -1,0 +1,41 @@
+{
+  "sourceCommit": "35574cba46d498e0992de05504756bccf7014ade",
+  "source": "src/views/hangar/components/devices.vue:297-363",
+  "reference": {
+    "defaultDevice": "机库",
+    "plateHeight": 94,
+    "backdropHeight": 58,
+    "portrait": [
+      63,
+      39
+    ],
+    "arrow": {
+      "top": 60,
+      "edge": 5,
+      "size": 20
+    }
+  },
+  "actual": {
+    "kind": null,
+    "header": {
+      "x": 1,
+      "y": 80,
+      "width": 333,
+      "height": 100
+    },
+    "backdrop": null,
+    "avatar": {
+      "x": 18,
+      "y": 26.46875,
+      "width": 76,
+      "height": 47.046875
+    },
+    "previous": null,
+    "next": null,
+    "description": null,
+    "online": null,
+    "resourceId": null,
+    "legacyTabs": 1
+  },
+  "screenshot": "/Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent/docs/evidence/cockpit-device-header-20261016/red/run-BycvHJ/04f-device-header-1920-observed.png"
+}

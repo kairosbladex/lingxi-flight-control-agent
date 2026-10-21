@@ -1,0 +1,235 @@
+{
+  "schema_version": "lingxi-dji-control-protocol-evidence/v1",
+  "evidence_type": "official_documentation_review",
+  "status": "documented_fields_verified_actor_binding_unresolved",
+  "scope": {
+    "objective": "记录可支持VendorControlFacts的DJI官方字段和协议边界，不形成设备执行许可",
+    "products_reviewed": ["DJI Dock 2", "M3D", "M30"],
+    "agent_repository_head": "c807bf2dc8d635ab21bccd98948327c09a62808b",
+    "java_repository_head": "7af3964cc89b35c9371a83c4b37ff26539a7bb48",
+    "raw_bundles_included": false,
+    "live_device_samples_collected": false,
+    "business_api_calls": 0,
+    "device_calls": 0,
+    "model_calls": 0,
+    "product_code_changed": false
+  },
+  "capture_window": {
+    "timezone": "Asia/Taipei",
+    "first_download_completed_at": "2026-10-16T17:41:30.355+08:00",
+    "last_download_completed_at": "2026-10-16T17:47:26.463+08:00",
+    "method": "HTTPS GET官方文档及当前路由引用的正文资源；仅静态读取，未执行下载的JavaScript",
+    "hash_input": "下载所得原始响应正文的字节，不含HTTP响应头，不是渲染后文本"
+  },
+  "routing_provenance": {
+    "entry_page": {
+      "url": "https://developer.dji.com/doc/cloud-api-tutorial/cn/api-reference/dock-to-cloud/mqtt/dock/dock2/drc.html",
+      "http_status": 200,
+      "download_completed_at": "2026-10-16T09:41:30.355Z",
+      "sha256": "7bd3c8e7b9f1f1497ea887a42cddbf4a8da7bbac6858802da5ad67251b2a36b7"
+    },
+    "route_manifest": {
+      "url": "https://developer.dji.com/doc/cloud-api-tutorial/assets/js/app.eb7bce80.js",
+      "http_status": 200,
+      "download_completed_at": "2026-10-16T09:43:50.631Z",
+      "sha256": "231df30fb4ce49f5eb8318e40fcb0b6c35705b8ee2f4597fe0c3ccccd0b98f92",
+      "use": "核对官方页面路由的page key，再与入口HTML引用的正文资源匹配"
+    }
+  },
+  "sources": [
+    {
+      "id": "dock2_drc",
+      "title": "DJI Dock 2 指令飞行",
+      "page_url": "https://developer.dji.com/doc/cloud-api-tutorial/cn/api-reference/dock-to-cloud/mqtt/dock/dock2/drc.html",
+      "page_key": "v-14902db9",
+      "resource_url": "https://developer.dji.com/doc/cloud-api-tutorial/assets/js/v-14902db9.9eb6fabc.js",
+      "http_status": 200,
+      "download_completed_at": "2026-10-16T09:41:31.125Z",
+      "sha256": "8c4032cb0d6748d7bae5f08bd7c1a3517edb8fbd665b43d9ff42ef33543c81aa"
+    },
+    {
+      "id": "dock2_properties",
+      "title": "DJI Dock 2 设备属性",
+      "page_url": "https://developer.dji.com/doc/cloud-api-tutorial/cn/api-reference/dock-to-cloud/mqtt/dock/dock2/properties.html",
+      "page_key": "v-f5e5f6de",
+      "resource_url": "https://developer.dji.com/doc/cloud-api-tutorial/assets/js/v-f5e5f6de.0c1ff6d3.js",
+      "http_status": 200,
+      "download_completed_at": "2026-10-16T09:45:02.410Z",
+      "sha256": "bfe9c86dbfe3516aa3a898fa597e265acf1a7e10429ca058d3dd0031dd7b3682"
+    },
+    {
+      "id": "m3d_properties",
+      "title": "M3D 飞行器设备属性",
+      "page_url": "https://developer.dji.com/doc/cloud-api-tutorial/cn/api-reference/dock-to-cloud/mqtt/aircraft/m3d-properties.html",
+      "page_key": "v-5b73cad5",
+      "resource_url": "https://developer.dji.com/doc/cloud-api-tutorial/assets/js/v-5b73cad5.d307dde7.js",
+      "http_status": 200,
+      "download_completed_at": "2026-10-16T09:45:02.154Z",
+      "sha256": "8fed81687087e86c8273c0c1cb3ce7150664bfc37fab8919583ee118a577daf0"
+    },
+    {
+      "id": "m30_properties",
+      "title": "M30 飞行器设备属性",
+      "page_url": "https://developer.dji.com/doc/cloud-api-tutorial/cn/api-reference/dock-to-cloud/mqtt/aircraft/m30-properties.html",
+      "page_key": "v-0e1a9abe",
+      "resource_url": "https://developer.dji.com/doc/cloud-api-tutorial/assets/js/v-0e1a9abe.40a718b2.js",
+      "http_status": 200,
+      "download_completed_at": "2026-10-16T09:45:02.168Z",
+      "sha256": "604dc444626b9ff2458e81e65e23228cf666eec85f15efac293eec230a605024"
+    },
+    {
+      "id": "drc_feature",
+      "title": "机场功能集：指令飞行",
+      "page_url": "https://developer.dji.com/doc/cloud-api-tutorial/cn/feature-set/dock-feature-set/drc.html",
+      "page_key": "v-39be6793",
+      "resource_url": "https://developer.dji.com/doc/cloud-api-tutorial/assets/js/v-39be6793.b4f3f0a7.js",
+      "http_status": 200,
+      "download_completed_at": "2026-10-16T09:45:44.431Z",
+      "sha256": "2dd57122be87ace85c573ac14f82a1aea9e1290d4797d8154961cd96f592734e"
+    },
+    {
+      "id": "topic_definition",
+      "title": "机场上云 MQTT Topic 定义",
+      "page_url": "https://developer.dji.com/doc/cloud-api-tutorial/cn/api-reference/dock-to-cloud/mqtt/topic-definition.html",
+      "page_key": "v-2bbebad1",
+      "resource_url": "https://developer.dji.com/doc/cloud-api-tutorial/assets/js/v-2bbebad1.1132b326.js",
+      "http_status": 200,
+      "download_completed_at": "2026-10-16T09:47:26.463Z",
+      "sha256": "efeec75bc58595c529740e201a09166e5418e0ac039c7810f545995161d8cf8e"
+    }
+  ],
+  "push_modes": {
+    "source_ids": ["dock2_properties", "m3d_properties", "m30_properties"],
+    "0": {
+      "topic": "thing/product/{device_sn}/osd",
+      "frequency_hz": 0.5,
+      "quote": "设备将以 0.5HZ 的频率定时上报"
+    },
+    "1": {
+      "topic": "thing/product/{device_sn}/state",
+      "trigger": "state_change",
+      "quote": "设备在状态变化时上报"
+    }
+  },
+  "findings": [
+    {
+      "id": "wireless_link_states",
+      "source_ids": ["dock2_properties"],
+      "fields": {
+        "data.wireless_link.4g_link_state": {"type": "enum_int", "enum": {"0": "断开", "1": "连接"}},
+        "data.wireless_link.sdr_link_state": {"type": "enum_int", "enum": {"0": "断开", "1": "连接"}},
+        "data.wireless_link.link_workmode": {"type": "enum_int", "enum": {"0": "SDR 模式", "1": "4G 融合模式"}}
+      },
+      "access_mode": "r",
+      "push_mode": 0,
+      "quote": "图传链路",
+      "supports": ["按官方整数枚举保存4G和SDR连接状态及图传模式"],
+      "does_not_support": ["DRC链路活跃或厂商航权成立", "未经另行定义就将两个链路状态按OR或AND合成为动作许可"]
+    },
+    {
+      "id": "aircraft_control_source",
+      "source_ids": ["m3d_properties", "m30_properties"],
+      "field": "data.control_source",
+      "type": "text",
+      "access_mode": "r",
+      "push_mode": 1,
+      "quote_segments": ["当前控制源", "设备使用 A/B 表示 A 控，B 控", "浏览器以自生成的 uuid 作为标识符"],
+      "supports": ["记录飞行器上报的当前控制源及其变化", "区分设备A/B标识与浏览器UUID"],
+      "does_not_support": ["任意UUID或cloud值等于我方actor持权", "control_source等于MQTT client_id、bid、tid或平台employeeId", "以读取时刻刷新控制源观测时间", "要求状态未变化时仍每5秒重新上报"],
+      "distinct_field": {
+        "source_id": "m30_properties",
+        "field": "data.payloads[].control_source",
+        "quote": "负载控制权",
+        "limitation": "该负载字段不能替代顶层飞行器control_source"
+      },
+      "search_limit": "所核对M3D/M30属性页未出现flight_authority_owner；不据此断言所有DJI产品或版本均无该字段"
+    },
+    {
+      "id": "control_service_results",
+      "source_ids": ["dock2_drc"],
+      "methods": ["flight_authority_grab", "drc_mode_enter", "drc_mode_exit"],
+      "request_topic": "thing/product/{gateway_sn}/services",
+      "reply_topic": "thing/product/{gateway_sn}/services_reply",
+      "reply_fields": ["method", "bid", "tid", "timestamp", "data.result"],
+      "result_type": "int",
+      "quote": "非 0 代表错误",
+      "supports": ["记录特定网关、方法和请求标识对应的设备结果", "以真实发送记录和设备回包关联一次请求"],
+      "does_not_support": ["一次result=0代表之后持续持权", "由回包正文直接确定员工或浏览器控制源UUID", "HTTP受理代替设备结果"]
+    },
+    {
+      "id": "drc_heartbeat",
+      "source_ids": ["dock2_drc"],
+      "method": "heart_beat",
+      "request_topic": "thing/product/{gateway_sn}/drc/down",
+      "reply_topic": "thing/product/{gateway_sn}/drc/up",
+      "current_example_fields": {"seq": "顶层递增序号，与data同级", "data.timestamp": "心跳发送时间戳，毫秒"},
+      "deprecated_field": "data.seq",
+      "quote_segments": ["与 data 同级的 seq 是递增的序号，保证指令顺序执行", "【废弃】命令序号", "若超过 1 分钟未收到业务方发送心跳协议，设备将会认为 DRC 链路处于空闲退出 DRC 链路。"],
+      "example_observation": "专页的上下行示例给出相同seq和data.timestamp；这是文档示例，不是已采集设备回包，也未据此宣称所有固件均严格原样回显",
+      "supports": ["记录发送与回应，构建独立的DRC链路活跃观测", "将未收到回应与本地发送循环正常区分", "记录官方超过1分钟无业务心跳时设备退出DRC的语义"],
+      "does_not_support": ["本地心跳线程运行即链路健康", "心跳回应即我方actor拥有飞行控制权", "自动授权重试或重发控制动作"]
+    },
+    {
+      "id": "broker_authentication_expiry",
+      "source_ids": ["dock2_drc"],
+      "field": "drc_mode_enter.data.mqtt_broker.expire_time",
+      "type": "int",
+      "unit": "seconds",
+      "quote": "认证信息过期后，并不会影响已建立连接的设备",
+      "supports": ["描述MQTT连接认证信息的有效期"],
+      "does_not_support": ["将expire_time当作已建立DRC会话的租约或自动断开时间", "将expire_time当作厂商航权到期时间"]
+    },
+    {
+      "id": "drc_action_authority",
+      "source_ids": ["drc_feature"],
+      "method": "drone_control",
+      "quote_segments": ["DRC-飞行控制 Method: drone_control", "的使用必须有飞行控制权。"],
+      "supports": ["DRC链路活跃与飞行控制权必须分开记录", "drone_control具有明确的飞行控制权前提"],
+      "does_not_support": ["对所有DRC方法一概套用相同航权要求", "由该片段反向推断fly_to_point不需要航权或其他前置条件"]
+    },
+    {
+      "id": "request_identifier_semantics",
+      "source_ids": ["topic_definition"],
+      "fields": {"tid": "事务UUID", "bid": "业务UUID", "timestamp": "消息发送时间，毫秒", "gateway": "发送消息的网关设备序列号"},
+      "quote_segments": ["解决事务多并发和消息匹配的问题", "解决业务多并发和重复请求的问题"],
+      "supports": ["用事务和业务标识关联消息"],
+      "does_not_support": ["将bid或tid解释为员工、浏览器或MQTT会话身份"]
+    }
+  ],
+  "compatibility_gaps": [
+    {
+      "id": "heartbeat_sequence_location",
+      "source_ids": ["dock2_drc", "topic_definition"],
+      "current_official_heartbeat": "Dock2心跳专页使用顶层seq，data.seq标废弃",
+      "legacy_java_observation": {
+        "repository": "ktd_backend-flight-agent-snapshot",
+        "commit": "7af3964cc89b35c9371a83c4b37ff26539a7bb48",
+        "path": "sys-core/src/main/java/com/fan/framework/operation/dJ/DJUtil.java",
+        "symbol": "DJUtil.heart_beat",
+        "line": 1494,
+        "seq_location": "data.seq",
+        "timestamp_location": "data.timestamp"
+      },
+      "generic_topic_example": "通用Topic页的drone_control示例仍使用下行data.seq、上行data.output.seq；它不是heart_beat专页的回应结构",
+      "unresolved": "需要按方法和实际固件确认兼容规则及真实回包；不能只因seq字段同名混用不同位置，也不把本地时间修复宣称为已符合最新全协议"
+    },
+    {
+      "id": "actor_and_session_binding",
+      "source_ids": ["m3d_properties", "m30_properties", "dock2_drc", "topic_definition"],
+      "unresolved": "本轮未找到control_source的浏览器UUID与mqtt_broker.client_id、bid/tid或平台employeeId之间的官方等价或绑定保证",
+      "required_boundary": "需要服务端认证actor到具体已发送控制会话和上报控制源的可追溯绑定；cloud、DRC模式、平台owner、UUID或HTTP成功都不能单独成为持权结论"
+    },
+    {
+      "id": "authority_lifecycle",
+      "source_ids": ["m3d_properties", "m30_properties", "dock2_drc"],
+      "unresolved": "control_source按变化上报，所查文档未提供足够依据把旧状态跨断线重连、会话替换或冷启动直接恢复为当前授权",
+      "required_boundary": "保留原始观测时间、来源和会话代次；明确失联、退出、控制源变化和未知态，不用认证expire_time补造航权租约"
+    }
+  ],
+  "evidence_limits": [
+    "HTTP 200及哈希只证明本轮取到了相应官方文档正文，不证明设备或业务成功",
+    "没有实际设备型号和固件样本、真实MQTT回包、业务actor映射或设备效果验证",
+    "文档证据可以支持事实解析和观测建模，不能直接生成执行许可或开放能力开关",
+    "本文件未复制完整bundle，未包含真实设备标识、凭据或业务数据"
+  ]
+}
