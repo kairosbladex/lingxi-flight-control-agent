@@ -36,12 +36,13 @@ def main():
     parser.add_argument('--minutes',type=int,default=10)
     parser.add_argument('--limit',type=int,default=500)
     parser.add_argument('--task-id',help='用户本轮手动创建的任务编号；按摘要过滤')
+    parser.add_argument('--user',action='store_true',help='读取迁移前用户级服务日志，默认读取系统级独立服务')
     parser.add_argument('--after',type=float,default=0,help='增量起始Unix时间，包含边界以免丢同秒事件')
     args=parser.parse_args()
     if not 1 <= args.minutes <= 180 or not 1 <= args.limit <= 5000 or args.after < 0:
         parser.error('minutes范围1–180，limit范围1–5000，after非负')
     started=time.time()
-    result=subprocess.run(['journalctl','--user','-u',UNIT,'--since',f'{args.minutes} minutes ago',
+    result=subprocess.run(['journalctl']+(['--user'] if args.user else [])+['-u',UNIT,'--since',f'{args.minutes} minutes ago',
         '--until',f'@{int(started)}','-n',str(args.limit),'-o','cat','--no-pager'],
         capture_output=True,text=True,timeout=15)
     if result.returncode:
