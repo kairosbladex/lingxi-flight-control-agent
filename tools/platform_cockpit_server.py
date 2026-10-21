@@ -18,6 +18,8 @@ def main(argv=None):
     parser.add_argument('--base-url', default=DEFAULT_BASE_URL, help='模型服务地址')
     parser.add_argument('--enable-platform-control', action='store_true',
                         help='显式开放已获权威许可的动作提议与逐次确认；需单独的设备测试授权')
+    parser.add_argument('--java-gateway', action='store_true',
+                        help='由已认证Java网关注入每次请求的登录及设备上下文')
     parser.add_argument('--enable-vendor-requests', action='store_true',
                         help='显式允许配置白名单内的厂商请求提议与逐次确认；不授予持续航权或启用飞行动作')
     parser.add_argument('--enable-legacy-control', action='store_true',
@@ -30,10 +32,23 @@ def main(argv=None):
     if args.allow_legacy_pose_unverified and not args.enable_legacy_control:
         parser.error('--allow-legacy-pose-unverified 必须与 --enable-legacy-control 同时使用')
     try:
-        config = PlatformRuntimeConfig.from_environment(os.environ)
-        service = build_platform_cockpit(config, lambda: OllamaDecider(
+        environment = dict(os.environ)
+        if args.java_gateway:
+            if args.enable_legacy_control or args.allow_legacy_pose_unverified or args.enable_vendor_requests:
+                raise ValueError('Java网关不能降级授权或自动取权')
+            for key in ('KTD_ACTOR_EMPLOYEE_ID', 'KTD_PROJECT_ID', 'KTD_HANGAR_ID',
+                        'KTD_DRONE_ID', 'KTD_SITE_ID', 'FLIGHT_AGENT_TASK_BATCH_ID', 'KTD_SERVER_TOKEN'):
+                environment[key] = 'gateway-unbound'
+            environment.pop('KTD_TASK_ID', None)
+        config = PlatformRuntimeConfig.from_environment(environment)
+        decider = lambda: OllamaDecider(
             model=args.model, base_url=args.base_url, system_prompt=COCKPIT_SYSTEM_PROMPT,
-            timeout=20, max_attempts=1, max_output_tokens=2048, keep_alive='30m'),
+            timeout=20, max_attempts=1, max_output_tokens=2048, keep_alive='30m')
+        if args.java_gateway:
+            from lingxi_flight_control.platform_gateway import PlatformGateway
+            service = PlatformGateway(config, decider, enable_control=args.enable_platform_control)
+        else:
+            service = build_platform_cockpit(config, decider,
             enable_control=args.enable_platform_control, enable_vendor_requests=args.enable_vendor_requests,
             enable_legacy_control=True if args.enable_legacy_control else None,
             allow_legacy_pose_unverified=True if args.allow_legacy_pose_unverified else None)
