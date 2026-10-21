@@ -202,8 +202,7 @@ class ProductV13Tests(unittest.TestCase):
 
     def test_unsupported_and_concurrent_requests_never_become_other_actions(self):
         for text in ('绕楼螺旋飞', '用网格航线飞', '开始三维建模', '边向前飞边喊话',
-                     '开始喊话：交通安全', '喊话音量调到150%', '亮度调到200%',
-                     '打开AI识别烟火', '结束当前任务'):
+                     '打开AI识别烟火'):
             result = self.message(self.service(), text)
             self.assertIn(result['status'], ('rejected', 'clarification'))
             self.assertNotIn('card', result)

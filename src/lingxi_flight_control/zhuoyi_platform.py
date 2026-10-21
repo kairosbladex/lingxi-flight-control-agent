@@ -55,6 +55,7 @@ class ZhuoyiPlatformExecutor:
 
     execution_mode = "platform"
     supports_plan_execution = True
+    supports_parallel_execution = True
 
     def __init__(
         self,
@@ -115,6 +116,18 @@ class ZhuoyiPlatformExecutor:
                         f"{self.binding.task_batch_id}")
         return ExecutionContext(execution_id, self.binding.drone_id,
                                 self.binding.context_version, True)
+
+    def available_actions(self):
+        state, _ = self._state()
+        if state is None:
+            return frozenset()
+        availability = state.get('action_availability', {})
+        permissions = state.get('permissions', [])
+        if not isinstance(availability, Mapping) or not isinstance(permissions, list):
+            return frozenset()
+        return frozenset({'read_state'} | {action for action, entry in availability.items()
+            if isinstance(entry, Mapping) and entry.get('available') is True
+            and entry.get('reasons') == [] and action in permissions})
 
     def read_state(self) -> Mapping[str, Any]:
         state, error = self._state()

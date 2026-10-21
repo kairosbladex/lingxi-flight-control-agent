@@ -41,6 +41,8 @@ confirmed_actions是先前工具回执，state是服务器状态；它们不是�
 只使用给定工具。工具是建议，系统会展示动作卡并由用户逐项确认；不能自行确认或声称已执行。
 用户缺少方向、距离、角度、高度、目标等必填参数时用中文问清；不能猜或用默认值。设备设置超限时仍提取用户原始数值，由确定性参数层按设备表调整并提示；模型不得自行截断或拆分数值。
 遵循flight-control-v1.3：急停、返航、载荷同样需要控制权。自动航线中悬停等价route_pause；手动飞行悬停使用emergency_stop。测绘干预必须展示成果失效且不可恢复的确认警告。飞行中不规划测绘、网格或立体航线。
+喊话文本使用speaker_speak，音量speaker_volume，灯光亮度searchlight_brightness；不替换为开关。
+AI使用ai_algorithm_set且算法必须来自state.configured_algorithms；结束当前和全部任务分别是task_end_current、task_end_all，不替换为急停或返航。
 相对前后左右均以机头为参考；左转/右转是改变航向，向左/右飞是平移。
 位移0<距离<=20米，角度0<角度<=360度；正确处理中文数词、小数和明确的单位换算。
 否定、假设、条件、能力询问、引用示例都不能产生动作；先澄清意图。
@@ -110,7 +112,7 @@ def _vendor_request_agrees(method, text):
 
 
 _NON_IMMEDIATE = re.compile(
-    r'(?<!分)别|不(?:要|用|必|需要)?(?:再|先)?(?:拍|飞|起飞|降落|返航|转|录像|执行|操作|继续)'
+    r'(?<![分识])别|不(?:要|用|必|需要)?(?:再|先)?(?:拍|飞|起飞|降落|返航|转|录像|执行|操作|继续)'
     r'|[\d零一二两三四五六七八九十百半]+\s*(?:秒钟?|分钟?|小时|天)\s*(?:以?后|再)'
     r'|[\d零一二两三四五六七八九十百半]+\s*(?:米|度|倍)\s*(?:左右|上下)'
     r'|\b(?:in|after)\s+\d+\s*(?:seconds?|minutes?|hours?)\b'
@@ -173,6 +175,22 @@ def _direct_command(text):
     direction = next((name for character, name in (
         ('前', 'forward'), ('后', 'backward'), ('左', 'left'), ('右', 'right')) if character in motion), None)
     return ToolCall('move_' + direction, {'distance_m': value}) if direction else None
+
+
+def _product_command(text):
+    end = {'结束当前任务': 'task_end_current', '结束全部任务': 'task_end_all', '结束所有任务': 'task_end_all'}
+    if text in end:
+        return ToolCall(end[text], {})
+    match = re.fullmatch(r'(?:请)?(?:开始喊话|喊话|播报)[:：]\s*(.{1,500})', text)
+    if match:
+        return ToolCall('speaker_speak', {'text': match[1].strip()})
+    match = re.fullmatch(r'(?:喊话|喊话器|探照灯|灯光)?(音量|亮度)(?:调到|设为|设置为)\s*(\d+(?:\.\d+)?)\s*[%％]', text)
+    if match:
+        return ToolCall('speaker_volume' if match[1] == '音量' else 'searchlight_brightness', {'value': float(match[2])})
+    match = re.fullmatch(r'(打开|开启|关闭)AI(?:识别)?(.+)', text, re.I)
+    if match:
+        return ToolCall('ai_algorithm_set', {'algorithm': match[2].strip(), 'enabled': match[1] != '关闭'})
+    return None
 
 
 # Full utterances only: mixed flight requests must retain the confirmation path.
@@ -441,6 +459,19 @@ def _ordered_motion_steps(text):
 
 def grounded_parameters(action, parameters, text):
     """A conservative evidence check, not an intent parser or replacement LLM."""
+    if action == 'speaker_speak':
+        match = re.fullmatch(r'(?:请)?(?:开始喊话|喊话|播报)[:：]\s*(.+)', text)
+        return bool(match and parameters.get('text') == match[1].strip())
+    if action in {'task_end_current', 'task_end_all'}:
+        command = _product_command(text)
+        return command is not None and command.name == action and not parameters
+    if action in {'speaker_volume', 'searchlight_brightness'}:
+        label = '音量' if action == 'speaker_volume' else '亮度'
+        match = re.fullmatch(r'(?:喊话|喊话器|探照灯|灯光)?' + label + r'(?:调到|设为|设置为)\s*(\d+(?:\.\d+)?)\s*[%％]', text)
+        return bool(match and float(match[1]) == parameters.get('value'))
+    if action == 'ai_algorithm_set':
+        match = re.fullmatch(r'(打开|开启|关闭)AI(?:识别)?(.+)', text, re.I)
+        return bool(match and parameters == {'algorithm': match[2].strip(), 'enabled': match[1] != '关闭'})
     from .java_tools import TOOLS as JAVA_TOOLS, grounded as java_grounded
     if action in JAVA_TOOLS:
         return java_grounded(action, parameters, text)
@@ -518,6 +549,7 @@ class _PendingPlan:
     confirmation_binding: str
     expires_at: float
     steps: list[dict]
+    execution_order: str = 'sequential'
 
 
 @dataclass
@@ -870,6 +902,7 @@ class CockpitService:
 
     def _context(self):
         definitions = build_proposal_registry(self.executor).definitions()
+        current_state = self.executor.read_state()
         available = getattr(self.executor, 'available_actions', None)
         if callable(available):
             available = available()
@@ -878,13 +911,18 @@ class CockpitService:
             from .java_tools import TOOLS as JAVA_TOOLS
             vendor = definition.name == 'request_vendor_control'
             enabled = vendor or available is None or definition.name in available
+            policy_reason = None
+            try:
+                check_flight_policy(definition.name, current_state)
+            except PolicyError as error:
+                enabled, policy_reason = False, str(error)
             tools.append({'action': definition.name,
                 'domain': ('vendor_request' if vendor else JAVA_TOOLS[definition.name].domain
                     if definition.name in JAVA_TOOLS else ACTION_SPECS[FlightControlAction(definition.name)].domain),
                 'description': definition.description,
                 'parameters': {key: parameter_json_schema(value) for key, value in definition.schema.properties.items()},
                 'required': list(definition.schema.required), 'available': enabled,
-                'unavailable_reason': None if enabled else '当前平台或机型尚未核验此能力。'})
+                'unavailable_reason': None if enabled else policy_reason or '当前平台或机型尚未核验此能力。'})
         return self._base(context={'context_id': f'{self.binding.project_id}:{self.binding.drone_id}',
             'project_id': self.binding.project_id, 'hangar_id': self.binding.hangar_id,
             'drone_id': self.binding.drone_id, 'task_id': self._task_id,
@@ -958,13 +996,6 @@ class CockpitService:
                 ])
                 return result
             immediate_text, motion_constraints = _separate_motion_constraints(text)
-            if re.search(r'音量|亮度|开始喊话\s*[:：]|(?:打开|开启|关闭|切换)\s*AI|结束(?:当前|全部|所有)任务', text, re.I):
-                result = self._base(status='rejected', error_code='PRODUCT_ACTION_UNAVAILABLE',
-                    message='当前工具契约尚不支持喊话文本、音量、亮度、AI切换或结束任务；不会替换为载荷开关、急停或返航。请使用平台对应入口。',
-                    request_id=request_id, state=state)
-                session.active_intent, session.clarification = '', False
-                session.requests[request_id] = (fingerprint, result)
-                return result
             if re.search(r'网格航线|螺旋飞|外立面|立体目标|三维建模|倾斜摄影|正射影像', text):
                 result = self._base(status='rejected', error_code='UNSUPPORTED_IN_FLIGHT_TASK',
                     message='飞控助手不支持飞行中发起测绘、立体或网格航线规划，请结束当前控制后使用任务规划入口。',
@@ -972,6 +1003,23 @@ class CockpitService:
                 session.active_intent, session.clarification = '', False
                 session.requests[request_id] = (fingerprint, result)
                 return result
+            parallel = re.fullmatch(r'(?:一)?边(.+?)(?:一)?边(?:喊话|播报)[:：](.{1,500})', text)
+            if parallel and self._plan_enabled and (self.execution_mode == 'simulator' or getattr(self.executor, 'supports_parallel_execution', False)):
+                motion = _direct_command(parallel[1].strip())
+                if motion and motion.name.startswith('move_'):
+                    calls = [(motion.name, dict(motion.arguments)), ('speaker_speak', {'text': parallel[2].strip()})]
+                    try:
+                        steps = self._validate_plan_steps(calls,
+                            parallel[1].strip() + '\n喊话：' + parallel[2].strip(), session)
+                        control_error = self._plan_control_precheck(steps, self.executor.read_state().get('control_owner'))
+                        if control_error:
+                            raise _PlanRejected(control_error)
+                        result, pending = self._plan_card(session, steps, request_id, self.executor.read_state(), execution_order='parallel')
+                        session.card, session.plan = deepcopy(result['card']), pending
+                    except _PlanRejected as error:
+                        result = self._base(status='clarification', message=str(error), request_id=request_id, state=state)
+                    session.requests[request_id] = (fingerprint, result)
+                    return result
             if re.search(r'同时|边.+边|一边.+一边', text):
                 result = self._base(status='clarification', error_code='CONCURRENT_EXECUTION_UNAVAILABLE',
                     message='当前执行器尚未提供并发动作及子失败契约，不能将同时执行擅自改为顺序执行。请明确顺序，或使用平台原控制入口。',
@@ -1040,9 +1088,10 @@ class CockpitService:
             safety_call = None if any(mark in text for mark in '?？') else SafetyFastPath().recognize(text)
             if re.fullmatch(r'(?:请|立即|马上)?悬停[。!！]?', text):
                 safety_call = ToolCall('route_pause' if state.get('route_status') == 'running' else 'emergency_stop', {})
+            product_call = _product_command(text)
             direct_call = _direct_command(text) if self._direct_commands and not self._plan_enabled else None
-            fixed_call = safety_call or direct_call
-            if self._plan_enabled and safety_call is None:
+            fixed_call = safety_call or product_call or direct_call
+            if self._plan_enabled and safety_call is None and product_call is None:
                 response, pending = self._plan_turn(session, epoch, started, model_input,
                                                    grounding_text, request_id)
                 with self._lock:
@@ -1102,7 +1151,7 @@ class CockpitService:
                     response = self._proposal(result, grounding_text, request_id, session,
                                               model_failure_code=model_failure_code,
                                               parameter_reply=parameter_reply)
-                    response['interpretation_source'] = ('exact-command-v1' if direct_call else
+                    response['interpretation_source'] = ('product-v1.3-exact' if product_call else 'exact-command-v1' if direct_call else
                         'safety-fast-path' if safety_call else 'model')
                     session.clarification = response['status'] == 'clarification'
                     history += [{'role': 'user', 'text': text}, {'role': 'assistant', 'status': response['status'], 'text': response['message']}]
@@ -1242,7 +1291,8 @@ class CockpitService:
                 raise _PlanRejected('计划中包含没有明确请求的控制权操作，请重新说明。')
             if not _motion_agrees(action.value, arguments, text, None, session.motion_source):
                 raise _PlanRejected('计划中的动作与明确的方向或数值不一致，请重新说明。')
-            if not grounded_parameters(action.value, original, text):
+            evidence_text = text.split('\n')[-1] if action.value == 'speaker_speak' else text
+            if not grounded_parameters(action.value, original, evidence_text):
                 raise _PlanRejected('计划中的参数在指令里没有明确依据，请重新说明数值和单位。')
             step = {'action': action.value, 'parameters': dict(arguments)}
             if adjustments:
@@ -1275,20 +1325,21 @@ class CockpitService:
                 return '请先获取控制权，再执行这份计划。'
         return None
 
-    def _plan_card(self, session, steps, request_id, raw_state):
+    def _plan_card(self, session, steps, request_id, raw_state, execution_order='sequential'):
         plan_id = uuid4().hex
         expires_at = self._clock() + self._plan_ttl
         state_revision = raw_state.get('revision') if isinstance(raw_state, dict) else None
-        binding_hash = plan_binding_hash(self.binding, steps, state_revision)
+        binding_hash = plan_binding_hash(self.binding, steps, state_revision, execution_order)
         internal_steps = []
         for index, step in enumerate(steps):
             command = f'{plan_id}:{index}'
             internal_steps.append({**deepcopy(step),
                                    'command_id': command,
                                    'idempotency_key': command})
-        pending = _PendingPlan(plan_id, binding_hash, expires_at, internal_steps)
+        pending = _PendingPlan(plan_id, binding_hash, expires_at, internal_steps, execution_order)
         card = {
             'kind': 'flight_plan',
+            'execution_order': execution_order,
             'confirmation_id': plan_id,
             'confirmation_binding': binding_hash,
             'command_id': plan_id,
@@ -1307,7 +1358,8 @@ class CockpitService:
         response = self._base(
             status='preview_required',
             message=(f'请核对整份飞行计划（共{len(steps)}步）：{sequence}。'
-                     '确认后按顺序执行，任一步失败即停止，不会自动重试。'),
+                     + ('确认后两项并发提交；一项失败不重试，另一项可能已执行，结果逐项保留，必要时手动急停。'
+                        if execution_order == 'parallel' else '确认后按顺序执行，任一步失败即停止，不会自动重试。')),
             request_id=request_id, card=deepcopy(card),
             state=self._public_state(raw_state))
         return response, pending
@@ -1496,7 +1548,7 @@ class CockpitService:
         current_binding = plan_binding_hash(
             self.binding,
             [{'action': step['action'], 'parameters': step['parameters']} for step in plan.steps],
-            current_revision)
+            current_revision, plan.execution_order)
         if current_binding != payload['confirmation_binding']:
             session.card = None
             session.plan = None
@@ -1506,7 +1558,11 @@ class CockpitService:
                               message='计划绑定或设备状态已变化，请重新生成计划。',
                               state=self._state())
         results, stopped = [], None
+        if plan.execution_order == 'parallel':
+            results, stopped = self._execute_parallel(plan)
         for index, step in enumerate(plan.steps):
+            if plan.execution_order == 'parallel':
+                break
             action = FlightControlAction(step['action'])
             if action not in _CONTROL_FREE_ACTIONS:
                 raw = self.executor.read_state()
@@ -1558,12 +1614,16 @@ class CockpitService:
         response = self._base(
             status='accepted' if completed else 'rejected',
             kind='flight_plan',
+            execution_order=plan.execution_order,
             plan_id=plan.plan_id,
             plan_status='completed' if completed else 'stopped',
             steps=results,
             failed_step=None if completed else stopped[0],
             error_code=None if completed else stopped[1],
-            message=('计划已按顺序全部执行。' if completed else
+            message=(('并发子项均已返回，请核对逐项回执。' if completed else
+                      '并发出现失败或未知，其他子项可能已经执行，请核对逐项回执；禁止自动重试。')
+                     if plan.execution_order == 'parallel' else
+                     '计划已按顺序全部执行。' if completed else
                      f'计划在第{stopped[0]}步停止：{stopped[2]}；后续步骤未执行。'),
             state=self._state())
         self._save_history(session_id, [
@@ -1573,6 +1633,44 @@ class CockpitService:
         ] + [{'role': 'assistant', 'kind': 'flight_plan',
               'status': response['plan_status'], 'text': response['message']}])
         return response
+
+    def _execute_parallel(self, plan):
+        """Preflight both commands before dispatch; retain every partial outcome."""
+        from concurrent.futures import ThreadPoolExecutor
+        prepared, results = [], []
+        for index, step in enumerate(plan.steps):
+            request = FlightControlActionRequest(step['command_id'], step['idempotency_key'],
+                step['action'], dict(step['parameters']), self.binding.context_version)
+            try:
+                preview = self.executor.preview(request)
+                if preview.status != FlightControlStatus.PREVIEW_REQUIRED or preview.parameters != step['parameters'] or MAPPING_MESSAGE in preview.warnings:
+                    if preview.status == FlightControlStatus.PREVIEW_REQUIRED:
+                        self.executor.cancel(**self._confirmation(preview.to_dict()))
+                    raise _PlanRejected(preview.error_code or 'POLICY_STATE_CHANGED')
+                prepared.append(preview)
+            except Exception:
+                for card in prepared:
+                    self.executor.cancel(**self._confirmation(card.to_dict()))
+                results = [{'step': i + 1, 'action': s['action'], 'parameters': s['parameters'],
+                    'status': 'rejected', 'error_code': 'PARALLEL_PREFLIGHT_FAILED',
+                    'message': '并发预检失败，两项均未下发'} for i, s in enumerate(plan.steps)]
+                return results, (index + 1, 'PARALLEL_PREFLIGHT_FAILED', '并发预检失败')
+        gate = threading.Barrier(2, timeout=2)
+        def execute(index):
+            step, card = plan.steps[index], prepared[index]
+            try:
+                gate.wait()
+                receipt = self.executor.confirm(**self._confirmation(card.to_dict()))
+                return self._plan_step_result(index, step, receipt)
+            except Exception:
+                return {'step': index + 1, 'action': step['action'], 'parameters': step['parameters'],
+                        'status': 'unknown', 'error_code': 'PARALLEL_OUTCOME_UNKNOWN',
+                        'message': '结果未知，禁止自动重试，请核对设备回执'}
+        with ThreadPoolExecutor(max_workers=2, thread_name_prefix='flight-parallel') as pool:
+            results = list(pool.map(execute, range(2)))
+        failure = next((item for item in results if item['status'] not in {'accepted', 'duplicate'}), None)
+        return results, ((failure['step'], failure['error_code'] or 'PARALLEL_PARTIAL_FAILURE',
+            '并发存在失败或未知，其他子项可能已执行，请核对逐项回执') if failure else None)
 
     @staticmethod
     def _plan_step_result(index, step, receipt):

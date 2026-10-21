@@ -152,12 +152,13 @@ def build_platform_cockpit(config: PlatformRuntimeConfig, decider_factory, *,
         provider = KtdSnapshotProvider(config.binding, site_id=config.site_id,
                                        task_id=config.task_id, transport=transport, clock=clock)
     journal = SqliteCommandJournal(config.journal_path)
+    from .ktd_path import KtdPathChecker
     executor = KtdPlatformExecutor(config.binding, site_id=config.site_id, task_id=config.task_id,
         transport=transport, snapshot_provider=provider, journal=journal,
         enabled=enable_control, track_commands=not enable_legacy_control, clock=clock,
         enable_vendor_requests=enable_vendor_requests, allowed_vendor_methods=config.allowed_vendor_methods,
         legacy_read_api=enable_legacy_control,
-        allow_unverified_pose=allow_legacy_pose_unverified)
+        allow_unverified_pose=allow_legacy_pose_unverified, path_checker=KtdPathChecker(transport))
     visuals = KtdVisualsProvider(config.binding, site_id=config.site_id, task_id=config.task_id,
         transport=transport, allowed_origins=config.media_allowed_origins,
         allow_insecure_http=config.media_allow_insecure_http, clock=clock)

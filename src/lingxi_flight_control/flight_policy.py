@@ -12,11 +12,14 @@ MICRO_ACTIONS = MOVES | {"turn_left", "turn_right"}
 TEMPORARY_ACTIONS = frozenset({"point_flight", "point_orbit"})
 PATH_ACTIONS = MOVES | TEMPORARY_ACTIONS
 INTERRUPTING_ACTIONS = MICRO_ACTIONS | TEMPORARY_ACTIONS | {"route_pause", "emergency_stop", "return_home", "land", "land_alternate"}
+INTERRUPTING_ACTIONS = INTERRUPTING_ACTIONS | {'task_end_current', 'task_end_all'}
 RESUME_ACTIONS = frozenset({"route_resume", "continue_from_breakpoint"})
 MAPPING_TASKS = frozenset({"mapping", "orthophoto", "oblique", "high_precision_modeling"})
 
 # These are protocol envelopes, not claims about any connected device.
 ADJUSTABLE = {
+    'speaker_volume': ('value', 0, 100),
+    'searchlight_brightness': ('value', 0, 100),
     "camera_zoom": ("value", 1, 30),
     "gimbal_digital_zoom": ("value", 1, 30),
     "set_move_speed": ("value", 0.1, 50),

@@ -123,8 +123,8 @@ class CockpitVendorControlTests(unittest.TestCase):
         return [call for call in self.opener.calls if call[0] == 'POST']
 
     def test_vendor_tool_requires_both_switch_and_method_allowlist(self):
-        for enabled, methods, count in ((False, (), 59), (False, METHODS, 59),
-                                        (True, (), 59), (True, (METHODS[0],), 60)):
+        for enabled, methods, count in ((False, (), 65), (False, METHODS, 65),
+                                        (True, (), 65), (True, (METHODS[0],), 66)):
             with self.subTest(enabled=enabled, methods=methods):
                 service = self.service(enabled=enabled, methods=methods)
                 context = self.request(service, 'context', method='GET')
@@ -132,8 +132,8 @@ class CockpitVendorControlTests(unittest.TestCase):
                 tools = context.payload['tools']
                 self.assertEqual(len(tools), count)
                 self.assertEqual({row['action'] for row in tools if row['available']},
-                    {'read_state', 'request_vendor_control'} if count == 60 else {'read_state'})
-                if count == 60:
+                    {'read_state', 'request_vendor_control'} if count == 66 else {'read_state'})
+                if count == 66:
                     tool = next(row for row in tools if row['action'] == 'request_vendor_control')
                     self.assertEqual(tool['domain'], 'vendor_request')
                     self.assertEqual(tool['parameters']['method']['enum'], [METHODS[0]])

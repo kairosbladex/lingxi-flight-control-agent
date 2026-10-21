@@ -109,6 +109,12 @@ class FlightControlAction(str, Enum):
     PAYLOAD_METHANE = "payload_methane"
     PAYLOAD_DROPPER = "payload_dropper"
     PAYLOAD_DYNAMIC = "payload_dynamic"
+    SPEAKER_SPEAK = "speaker_speak"
+    SPEAKER_VOLUME = "speaker_volume"
+    SEARCHLIGHT_BRIGHTNESS = "searchlight_brightness"
+    TASK_END_CURRENT = "task_end_current"
+    TASK_END_ALL = "task_end_all"
+    AI_ALGORITHM_SET = "ai_algorithm_set"
     # state
     READ_STATE = "read_state"
 
@@ -236,6 +242,11 @@ class FlightControlState:
     auto_stitching: bool = False
     temporary_task_id: str | None = None
     low_battery_return: bool = False
+    configured_algorithms: list[str] = field(default_factory=list)
+    global_algorithms: list[str] = field(default_factory=list)
+    annotation_algorithms: dict[str, list[str]] = field(default_factory=dict)
+    active_annotations: list[str] = field(default_factory=list)
+    active_algorithms: list[str] = field(default_factory=list)
     device_limits: dict[str, Any] = field(default_factory=lambda: {
         **{action: {"min": low, "max": high} for action, (_, low, high) in ADJUSTABLE.items()},
         "gimbal_pitch_deg": {"min": -90, "max": 90},
@@ -294,6 +305,11 @@ class FlightControlState:
             "temporary_task_id": self.temporary_task_id,
             "low_battery_return": self.low_battery_return,
             "device_limits": deepcopy(self.device_limits),
+            "configured_algorithms": list(self.configured_algorithms),
+            "global_algorithms": list(self.global_algorithms),
+            "annotation_algorithms": deepcopy(self.annotation_algorithms),
+            "active_annotations": list(self.active_annotations),
+            "active_algorithms": list(self.active_algorithms),
             "parameters": dict(self.parameters),
             "camera": dict(self.camera),
             "infrared": dict(self.infrared),
@@ -375,6 +391,8 @@ _ROUTE_INVALIDATING_ACTIONS = frozenset(_ROUTE_REQUIRED_STATES) | {
     FlightControlAction.RETURN_HOME,
     FlightControlAction.CANCEL_RETURN_HOME,
     FlightControlAction.CONTROL_RELEASE,
+    FlightControlAction.TASK_END_CURRENT,
+    FlightControlAction.TASK_END_ALL,
 }
 
 
@@ -420,6 +438,10 @@ def _validate_parameters(action: FlightControlAction, parameters: Mapping[str, A
         FlightControlAction.GIMBAL_DIGITAL_ZOOM: ("value",),
         FlightControlAction.INFRARED_SET_LIMITS: ("min_c", "max_c"),
         FlightControlAction.PAYLOAD_DYNAMIC: ("payload", "enabled"),
+        FlightControlAction.SPEAKER_SPEAK: ("text",),
+        FlightControlAction.SPEAKER_VOLUME: ("value",),
+        FlightControlAction.SEARCHLIGHT_BRIGHTNESS: ("value",),
+        FlightControlAction.AI_ALGORITHM_SET: ("algorithm", "enabled"),
     }
     optional: dict[FlightControlAction, tuple[str, ...]] = {
         FlightControlAction.GIMBAL_UP: ("angle_deg",),
@@ -442,6 +464,17 @@ def _validate_parameters(action: FlightControlAction, parameters: Mapping[str, A
     for field_name in required.get(action, ()):
         if field_name not in parameters:
             raise ValueError(f"{action.value} requires {field_name}")
+    if action == FlightControlAction.SPEAKER_SPEAK:
+        text = parameters['text']
+        if not isinstance(text, str) or not text.strip() or len(text) > 500 or any(ord(c) < 32 for c in text):
+            raise ValueError('speaker text must contain 1-500 printable characters')
+    if action in {FlightControlAction.SPEAKER_VOLUME, FlightControlAction.SEARCHLIGHT_BRIGHTNESS}:
+        value = _number(parameters['value'], 'value', 0, 100)
+        if value != int(value):
+            raise ValueError('payload percentage must be an integer')
+    if action == FlightControlAction.AI_ALGORITHM_SET:
+        if not isinstance(parameters['algorithm'], str) or not parameters['algorithm'].strip() or len(parameters['algorithm']) > 128 or type(parameters['enabled']) is not bool:
+            raise ValueError('explicit algorithm and boolean enabled required')
     if action in {
         FlightControlAction.MOVE_FORWARD, FlightControlAction.MOVE_BACKWARD,
         FlightControlAction.MOVE_LEFT, FlightControlAction.MOVE_RIGHT,
@@ -638,6 +671,8 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
                                    error_code="CONTROL_NOT_OWNED", message=CONTROL_MESSAGE)
         try:
             check_flight_policy(action.value, self.state.to_dict())
+            if action == FlightControlAction.AI_ALGORITHM_SET and parameters['algorithm'] not in self.state.configured_algorithms:
+                raise PolicyError('ALGORITHM_NOT_CONFIGURED', '当前项目未配置该AI算法。')
             warning = check_path(self._path_checker, self.binding, action.value, parameters, self.state.to_dict())
         except PolicyError as error:
             return _status_receipt(FlightControlStatus.REJECTED, request, self.binding, self.state,
@@ -646,7 +681,7 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         if error is not None:
             return _status_receipt(FlightControlStatus.REJECTED, request, self.binding, self.state,
                                    error_code=error[0], message=error[1])
-        route_context = self._route_context() if action in _ROUTE_REQUIRED_STATES or action.value in MICRO_ACTIONS | TEMPORARY_ACTIONS | RESUME_ACTIONS else None
+        route_context = self._route_context() if action in _ROUTE_REQUIRED_STATES or action.value in MICRO_ACTIONS | TEMPORARY_ACTIONS | RESUME_ACTIONS | {'task_end_current', 'task_end_all'} else None
         confirmation_id = uuid4().hex
         binding_data = {"binding": self.binding.to_dict(), "request": request.to_dict()}
         if route_context is not None:
@@ -670,16 +705,26 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             keys += ["device_limits"]
         if action in {"gimbal_up", "gimbal_down"}:
             keys += ["gimbal_pitch_deg"]
+        if action == 'ai_algorithm_set':
+            keys += ['configured_algorithms', 'global_algorithms', 'annotation_algorithms', 'active_annotations']
         if action in INTERRUPTING_ACTIONS:
             keys += ["route_status", "auto_stitching"]
         return _json_hash({key: state[key] for key in keys})
 
-    def apply_task_event(self, event, *, task_batch_id, temporary_task_id=None):
+    def apply_task_event(self, event, *, task_batch_id, temporary_task_id=None, annotation_id=None):
         """Simulator-only platform event seam; never exposed as an LLM tool."""
         if task_batch_id != self.binding.task_batch_id:
             raise ValueError("task binding mismatch")
         s = self.state
-        if event == "temporary_completed":
+        if event in {'annotation_entered', 'annotation_left'}:
+            if annotation_id not in s.annotation_algorithms:
+                raise ValueError('unknown annotation')
+            if event == 'annotation_entered' and annotation_id not in s.active_annotations:
+                s.active_annotations.append(annotation_id)
+            elif event == 'annotation_left' and annotation_id in s.active_annotations:
+                s.active_annotations.remove(annotation_id)
+            self._refresh_algorithms()
+        elif event == "temporary_completed":
             if not temporary_task_id or temporary_task_id != s.temporary_task_id:
                 raise ValueError("stale temporary task event")
             s.temporary_task_id = None
@@ -704,11 +749,20 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             s.breakpoint_index = None
             s.temporary_task_id = None
             s.route_status = s.task_status = "ended"
+            s.active_annotations.clear()
+            self._refresh_algorithms()
         else:
             raise ValueError("unsupported task event")
         self._route_revision += 1
         s.revision += 1
         return s.to_dict()
+
+    def _refresh_algorithms(self):
+        s = self.state
+        active = set(s.global_algorithms)
+        for annotation in s.active_annotations:
+            active.update(s.annotation_algorithms.get(annotation, []))
+        s.active_algorithms = sorted(active.intersection(s.configured_algorithms))
 
     def confirm(self, confirmation_id: str, *, command_id: str, idempotency_key: str,
                 confirmation_binding: str, context_version: int) -> FlightControlReceipt:
@@ -928,6 +982,29 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             s.infrared.update(enabled=True, min_c=float(p["min_c"]), max_c=float(p["max_c"]))
         elif action == FlightControlAction.PAYLOAD_DYNAMIC:
             s.payloads[str(p["payload"])] = bool(p["enabled"])
+        elif action == FlightControlAction.SPEAKER_SPEAK:
+            s.payloads['speaker_text'] = p['text']
+            s.payloads['megaphone'] = True
+        elif action == FlightControlAction.SPEAKER_VOLUME:
+            s.payloads['speaker_volume'] = int(p['value'])
+        elif action == FlightControlAction.SEARCHLIGHT_BRIGHTNESS:
+            s.payloads['searchlight_brightness'] = int(p['value'])
+        elif action == FlightControlAction.AI_ALGORITHM_SET:
+            selected = set(s.global_algorithms)
+            if p['enabled']:
+                selected.add(p['algorithm'])
+            else:
+                selected.discard(p['algorithm'])
+            s.global_algorithms = sorted(selected)
+            self._refresh_algorithms()
+        elif action == FlightControlAction.TASK_END_CURRENT:
+            if s.temporary_task_id:
+                s.temporary_task_id = None
+                s.route_status = 'ended' if s.mapping_invalidated else 'temporary_completed'
+            else:
+                self.apply_task_event('all_tasks_ended', task_batch_id=self.binding.task_batch_id)
+        elif action == FlightControlAction.TASK_END_ALL:
+            self.apply_task_event('all_tasks_ended', task_batch_id=self.binding.task_batch_id)
         elif action == FlightControlAction.PAYLOAD_DROPPER:
             s.payloads["dropper"] = {"last_drop": True, "payload": p.get("payload", "default")}
         elif action in {FlightControlAction.PAYLOAD_MEGAPHONE, FlightControlAction.PAYLOAD_SEARCHLIGHT, FlightControlAction.PAYLOAD_METHANE}:
@@ -1164,6 +1241,16 @@ ACTION_SPECS: dict[FlightControlAction, ActionSpec] = {
         ("payload", "enabled")),
     # 状态
     FlightControlAction.READ_STATE: _spec("state", "读取当前飞行状态与遥测"),
+    FlightControlAction.SPEAKER_SPEAK: _spec('payload', '立即播报明确的喊话文本',
+        {'text': ToolParameter('string', min_length=1)}, ('text',)),
+    FlightControlAction.SPEAKER_VOLUME: _spec('payload', '设置喊话器音量百分比',
+        {'value': ToolParameter('number', minimum=0, maximum=100)}, ('value',)),
+    FlightControlAction.SEARCHLIGHT_BRIGHTNESS: _spec('payload', '设置探照灯亮度百分比',
+        {'value': ToolParameter('number', minimum=0, maximum=100)}, ('value',)),
+    FlightControlAction.TASK_END_CURRENT: _spec('route', '结束临时任务；没有临时任务时结束主线任务'),
+    FlightControlAction.TASK_END_ALL: _spec('route', '结束全部任务并清空原始主线断点，不能续飞'),
+    FlightControlAction.AI_ALGORITHM_SET: _spec('payload', '启停项目已配置的全局AI算法',
+        {'algorithm': ToolParameter('string', min_length=1), 'enabled': _P_ENABLED}, ('algorithm', 'enabled')),
 }
 
 if set(ACTION_SPECS) != set(FlightControlAction):  # pragma: no cover - 导入期自检

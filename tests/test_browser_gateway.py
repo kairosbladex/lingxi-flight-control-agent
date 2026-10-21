@@ -18,10 +18,14 @@ class OldJava:
             loadInfoCode={'1001': True}, load={'optoelecPodParamList': [{'podType': 'wide'}]})
         self.requests = []
         self.posts = []
+        self.path_checks = []
     def open(self, request, timeout):
         path = urlsplit(request.full_url).path.removeprefix('/gis_server_a')
         self.requests.append((request.get_method(), path))
-        if request.get_method() == 'POST':
+        if path == '/electronicFence/path-route/with-clean':
+            self.path_checks.append(json.loads(request.data))
+            packet = {'code': 200, 'data': None}
+        elif request.get_method() == 'POST':
             self.posts.append((path, json.loads(request.data)))
             packet = {'code': 200}
         else:
@@ -76,7 +80,7 @@ class BrowserGatewayTests(unittest.TestCase):
     def test_camera_requires_confirmation_and_exact_replay_does_not_resend(self):
         proposal = self.proposal()
         self.assertEqual(proposal.payload['status'],'preview_required',proposal.payload)
-        self.assertFalse(any(m=='POST' for m,p in self.java.requests))
+        self.assertFalse(any(m=='POST' and p != '/electronicFence/path-route/with-clean' for m,p in self.java.requests))
         body = self.confirmation(proposal.payload['card'])
         first = self.call('/agent/confirm',body)
         self.assertEqual(first.payload['status'],'submitted',first.payload)
@@ -87,13 +91,13 @@ class BrowserGatewayTests(unittest.TestCase):
         card = self.proposal().payload['card']
         self.java.source.responses['task'].payload['data']['taskFlag']='3'
         self.assertEqual(self.call('/agent/confirm',self.confirmation(card)).status_code,403)
-        self.assertFalse(any(m=='POST' for m,p in self.java.requests))
+        self.assertFalse(any(m=='POST' and p != '/electronicFence/path-route/with-clean' for m,p in self.java.requests))
     def test_owner_change_after_preview_blocks_confirmation(self):
         card=self.proposal().payload['card']
         self.java.source.responses['owners']=ok([{'employeeId':'other'}])
         response=self.call('/agent/confirm',self.confirmation(card))
         self.assertEqual(response.payload['status'],'rejected')
-        self.assertFalse(any(m=='POST' for m,p in self.java.requests))
+        self.assertFalse(any(m=='POST' and p != '/electronicFence/path-route/with-clean' for m,p in self.java.requests))
     def test_missing_login_and_foreign_device_fail_before_control(self):
         self.headers['Authorization']=''
         self.assertEqual(self.call().status_code,401)
@@ -116,7 +120,7 @@ class BrowserGatewayTests(unittest.TestCase):
         self.action='move_forward'
         response=self.proposal()
         self.assertEqual(response.payload['status'],'preview_required',response.payload)
-        self.assertFalse(any(m=='POST' for m,p in self.java.requests))
+        self.assertFalse(any(m=='POST' and p != '/electronicFence/path-route/with-clean' for m,p in self.java.requests))
         result=self.call('/agent/confirm',self.confirmation(response.payload['card']))
         self.assertEqual(result.payload['status'],'submitted',result.payload)
         path, body=self.java.posts[0]
@@ -166,7 +170,7 @@ class BrowserGatewayTests(unittest.TestCase):
         self.java.source.responses['pose'].payload['data']['timeStamp']=900
         response=self.proposal()
         self.assertEqual(response.payload['status'],'rejected')
-        self.assertFalse(any(m=='POST' for m,p in self.java.requests))
+        self.assertFalse(any(m=='POST' and p != '/electronicFence/path-route/with-clean' for m,p in self.java.requests))
     def test_pose_expiry_after_preview_blocks_distance_confirmation(self):
         self.action='move_forward'
         card=self.proposal().payload['card']

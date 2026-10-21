@@ -96,7 +96,7 @@ def build_plan_registry() -> tuple[ToolRegistry, PlanRecorder]:
 
 
 def plan_binding_hash(binding: Any, steps: list[Mapping[str, Any]],
-                      state_revision: Any) -> str:
+                      state_revision: Any, execution_order: str = 'sequential') -> str:
     """计划级确认绑定：资源、完整步骤、上下文版本和计划生成时的状态版本。"""
     data = {
         "binding": binding.to_dict(),
@@ -105,6 +105,7 @@ def plan_binding_hash(binding: Any, steps: list[Mapping[str, Any]],
             for step in steps
         ],
         "state_revision": state_revision,
+        "execution_order": execution_order,
     }
     encoded = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()

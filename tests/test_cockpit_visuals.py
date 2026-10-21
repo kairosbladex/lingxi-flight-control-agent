@@ -88,7 +88,7 @@ class CockpitVisualsTests(unittest.TestCase):
         for value in (context.payload, reply.payload, self.model_inputs, checkpoint, out.getvalue(), err.getvalue()):
             self.assertNotIn('SYNTHETIC_MEDIA_SECRET', json.dumps(value))
             self.assertNotIn('media.example', json.dumps(value))
-        self.assertEqual(len(context.payload['tools']), 59)
+        self.assertEqual(len(context.payload['tools']), 65)
         self.assertEqual(len(self.boundary.calls), 1)
         self.assertFalse(any(method == 'POST' for method, *_ in self.boundary.snapshot.calls))
 

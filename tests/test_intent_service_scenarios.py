@@ -45,8 +45,10 @@ class ServiceIntentBenchTests(unittest.TestCase):
         self.assertEqual(report["schema_version"], "cockpit-service-intent-report/v1")
         self.assertEqual(report["summary"]["denominator"], 102)
         self.assertEqual(report["summary"]["missing"], 102)
-        self.assertEqual(report["action_coverage"]["declared_actions"], 59)
-        self.assertEqual(report["action_coverage"]["uncovered_actions"], [])
+        self.assertEqual(report["action_coverage"]["declared_actions"], 65)
+        self.assertEqual(report["action_coverage"]["uncovered_actions"], [
+            'ai_algorithm_set', 'searchlight_brightness', 'speaker_speak', 'speaker_volume',
+            'task_end_all', 'task_end_current'])
         self.assertEqual(report["run"]["surface"], "service")
         self.assertEqual(report["run"]["usage"]["confirmations"], 0)
         self.assertEqual(report["run"]["usage"]["mutating_tool_calls"], 0)

@@ -19,6 +19,8 @@ _NUMERIC_STATE = {'longitude': (-180, 180), 'latitude': (-90, 90),
     'altitude_m': (-500, 10000), 'height_m': (-500, 10000),
     'yaw_deg': (-360, 360), 'battery_percent': (0, 100)}
 _STATE_FIELDS = frozenset(_NUMERIC_STATE) | {'online', 'airborne', 'flight_status', 'route_status'}
+_POLICY_FIELDS = frozenset({'task_type', 'mapping_invalidated', 'auto_stitching', 'low_battery_return',
+    'device_limits', 'gimbal_pitch_deg', 'breakpoint_index', 'temporary_task_id', 'task_scope'})
 
 
 def _reject(code='INVALID_SNAPSHOT_RESPONSE'):
@@ -149,9 +151,32 @@ class KtdSnapshotProvider:
 
     @staticmethod
     def _state(value):
-        if not isinstance(value, Mapping) or set(value) != _STATE_FIELDS:
+        if not isinstance(value, Mapping) or not _STATE_FIELDS <= set(value) or set(value) - (_STATE_FIELDS | _POLICY_FIELDS):
             _reject()
         for key, item in value.items():
+            if key in _POLICY_FIELDS:
+                if key in {'mapping_invalidated', 'auto_stitching', 'low_battery_return'}:
+                    valid = type(item) is bool
+                elif key == 'task_type':
+                    valid = item in {'inspection', 'mapping', 'orthophoto', 'oblique', 'high_precision_modeling'}
+                elif key == 'task_scope':
+                    valid = item in {'bound_main_only', 'main_with_temporary'}
+                elif key == 'temporary_task_id':
+                    valid = item is None or _identifier(item)
+                elif key == 'breakpoint_index':
+                    valid = item is None or type(item) is int and item >= 0
+                elif key == 'gimbal_pitch_deg':
+                    valid = _finite(item, -90, 90)
+                else:
+                    from .flight_policy import ADJUSTABLE
+                    valid = isinstance(item, Mapping) and not set(item) - (set(ADJUSTABLE) | {'gimbal_pitch_deg'})
+                    if valid:
+                        valid = all(isinstance(limit, Mapping) and set(limit) == {'min', 'max'}
+                            and _finite(limit['min'], -10000, 10000) and _finite(limit['max'], -10000, 10000)
+                            and limit['min'] <= limit['max'] for limit in item.values())
+                if not valid:
+                    _reject('INVALID_POLICY_SNAPSHOT')
+                continue
             if item is None:
                 continue
             if key in _NUMERIC_STATE:
@@ -169,7 +194,7 @@ class KtdSnapshotProvider:
         availability = data.get('action_availability')
         if (not isinstance(permissions, list) or any(not isinstance(item, str) for item in permissions)
                 or len(set(permissions)) != len(permissions) or set(permissions) - _ACTIONS
-                or not isinstance(capabilities, Mapping) or set(capabilities) - (_ACTIONS | {'UAV_MOVE_DISTANCE'})
+                or not isinstance(capabilities, Mapping) or set(capabilities) - (_ACTIONS | {'UAV_MOVE_DISTANCE', 'LOCAL_SPEAKER_TEXT'})
                 or any(type(value) is not bool for value in capabilities.values())
                 or not isinstance(availability, Mapping) or set(availability) - _ACTIONS):
             _reject()

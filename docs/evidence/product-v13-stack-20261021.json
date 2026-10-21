@@ -1,0 +1,158 @@
+{
+  "date": "2026-10-21",
+  "repositories": {
+    "agent": {
+      "base": "61d5168b5bcfd173d168af084cd4bfdeb7839159",
+      "branch": "feature/product-v13-flight-policy",
+      "source_hashes": {
+        "src/lingxi_flight_control/cockpit.py": "15e20f2c57b1a8d819a42252207171dcff6aa4073d0a1c959fa07abe72a5bf4e",
+        "src/lingxi_flight_control/flight_policy.py": "0b1bb68e78be82e931f8de5620dcd8d91d501e72bb364b6ec22d310e849e40ba",
+        "src/lingxi_flight_control/full_control.py": "99b62a6b8cfcbbb487ac5a2ed29ef3390d78c11ae274d8e30833f510b309e2d5",
+        "src/lingxi_flight_control/ktd_path.py": "3611897cca23ff6ab21175cdc92e9a820ac60a69c4724a1de78163f00b62e0b1",
+        "src/lingxi_flight_control/ktd_platform.py": "3917d73ffcb9521e8f7a11e445247d5ba5031c84aea5cda5cb2f44a97c22bb1f",
+        "src/lingxi_flight_control/ktd_snapshot.py": "a21762be293089e2f7522ee5643961cdc050418109226f88741dca5aa3e73632",
+        "src/lingxi_flight_control/plan.py": "2f2686de42e06f13add8a064f90720c56b98d1670acfcbfa57ee6b202795ee19",
+        "src/lingxi_flight_control/platform_runtime.py": "1132d83cbd2bbac2ff4631c1c5f1d64ada418f80abc38924722b493830ffd67a",
+        "src/lingxi_flight_control/zhuoyi_platform.py": "b3d721b9825ab3d647586a352ad1f8b90b9a52170629d8e7aee7ac256b17afb8",
+        "tests/test_browser_gateway.py": "eaf8c8ebc69539a5e7a1d27dfee23810220dca9d5228e6bdf4b5314123820149",
+        "tests/test_cockpit.py": "be33f3d3ca9ff43e49336e641c3eefbf934f60faaa5619c5b8a19dcadc31068b",
+        "tests/test_cockpit_vendor_control.py": "a96b84cd5c7711d69f66d2eeb270fb1edc34d3985562d28d32f1506050ffc317",
+        "tests/test_cockpit_visuals.py": "bf668c87ee4d5037a8e65904cdef0c5420dc4736a34294f7d03a92f58ac1022f",
+        "tests/test_full_control_registry.py": "dd3fb6da8163e8d8b19ea449e979cdfb9d24480a1c52078ede29f0ce1bffa774",
+        "tests/test_intent_service_scenarios.py": "3e1cc09de24b827e836fdf21411c23ce9343b396eda5e7004d06b0c42db83935",
+        "tests/test_java_tools.py": "bfb0bb7a3421180fb5a279c36ad10c54fb349a8b03ad19b015dadce1d1dd3e10",
+        "tests/test_ktd_path.py": "f072fb72835a478f2edd98324259c8f7f7cf3375e6e241abd472c5fc748a02ca",
+        "tests/test_platform_runtime.py": "297d330c1dc8977115319877b363be44f4e2f34227f42e364ee78568e647ec0c",
+        "tests/test_product_v13.py": "6fd197b24410afcfb90805460942e93621cf033e0429c6633d8ef5d9edc89276",
+        "tests/test_product_v13_actions.py": "02270f1a34a008e3d95f447b4976b457582b6d4514dc2a8d7bec2d2bef96327d",
+        "tests/test_vendor_control.py": "c29d00addd2bdf3d7ab60d867efd7f2fa94863926ecc193b1822683acabb8cad",
+        "tools/bench/product_v13_stack.py": "4bc98fefdb9779396867f9f8854f04c670341c6500094024c535a3b262dc1218"
+      }
+    },
+    "ui": {
+      "base": "427dd86b0a6290325ffdcce3aebe165bb8d6e832",
+      "branch": "feature/product-v13-flight-controls",
+      "source_hashes": {
+        "src/CockpitPanel.vue": "fb1f5928f8cc06977df626f5e260ff4386e3f99ed2b74904a15a77a7039c6fc5",
+        "src/cockpitControls.ts": "e9e5531f543c26dfe3cf6f66b806c655eed18f30f64a95da4d989f526b5b82b8",
+        "src/flightControl.ts": "faf5ab1fde8fb85591e2617b7a654efa50a2c1755632e9d7ccaaafe52d92f85a",
+        "tests/cockpitControls.test.mjs": "83c953ec08f3afc67c608ce0c3cbeb1de8acd995ab0ce1fcff189ebf5cff6100",
+        "tests/flightControl.test.mjs": "55db2d641cda6b64570913514a36ad894d28b9910b69df83a4ab821cdd459e49"
+      },
+      "delivery_commit": "4e71b551ee72b8679042b2e7a2295764b1b91b25"
+    },
+    "java": {
+      "base": "1e037d91f0d4ef41db7b355e15ca2b96fcb3537e",
+      "branch": "feature/agent-flight-control",
+      "source_hashes": {
+        "src/main/java/com/zhuoyi/aiplatform/flightcontrol/DjiCommandEncoder.java": "d7dc42a2fefac97770584038648b8b9bc7dd2f8f732a54080ba59a9bb023ab97",
+        "src/main/java/com/zhuoyi/aiplatform/flightcontrol/DjiDeviceBinding.java": "7668e5c376df5216c94e6194d40635121e089d14400783a449ebd5a88c8a4f26",
+        "src/main/java/com/zhuoyi/aiplatform/flightcontrol/DjiMethod.java": "a5ec4e5e1035f45f76384edd99c39a2f062400396cd56f12d68addc7a2837c92",
+        "src/main/java/com/zhuoyi/aiplatform/flightcontrol/DjiReceiptParser.java": "f6945ac4399e4480408d79f332a20f72244e8907ce1aa9476e56d6c35606137d",
+        "src/main/java/com/zhuoyi/aiplatform/flightcontrol/FixtureFlightControlSnapshotClient.java": "f28fa8429749a3705a9262584d925d412d81e01da831d1b1f0d3b84bd1f71b5f",
+        "src/main/java/com/zhuoyi/aiplatform/flightcontrol/FlightControlAction.java": "1568a3990143669bea30e2e7b7896ad86d2ad6aa36b9e5e786610929751a331b",
+        "src/main/java/com/zhuoyi/aiplatform/flightcontrol/FlightControlContracts.java": "93e8d94a8b24e751949c52565e3940a88d817b4744faacb09c6b688c9ff0a984",
+        "src/main/java/com/zhuoyi/aiplatform/flightcontrol/FlightControlService.java": "5f1fcd341899d840c9226da5b5f900de5592a8f3130ead31af282b03b24714c8",
+        "src/main/java/com/zhuoyi/aiplatform/flightcontrol/FlightControlSnapshot.java": "861b7d8608f01693ec234a64e94b81d5f44717ca120868b460c81c343bf800d9",
+        "src/main/java/com/zhuoyi/aiplatform/flightcontrol/HttpKtdSnapshotClient.java": "85ce95d37b816e289a36eb1f42094a7ba0521dfff0cb2d33a0241c2181cc7ef6",
+        "src/main/java/com/zhuoyi/aiplatform/flightcontrol/SnapshotDjiDeviceBindingProvider.java": "34a2abfde81b87a5dc5895885cb1ff4f7e6752e454b7a6cae0fd3a961a0cdc80",
+        "src/test/java/com/zhuoyi/aiplatform/flightcontrol/DjiCommandEncoderTest.java": "3beb023c2dc527b49657bb73b93e09a837ca3825dcb69f5fd094f4f13832acf9",
+        "src/test/java/com/zhuoyi/aiplatform/flightcontrol/SnapshotDjiDeviceBindingProviderTest.java": "217d2b0350b29d7e555df5993f33f4d41da0c42ee4b01f84b45119b553644504"
+      },
+      "delivery_commit": "499b68693dbaeb73ac24b62ea70ce71945abb822",
+      "pushed": false
+    }
+  },
+  "python_tests": {
+    "total": 800,
+    "passed": 800,
+    "socket_guard": "passed"
+  },
+  "ui_tests": {
+    "total": 156,
+    "passed": 156
+  },
+  "java_tests": {
+    "tests": 122,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 9
+  },
+  "builds": {
+    "wheel_sha256": "1308fcf5332973f6c8266e0cf145ac5308af191f14ebe92c2827041d01a14667",
+    "jar_sha256": "e58f0d283ea47d71a30a5b7b6debd15dbf1eae7fce87209746847463c86ac32c",
+    "ui": "both dist and ktd bundle built"
+  },
+  "isolated_stack": [
+    {
+      "url": "http://127.0.0.1:56368",
+      "java_port": 56352,
+      "agent_port": 56367,
+      "passed": 3,
+      "results": [
+        {
+          "action": "speaker_volume",
+          "status": "accepted",
+          "order": "single",
+          "effective": {
+            "value": 100
+          },
+          "step_statuses": []
+        },
+        {
+          "action": "speaker_speak",
+          "status": "accepted",
+          "order": "single",
+          "effective": {
+            "text": "交通安全"
+          },
+          "step_statuses": []
+        },
+        {
+          "action": "move_forward",
+          "status": "accepted",
+          "order": "parallel",
+          "effective": {
+            "distance_m": 10.0
+          },
+          "step_statuses": [
+            "accepted",
+            "accepted"
+          ]
+        }
+      ],
+      "mqtt": false,
+      "model": "exact-commands-no-model",
+      "device": "Java-fixture-only"
+    },
+    {
+      "cleanup": "all listeners closed",
+      "ports": [
+        56367,
+        56368,
+        56352
+      ]
+    }
+  ],
+  "browser": {
+    "actual_ui_agent_java": true,
+    "viewport_width": 466,
+    "scenarios": [
+      "volume adjustment 150 to 100 shown and confirmed",
+      "parallel move and speech confirmed; individual receipts displayed"
+    ],
+    "image": "product-v13-stack-20261021.png"
+  },
+  "shared_deployment": false,
+  "mqtt": false,
+  "physical_device_verified": false,
+  "live_model_evaluation": false,
+  "remaining": [
+    "annotation algorithm persistence and live inference events",
+    "atomic mapping invalidation",
+    "live temporary mission recharge events",
+    "static destination resolution and battery ambiguity",
+    "orbit path checker",
+    "arbitrary parallel natural language combinations"
+  ]
+}

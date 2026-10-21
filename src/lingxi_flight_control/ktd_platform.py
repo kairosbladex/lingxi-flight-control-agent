@@ -51,11 +51,15 @@ _ROUTE_TYPES = {"route_pause": 110, "route_resume": 112, "emergency_stop": 113,
 _CAMERA_TYPES = {"camera_photo": 100, "camera_start_recording": 101, "camera_stop_recording": 102}
 _LENS_MODES = {"camera_electro_optical": 6, "camera_infrared": 2, "camera_wide": 5}
 _EXTRA_CAMERA = frozenset(_LENS_MODES) | {"camera_zoom", "camera_panorama", "infrared_set_limits"}
+_PAYLOAD_TYPES = {'speaker_speak': ('/screen/speaker/control', 201),
+                  'speaker_volume': ('/screen/speaker/control', 109),
+                  'searchlight_brightness': ('/screen/lighting/control', 103)}
 SUPPORTED_ACTIONS = (frozenset(_MOVE_TYPES) | frozenset(_TURN_TYPES)
                      | frozenset(_GIMBAL_TYPES) | frozenset(_ROUTE_TYPES)
-                     | frozenset(_CAMERA_TYPES) | _EXTRA_CAMERA | frozenset(JAVA_TOOLS) | {"read_state"})
+                     | frozenset(_CAMERA_TYPES) | _EXTRA_CAMERA | frozenset(JAVA_TOOLS) | frozenset(_PAYLOAD_TYPES) | {"read_state", 'task_end_current', 'task_end_all'})
 _PATHS = frozenset({"/screen/uav/operation/control", "/screen/uav/route/control",
-                    "/screen/uav/camera/control", "/screen/uav/gimbal/control", "/screen/uav/fly/control"})
+                    "/screen/uav/camera/control", "/screen/uav/gimbal/control", "/screen/uav/fly/control",
+                    '/screen/speaker/control', '/screen/lighting/control'})
 _STATE_FIELDS = frozenset({"online", "airborne", "longitude", "latitude", "altitude_m",
                           "height_m", "yaw_deg", "battery_percent", "flight_status", "route_status"})
 
@@ -347,8 +351,11 @@ class KtdHttpTransport:
             return self._last_timestamp
 
     def submit(self, command: KtdCommand, context: KtdRequestContext) -> KtdHttpResponse:
-        if command.path not in _PATHS or context.actor_id != self.actor_id:
+        task_end = re.fullmatch(r'/portal/task/overTask/([A-Za-z0-9_.:-]{1,128})', command.path)
+        if (command.path not in _PATHS and not task_end) or context.actor_id != self.actor_id:
             raise KtdPlatformError("TRANSPORT_SCOPE_MISMATCH")
+        if task_end and command.body:
+            raise KtdPlatformError('INVALID_REQUEST_CONTEXT')
         if not all(_identifier(value) for value in (context.project_id, context.trace_id, context.idempotency_key)):
             raise KtdPlatformError("INVALID_REQUEST_CONTEXT")
         headers = {"Authorization": "Bearer " + self._token, "Content-Type": "application/json",
@@ -372,6 +379,24 @@ class KtdHttpTransport:
         emit('flight_java', phase='response', http_status=response.status_code,
              java_code=code if type(code) is int else None, device_effect='not_verified', **fields)
         return response
+
+    def task_end_check(self, binding: RuntimeBinding, task_id: str) -> KtdHttpResponse:
+        if binding.actor_id != self.actor_id or not re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', task_id):
+            raise KtdPlatformError('TRANSPORT_SCOPE_MISMATCH')
+        request = Request(self._base_url + '/portal/task/overTask/safetyCheck',
+            data=_json({'taskId': task_id}).encode(), method='POST',
+            headers={'Authorization': 'Bearer ' + self._token, 'projectId': binding.project_id,
+                     'Content-Type': 'application/json'})
+        return self._read_response(request, strict_json=True)
+
+    def check_path(self, binding: RuntimeBinding, points: list) -> KtdHttpResponse:
+        if binding.actor_id != self.actor_id or not _identifier(binding.project_id) or len(points) != 2:
+            raise KtdPlatformError('TRANSPORT_SCOPE_MISMATCH')
+        request = Request(self._base_url + '/electronicFence/path-route/with-clean',
+            data=_json({'points': points}).encode(), method='POST',
+            headers={'Authorization': 'Bearer ' + self._token, 'projectId': binding.project_id,
+                     'Content-Type': 'application/json'})
+        return self._read_response(request, strict_json=True)
 
     def read_snapshot(self, binding: RuntimeBinding, *, site_id: str,
                       task_id: str | None) -> KtdHttpResponse:
@@ -709,6 +734,8 @@ class KtdPlatformExecutor:
                         parameters = {'value': 1}
                     elif action == 'infrared_set_limits':
                         parameters = {'min_c': 0, 'max_c': 50}
+                    elif action in _PAYLOAD_TYPES:
+                        parameters = {'text': '能力校验'} if action == 'speaker_speak' else {'value': 50}
                     else:
                         parameters = {}
                     request_type = JavaActionRequest if action in JAVA_TOOLS else FlightControlActionRequest
@@ -817,6 +844,31 @@ class KtdPlatformExecutor:
             return KtdCommand(endpoint, {'terminalId':self.binding.drone_id,'siteId':self.site_id,
                 **({'taskId':self.task_id} if self.task_id is not None else {}),**values})
         action = FlightControlAction(request.action).value
+        if action in {'task_end_current', 'task_end_all'}:
+            if self.task_id is None or not re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', self.task_id):
+                raise KtdPlatformError('JAVA_TASK_REQUIRED')
+            if snapshot.state.get('temporary_task_id') is not None or snapshot.state.get('task_scope') != 'bound_main_only':
+                raise KtdPlatformError('TASK_SCOPE_UNAVAILABLE')
+            return KtdCommand('/portal/task/overTask/' + self.task_id, {})
+        if action in _PAYLOAD_TYPES:
+            if self._track_commands:
+                raise KtdPlatformError('TRACKING_UNSUPPORTED')
+            path, operation = _PAYLOAD_TYPES[action]
+            if action == 'speaker_speak':
+                # Existing 201 may invoke paid external TTS. Require explicit server capability.
+                if snapshot.capabilities.get('LOCAL_SPEAKER_TEXT') is not True:
+                    raise KtdPlatformError('LOCAL_SPEAKER_TEXT_UNAVAILABLE')
+                value = request.parameters['text']
+            else:
+                value = request.parameters['value']
+                if int(value) != value:
+                    raise KtdPlatformError('INTEGER_PERCENT_REQUIRED')
+                value = str(int(value)) if action == 'speaker_volume' else int(value)
+            body = {'uavId': self.binding.drone_id, 'siteId': self.site_id,
+                    'type': operation, 'param': value}
+            if self.task_id is not None:
+                body['taskId'] = self.task_id
+            return KtdCommand(path, body)
         if self._track_commands:
             if action not in _MOVE_TYPES or snapshot.profile != 'DJI_HANGAR':
                 raise KtdPlatformError('TRACKING_UNSUPPORTED')
@@ -1236,6 +1288,7 @@ class KtdPlatformExecutor:
                 if action == FlightControlAction.READ_STATE:
                     return self._receipt(request, "observed", snapshot=snapshot, message="已读取权威状态")
                 command = self._compile(request, snapshot)
+                self._task_end_precheck(request)
                 fingerprint = self._fingerprint(request)
                 existing = self._journal.read(self._scope(request.idempotency_key))
                 if existing:
@@ -1263,6 +1316,19 @@ class KtdPlatformExecutor:
                 return self._reject(request, str(error))
             except Exception:
                 return self._reject(request, "JOURNAL_OR_STATE_UNAVAILABLE")
+
+    def _task_end_precheck(self, request):
+        if request.action not in {'task_end_current', 'task_end_all'}:
+            return
+        checker = getattr(self._transport, 'task_end_check', None)
+        if not callable(checker):
+            raise KtdPlatformError('TASK_END_CHECK_UNAVAILABLE')
+        response = checker(self.binding, self.task_id)
+        data = response.payload.get('data') if isinstance(response, KtdHttpResponse) else None
+        if (not isinstance(response, KtdHttpResponse) or response.status_code != 200
+                or response.payload.get('code') != 200 or not isinstance(data, Mapping)
+                or data.get('pass') is not True or data.get('needConfirm') is not True):
+            raise KtdPlatformError('TASK_END_SAFETY_REJECTED')
 
     def _matches(self, receipt, confirmation_id, command_id, idempotency_key, confirmation_binding, context_version):
         return (type(context_version) is int and receipt.confirmation_id == confirmation_id and receipt.command_id == command_id
@@ -1309,6 +1375,7 @@ class KtdPlatformExecutor:
                 else:
                     snapshot = self._snapshot(request.action.value if isinstance(request.action, FlightControlAction) else request.action)
                     command = self._compile(request, snapshot)
+                    self._task_end_precheck(request)
                     try:
                         warning = check_path(self._path_checker, self.binding, request.action,
                                              request.parameters, snapshot.state)

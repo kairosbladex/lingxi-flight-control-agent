@@ -115,6 +115,9 @@ class FakeJavaOpener:
         if method == 'GET':
             assert path == '/api/lingxi/agent/platform/snapshot'
             payload = {'code': 200, 'data': self.data}
+        elif path == '/api/electronicFence/path-route/with-clean':
+            assert method == 'POST'
+            payload = {'code': 200, 'data': None}
         else:
             assert method == 'POST' and path == '/api/screen/uav/operation/control'
             body = json.loads(request.data)
@@ -165,7 +168,7 @@ class PlatformRuntimeFlowTests(unittest.TestCase):
         result = self.propose(service)
         self.assertEqual(result.payload['status'], 'rejected')
         self.assertEqual(result.payload['error_code'], 'PLATFORM_DISABLED')
-        self.assertFalse(any(method == 'POST' for method, _, _ in self.opener.calls))
+        self.assertFalse(any(method == 'POST' and path != '/api/electronicFence/path-route/with-clean' for method, path, _ in self.opener.calls))
         self.assertNotIn(self.config.server_token, json.dumps(context.payload))
         self.assertNotIn(self.config.gateway_token, json.dumps(context.payload))
 
@@ -183,7 +186,7 @@ class PlatformRuntimeFlowTests(unittest.TestCase):
         service = self.service(enable_control=True)
         result = self.propose(service)
         self.assertEqual(result.payload['status'], 'preview_required', result.payload)
-        self.assertFalse(any(method == 'POST' for method, _, _ in self.opener.calls))
+        self.assertFalse(any(method == 'POST' and path != '/api/electronicFence/path-route/with-clean' for method, path, _ in self.opener.calls))
         card = result.payload['card']
         self.assertTrue(card['receipt_tracking'])
         body = json.dumps({key: card[key] for key in ('confirmation_id', 'confirmation_binding',
@@ -192,7 +195,7 @@ class PlatformRuntimeFlowTests(unittest.TestCase):
         self.assertEqual(confirmed.payload['status'], 'submitted', confirmed.payload)
         self.assertEqual(confirmed.payload['device_effect'], 'not_verified')
         self.assertTrue(confirmed.payload['receipt_tracking'])
-        writes = [body for method, _, body in self.opener.calls if method == 'POST']
+        writes = [body for method, path, body in self.opener.calls if method == 'POST' and path != '/api/electronicFence/path-route/with-clean']
         self.assertEqual(writes, [{'terminalId': 'drone-1', 'siteId': 'site-1',
             'type': 202, 'mode': 2, 'param': 10, 'tracking': {
                 'schemaVersion': 'lingxi-command-request/v1',
@@ -202,7 +205,7 @@ class PlatformRuntimeFlowTests(unittest.TestCase):
         self.assertEqual(len(self.model_calls), 1)
         self.assertEqual(service.handle('POST', '/api/flight-control/agent/confirm', body,
                                        self.headers).payload, confirmed.payload)
-        self.assertEqual(len([call for call in self.opener.calls if call[0] == 'POST']), 1)
+        self.assertEqual(len([call for call in self.opener.calls if call[0] == 'POST' and call[1] != '/api/electronicFence/path-route/with-clean']), 1)
 
     def test_write_flag_and_private_journal_are_validated_before_creating_runtime(self):
         with self.assertRaises(ValueError):

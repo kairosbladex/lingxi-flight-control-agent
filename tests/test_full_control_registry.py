@@ -248,6 +248,10 @@ class SafetyRegressionTests(unittest.TestCase):
     def test_every_action_receipt_passes_the_unsafe_content_check(self):
         """裸词 payload 曾被列入禁用表，会把驾驶舱回执整条判为禁止内容。"""
         arguments = {
+            FlightControlAction.SPEAKER_SPEAK: {"text": "安全提示"},
+            FlightControlAction.SPEAKER_VOLUME: {"value": 50},
+            FlightControlAction.SEARCHLIGHT_BRIGHTNESS: {"value": 50},
+            FlightControlAction.AI_ALGORITHM_SET: {"algorithm": "烟火", "enabled": True},
             FlightControlAction.SET_VIRTUAL_BUTTON: {"button": "b1", "action": "press"},
             FlightControlAction.TURN_LEFT: {"angle_deg": 90},
             FlightControlAction.TURN_RIGHT: {"angle_deg": 90},
