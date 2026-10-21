@@ -254,7 +254,7 @@ class LegacyKtdSnapshotProvider:
         if (row.get("uavId") != self.binding.drone_id
                 or row.get("hangarId") != self.binding.hangar_id):
             _reject("RESOURCE_BINDING_MISMATCH")
-        uav_sn = row.get("uavSn")
+        uav_sn = row.get("uavCode") or row.get("uavSn")
         if isinstance(uav_sn, str) and _identifier(uav_sn):
             self.uav_sn = uav_sn
 

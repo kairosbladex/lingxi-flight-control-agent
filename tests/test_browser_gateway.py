@@ -96,6 +96,10 @@ class BrowserGatewayTests(unittest.TestCase):
     def test_device_allowlist_is_enforced(self):
         self.java.source.responses['sites'].payload['data'][0]['uavSn']='other-sn'
         self.assertEqual(self.call().payload['error_code'],'DEVICE_OUT_OF_SCOPE')
+    def test_actual_site_projection_uses_uav_code_for_serial(self):
+        row=self.java.source.responses['sites'].payload['data'][0]
+        row['uavCode']=row.pop('uavSn')
+        self.assertEqual(self.call().status_code,200)
     def test_no_task_authenticates_then_returns_explicit_waiting_state(self):
         self.headers['X-Flight-Task']=''
         response=self.call()

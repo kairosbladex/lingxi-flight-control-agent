@@ -91,6 +91,7 @@ class BrowserGateway:
             operation = 'other'
         print(json.dumps({'event': 'flight_gateway', 'operation': operation,
               'status': response.status_code, 'error_code': response.payload.get('error_code'),
+              'distance_mode_available': response.payload.get('distance_mode_available'),
               'trace_id': response.payload.get('trace_id'),
               'elapsed_ms': round((time.monotonic() - started) * 1000)}), flush=True)
         return response
@@ -126,10 +127,18 @@ class BrowserGateway:
             matches = [s for s in sites if isinstance(s, dict) and s.get('id') == values['site_id']] if isinstance(sites, list) else []
             if len(matches) != 1 or matches[0].get('uavId') != values['drone_id']:
                 return self.runtime.failure(403, 'RESOURCE_BINDING_MISMATCH')
-            if matches[0].get('uavSn') not in self.allowed_drone_sns:
+            # 原/uavSite/list投影只返回uavCode；UAVSite.getUavSn也优先使用该字段。
+            if (matches[0].get('uavCode') or matches[0].get('uavSn')) not in self.allowed_drone_sns:
                 return self.runtime.failure(403, 'DEVICE_OUT_OF_SCOPE')
             if not re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', values['task_id']):
-                return self.runtime.failure(409, 'TASK_REQUIRED')
+                capabilities = _data(transport.read_legacy('permissions', project_id=values['project_id'],
+                                                          drone_id=values['drone_id']))
+                response = self.runtime.failure(409, 'TASK_REQUIRED')
+                response.payload['connection_verified'] = True
+                response.payload['distance_mode_available'] = bool(isinstance(capabilities, dict)
+                    and isinstance(capabilities.get('uav'), dict)
+                    and capabilities['uav'].get('UAV_MOVE_DISTANCE') is True)
+                return response
             require_task(transport, values['project_id'], values['site_id'], values['drone_id'], values['task_id'])
             scope = {**values, 'actor_id': actor, 'hangar_id': matches[0].get('hangarId')}
             trusted = {'X-Agent-Gateway': self.config.gateway_token, 'X-Agent-Actor': actor,
