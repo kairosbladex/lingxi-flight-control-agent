@@ -280,7 +280,7 @@ class OllamaDecider:
         max_output_tokens: int | None = None,
         keep_recent_observations: int = DEFAULT_KEEP_RECENT_OBSERVATIONS,
         omission_summary: bool = DEFAULT_OMISSION_SUMMARY,
-        keep_alive: str | None = None,
+        keep_alive: str | int | None = None,
         max_attempts: int = 2,
         transport: Transport | None = None,
         clarify_detector: Callable[[str], bool] | None = None,

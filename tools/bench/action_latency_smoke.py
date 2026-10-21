@@ -83,7 +83,7 @@ def main():
     fixture.gateway = BrowserGateway(fixture.gateway.config,
         lambda: OllamaDecider(model=args.model, base_url=base,
             system_prompt=COCKPIT_SYSTEM_PROMPT, timeout=45, max_attempts=1,
-            max_output_tokens=2048, keep_alive=args.model_keep_alive, transport=transport),
+            max_output_tokens=2048, keep_alive=-1 if args.model_keep_alive == '-1' else args.model_keep_alive, transport=transport),
         enable_control=True, opener=ReadOnlyJava(), clock=lambda: 1000,
         enable_direct_commands=args.direct_commands,
         allowed_drone_sns=['uav-sn-1'])

@@ -62,7 +62,7 @@ def main(argv=None):
         decider = lambda: OllamaDecider(
             model=args.model, base_url=args.base_url, system_prompt=COCKPIT_SYSTEM_PROMPT,
             timeout=args.model_timeout, max_attempts=1, max_output_tokens=2048,
-            keep_alive=args.model_keep_alive)
+            keep_alive=-1 if args.model_keep_alive == '-1' else args.model_keep_alive)
         if args.browser_gateway:
             from lingxi_flight_control.browser_gateway import BrowserGateway
             service = BrowserGateway(config, decider, enable_control=args.enable_platform_control,

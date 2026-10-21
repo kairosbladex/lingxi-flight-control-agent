@@ -7,6 +7,13 @@ from tools.deploy.warm_flight_model import warm
 
 
 class ModelWarmupTests(unittest.TestCase):
+    def test_permanent_residency_uses_numeric_wire_value(self):
+        from lingxi_flight_control import OllamaDecider, AgentCheckpoint
+        decider = OllamaDecider(keep_alive=-1)
+        body = decider.payload('synthetic', AgentCheckpoint('synthetic', {}, [], [], []), ())
+        self.assertEqual(body['keep_alive'], -1)
+        self.assertIs(type(body['keep_alive']), int)
+
     def test_readiness_requires_resident_gpu_and_preserves_permanent_keep_alive(self):
         replies = [{'version': 'fixture'}, {'done': True}, {'models': [
             {'name': 'qwen3.5:9b', 'context_length': 32768, 'size_vram': 100}]}]
