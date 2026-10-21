@@ -71,7 +71,12 @@ class BrowserSnapshotProvider(LegacyKtdSnapshotProvider):
 
 
 class BrowserGateway:
-    def __init__(self, config, decider_factory, *, enable_control=False, opener=None, clock=time.time):
+    def __init__(self, config, decider_factory, *, enable_control=False, opener=None, clock=time.time,
+                 allowed_drone_sns=()):
+        if not isinstance(allowed_drone_sns, (tuple, list)) or not allowed_drone_sns or any(
+                not isinstance(s, str) or not re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', s) for s in allowed_drone_sns):
+            raise ValueError('必须配置明确的设备范围')
+        self.allowed_drone_sns = frozenset(allowed_drone_sns)
         self.config, self.opener = config, opener
         def factory(bound, decider, **kwargs):
             return build_platform_cockpit(replace(bound, legacy_read_api=True), decider,
@@ -106,6 +111,8 @@ class BrowserGateway:
             matches = [s for s in sites if isinstance(s, dict) and s.get('id') == values['site_id']] if isinstance(sites, list) else []
             if len(matches) != 1 or matches[0].get('uavId') != values['drone_id']:
                 return self.runtime.failure(403, 'RESOURCE_BINDING_MISMATCH')
+            if matches[0].get('uavSn') not in self.allowed_drone_sns:
+                return self.runtime.failure(403, 'DEVICE_OUT_OF_SCOPE')
             if not re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', values['task_id']):
                 return self.runtime.failure(409, 'TASK_REQUIRED')
             require_task(transport, values['project_id'], values['site_id'], values['drone_id'], values['task_id'])
@@ -118,4 +125,9 @@ class BrowserGateway:
             code = str(error)
             return self.runtime.failure(403 if code in ('AUTHENTICATION_REQUIRED', 'TASK_NOT_RUNNING_OR_CHANGED') else 503, code)
         except Exception:
+            if method == 'POST' and path.rstrip('/').endswith('/confirm'):
+                response = self.runtime.failure(503, 'PLATFORM_OUTCOME_UNKNOWN')
+                response.payload.pop('dispatched', None)
+                response.payload['message'] = '提交结果未知，请核对设备；不要重复确认或重发。'
+                return response
             return self.runtime.failure(503, 'PLATFORM_SOURCE_UNAVAILABLE')

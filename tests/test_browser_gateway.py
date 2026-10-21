@@ -44,7 +44,8 @@ class BrowserGatewayTests(unittest.TestCase):
             RuntimeBinding('unbound', 'unbound', 'unbound', 'unbound', 'unbound', 1), 'unbound', None,
             Path(self.tmp.name)/'journal.sqlite', 'unbound', 'synthetic-private-gateway', True)
         self.gateway = BrowserGateway(config, lambda: OllamaDecider(model='fixture', base_url='http://model.invalid',
-            transport=model, max_attempts=1), enable_control=True, opener=self.java, clock=lambda:1000)
+            transport=model, max_attempts=1), enable_control=True, opener=self.java, clock=lambda:1000,
+            allowed_drone_sns=['uav-sn-1'])
         self.headers = {'Authorization':'Bearer synthetic', 'projectId':'project-1',
             'X-Flight-Site':'site-1', 'X-Flight-Drone':'drone-1', 'X-Flight-Task':'task-1',
             'X-Agent-Session':'session-1', 'X-Agent-Actor':'forged', 'X-Agent-Gateway':'forged'}
@@ -88,6 +89,9 @@ class BrowserGatewayTests(unittest.TestCase):
         self.assertEqual(self.java.requests,[])
         self.headers['Authorization']='Bearer synthetic'; self.headers['X-Flight-Drone']='other'
         self.assertEqual(self.call().status_code,403)
+    def test_device_allowlist_is_enforced(self):
+        self.java.source.responses['sites'].payload['data'][0]['uavSn']='other-sn'
+        self.assertEqual(self.call().payload['error_code'],'DEVICE_OUT_OF_SCOPE')
     def test_no_task_authenticates_then_returns_explicit_waiting_state(self):
         self.headers['X-Flight-Task']=''
         response=self.call()
@@ -110,3 +114,11 @@ class BrowserGatewayTests(unittest.TestCase):
         response=self.proposal()
         self.assertEqual(response.payload['status'],'rejected')
         self.assertFalse(any(m=='POST' for m,p in self.java.requests))
+    def test_unexpected_confirmation_failure_does_not_claim_unsent(self):
+        def failed(*args): raise RuntimeError('private error')
+        self.gateway.runtime.handle=failed
+        response=self.call('/agent/confirm',{})
+        self.assertEqual(response.status_code,503)
+        self.assertEqual(response.payload['error_code'],'PLATFORM_OUTCOME_UNKNOWN')
+        self.assertNotIn('dispatched',response.payload)
+        self.assertNotIn('private error',str(response.payload))

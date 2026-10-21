@@ -4,6 +4,7 @@ import argparse
 import os
 import sys
 import secrets
+import json
 
 from lingxi_flight_control import OllamaDecider
 from lingxi_flight_control.cockpit import COCKPIT_SYSTEM_PROMPT
@@ -53,7 +54,8 @@ def main(argv=None):
             timeout=20, max_attempts=1, max_output_tokens=2048, keep_alive='30m')
         if args.browser_gateway:
             from lingxi_flight_control.browser_gateway import BrowserGateway
-            service = BrowserGateway(config, decider, enable_control=args.enable_platform_control)
+            service = BrowserGateway(config, decider, enable_control=args.enable_platform_control,
+                allowed_drone_sns=json.loads(environment.get('FLIGHT_AGENT_ALLOWED_DRONE_SNS', '[]')))
         elif args.java_gateway:
             from lingxi_flight_control.platform_gateway import PlatformGateway
             service = PlatformGateway(config, decider, enable_control=args.enable_platform_control)
