@@ -28,8 +28,12 @@ def main():
     section.left_margin=section.right_margin=Inches(.75)
     for name in ('Normal','Title','Subtitle','Heading 1','Heading 2','Heading 3'):
         style=doc.styles[name]
-        style.font.name='PingFang SC';style.font.color.rgb=RGBColor(0,0,0)
-        style.element.get_or_add_rPr().rFonts.set(qn('w:eastAsia'),'PingFang SC')
+        style.font.name='Songti SC';style.font.color.rgb=RGBColor(0,0,0)
+        fonts=style.element.get_or_add_rPr().rFonts
+        for attribute in list(fonts.attrib):
+            if 'theme' in attribute.lower():del fonts.attrib[attribute]
+        fonts.set(qn('w:eastAsia'),'Songti SC')
+        for border in style.element.xpath('./w:pPr/w:pBdr'):border.getparent().remove(border)
     doc.styles['Normal'].font.size=Pt(10.5)
     doc.styles['Normal'].paragraph_format.line_spacing=1.12
     doc.styles['Normal'].paragraph_format.space_after=Pt(5)
@@ -46,13 +50,15 @@ def main():
     def p(text,style=None):
         return doc.add_paragraph(text,style)
     def h(text): doc.add_heading(text,level=1)
-    def page(text): doc.add_page_break();h(text)
+    def page(text):
+        heading=doc.add_heading(text,level=1)
+        heading.paragraph_format.page_break_before=True
     def code(text):
         paragraph=p(text)
         paragraph.paragraph_format.space_after=Pt(4)
         for run in paragraph.runs:
-            run.font.name='Consolas';run.font.size=Pt(9)
-            run._element.get_or_add_rPr().rFonts.set(qn('w:eastAsia'),'PingFang SC')
+            run.font.name='Liberation Mono';run.font.size=Pt(9)
+            run._element.get_or_add_rPr().rFonts.set(qn('w:eastAsia'),'Songti SC')
     def table(headers,rows,widths):
         t=doc.add_table(rows=1,cols=len(headers));t.autofit=False;t.alignment=WD_TABLE_ALIGNMENT.CENTER
         for column,width in zip(t.columns,widths):column.width=Inches(width)
@@ -77,7 +83,6 @@ def main():
                     for run in cell.paragraphs[0].runs:run.bold=True
             pr=row._tr.get_or_add_trPr();pr.append(OxmlElement('w:cantSplit'))
         t.rows[0]._tr.get_or_add_trPr().append(OxmlElement('w:tblHeader'))
-        p('')
 
     p('大疆飞控能力与Agent工具输入输出说明','Title')
     p('原 ktd_backend 接口核验与自然语言控制验收','Subtitle')
