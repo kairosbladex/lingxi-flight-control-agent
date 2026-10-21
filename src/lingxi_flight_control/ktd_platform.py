@@ -314,7 +314,7 @@ class KtdHttpTransport:
         parsed = urlsplit(base_url)
         if (parsed.scheme not in ({"https", "http"} if allow_insecure_http else {"https"})
                 or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment
-                or parsed.path.rstrip("/") not in ("", "/api")):
+                or parsed.path.rstrip("/") not in ("", "/api", "/gis_server_a")):
             raise ValueError("base_url must be a fixed trusted server origin with optional /api")
         if (not isinstance(token, str) or not 1 <= len(token) <= 8192
                 or any(ord(character) <= 32 or ord(character) >= 127 for character in token)
@@ -467,6 +467,7 @@ class KtdHttpTransport:
             "owners": "/uavControlPower/list",
             "hangar_state": "/portal/task/hangar-view/state",
             "pose": "/test/getUdpData",
+            "task": "/inspectionResult/task/terminal/detail",
         }
         if resource == "permissions":
             if (not isinstance(drone_id, str)
@@ -757,7 +758,7 @@ class KtdPlatformExecutor:
                 raise KtdPlatformError("DISTANCE_MODE_UNAVAILABLE")
             if not _finite(request.parameters["distance_m"], 0.01, 20):
                 raise KtdPlatformError("DISTANCE_OUT_OF_RANGE")
-            if self._legacy_read_api:
+            if self._legacy_read_api and snapshot.state.get('legacy_pose_verified') is not True:
                 # 旧只读接口没有机头坐标和高度，无法在 Agent 侧重算目标点或
                 # 证明 20 米隐含爬升边界；这里只允许测试环境显式打开的路径，
                 # 由 Java 原控制接口用服务端实时姿态计算目标。

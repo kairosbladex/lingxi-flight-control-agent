@@ -115,7 +115,7 @@ def build_platform_cockpit(config: PlatformRuntimeConfig, decider_factory, *,
                            enable_control: bool = False, enable_vendor_requests: bool = False,
                            enable_legacy_control: bool | None = None,
                            allow_legacy_pose_unverified: bool | None = None,
-                           opener=None, clock=time.time):
+                           opener=None, clock=time.time, legacy_snapshot_factory=None):
     """将既有Agent会话接到Java适配器；构建本身不请求Java或模型。"""
     from .cockpit import CockpitService
     from .ktd_platform import KtdPlatformExecutor, SqliteCommandJournal
@@ -145,7 +145,7 @@ def build_platform_cockpit(config: PlatformRuntimeConfig, decider_factory, *,
     transport = KtdHttpTransport(config.base_url, token=config.server_token,
         actor_id=config.binding.actor_id, allow_insecure_http=config.allow_insecure_http, opener=opener)
     if enable_legacy_control:
-        provider = LegacyKtdSnapshotProvider(config.binding, site_id=config.site_id,
+        provider = (legacy_snapshot_factory or LegacyKtdSnapshotProvider)(config.binding, site_id=config.site_id,
                                              task_id=config.task_id, transport=transport, clock=clock)
     else:
         provider = KtdSnapshotProvider(config.binding, site_id=config.site_id,

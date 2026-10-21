@@ -3,6 +3,7 @@
 import argparse
 import os
 import sys
+import secrets
 
 from lingxi_flight_control import OllamaDecider
 from lingxi_flight_control.cockpit import COCKPIT_SYSTEM_PROMPT
@@ -20,6 +21,8 @@ def main(argv=None):
                         help='显式开放已获权威许可的动作提议与逐次确认；需单独的设备测试授权')
     parser.add_argument('--java-gateway', action='store_true',
                         help='由已认证Java网关注入每次请求的登录及设备上下文')
+    parser.add_argument('--browser-gateway', action='store_true',
+                        help='浏览器同源入口；Python调用原Java接口核验登录，不需要修改Java')
     parser.add_argument('--enable-vendor-requests', action='store_true',
                         help='显式允许配置白名单内的厂商请求提议与逐次确认；不授予持续航权或启用飞行动作')
     parser.add_argument('--enable-legacy-control', action='store_true',
@@ -33,18 +36,25 @@ def main(argv=None):
         parser.error('--allow-legacy-pose-unverified 必须与 --enable-legacy-control 同时使用')
     try:
         environment = dict(os.environ)
-        if args.java_gateway:
+        if args.java_gateway and args.browser_gateway:
+            raise ValueError('网关模式互斥')
+        if args.java_gateway or args.browser_gateway:
             if args.enable_legacy_control or args.allow_legacy_pose_unverified or args.enable_vendor_requests:
                 raise ValueError('Java网关不能降级授权或自动取权')
             for key in ('KTD_ACTOR_EMPLOYEE_ID', 'KTD_PROJECT_ID', 'KTD_HANGAR_ID',
                         'KTD_DRONE_ID', 'KTD_SITE_ID', 'FLIGHT_AGENT_TASK_BATCH_ID', 'KTD_SERVER_TOKEN'):
                 environment[key] = 'gateway-unbound'
             environment.pop('KTD_TASK_ID', None)
+            if args.browser_gateway:
+                environment['FLIGHT_AGENT_GATEWAY_TOKEN'] = secrets.token_urlsafe(32)
         config = PlatformRuntimeConfig.from_environment(environment)
         decider = lambda: OllamaDecider(
             model=args.model, base_url=args.base_url, system_prompt=COCKPIT_SYSTEM_PROMPT,
             timeout=20, max_attempts=1, max_output_tokens=2048, keep_alive='30m')
-        if args.java_gateway:
+        if args.browser_gateway:
+            from lingxi_flight_control.browser_gateway import BrowserGateway
+            service = BrowserGateway(config, decider, enable_control=args.enable_platform_control)
+        elif args.java_gateway:
             from lingxi_flight_control.platform_gateway import PlatformGateway
             service = PlatformGateway(config, decider, enable_control=args.enable_platform_control)
         else:
