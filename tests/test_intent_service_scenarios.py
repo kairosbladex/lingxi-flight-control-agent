@@ -83,8 +83,9 @@ class ServiceIntentBenchTests(unittest.TestCase):
             self.assertEqual(rows[case_id]["model_calls"], 0)
             self.assertNotIn(case_id, requests)
         self.assertEqual(rows["movement_01"]["preview_calls"], 1)
-        self.assertEqual(rows["inquiry_03"]["read_only_tool_calls"], 1)
-        self.assertEqual(rows["inquiry_03"]["model_calls"], 2)
+        self.assertEqual(rows["inquiry_03"]["read_only_tool_calls"], 0)
+        self.assertEqual(rows["inquiry_03"]["model_calls"], 0)
+        self.assertEqual(rows["inquiry_03"]["service_stage"], "direct_state_query")
         self.assertEqual(rows["inquiry_03"]["observed_action"], "read_state")
         for case_id in selected:
             self.assertTrue(rows[case_id]["state_unchanged"])
@@ -93,7 +94,7 @@ class ServiceIntentBenchTests(unittest.TestCase):
         usage = report["run"]["usage"]
         self.assertEqual(usage["service_requests"], len(selected))
         self.assertEqual(usage["model_calls"], len(requests))
-        self.assertEqual(usage["read_only_tool_calls"], 1)
+        self.assertEqual(usage["read_only_tool_calls"], 0)
         self.assertEqual(usage["confirmations"], 0)
         self.assertEqual(usage["mutating_tool_calls"], 0)
 

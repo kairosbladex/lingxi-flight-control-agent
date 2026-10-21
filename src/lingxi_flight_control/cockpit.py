@@ -147,10 +147,40 @@ def _separate_motion_constraints(text):
     return '，'.join(remaining), forbidden
 
 _CONTINUE = frozenset({'继续', '下一步', '继续下一步', 'continue', 'next'})
+# Full utterances only: mixed flight requests must retain the confirmation path.
+_STATE_QUERY = re.compile(
+    r'(?:(?:请|帮我)?(?:查询|查看|读取|刷新|看一下)(?:一下)?(?:当前|现在)?(?:无人机|飞机|设备)?(?:的)?(?:状态|电量|高度|控制权)'
+    r'|(?:当前|现在)?(?:无人机|飞机|设备)?(?:现在|当前)?(?:的)?(?:状态|电量|高度|控制权)(?:(?:是)?(?:什么|多少)|怎么样|如何)?'
+    r'|(?:无人机|飞机|设备)(?:现在|当前)?什么状态)[？?。！!]*')
+
+
+def _state_summary(state):
+    def number(key, unit):
+        value = state.get(key)
+        return f'{value:g}{unit}' if (isinstance(value, (int, float))
+            and not isinstance(value, bool) and math.isfinite(value)) else '未知'
+
+    def flag(key, yes, no):
+        value = state.get(key)
+        return yes if value is True else no if value is False else '未知'
+
+    source = '模拟器读数' if state.get('execution_mode') == 'simulator' else '平台读数'
+    return (f'当前状态（{source}；缺失字段标为未知）：'
+        f'在线：{flag("online", "是", "否")}；'
+        f'空中：{flag("airborne", "是", "否")}；'
+        f'电量：{number("battery_percent", "%")}；'
+        f'高度：{number("altitude_m", "米")}；'
+        f'控制权：{flag("control_owned", "当前用户持有", "当前用户未持有")}。'
+        '仅查询，未发送控制指令。')
+
+
 _MODEL_FAILURE_MESSAGES = {
     'MODEL_TIMEOUT': '模型响应超时，本次未执行动作。',
     'MODEL_OUTPUT_TRUNCATED': '模型输出未完整生成，本次未执行动作。',
-    'RUN_BUDGET_EXCEEDED': '本轮理解预算已耗尽，请缩短指令后重试。',
+    'RUN_TIMEOUT': '本轮处理超时，未执行动作。查询状态请使用“刷新状态”；控制指令请稍后重试。',
+    'MODEL_STEP_LIMIT': '本轮理解未能在限定步骤内完成，未执行动作。请稍后重试或明确单个动作。',
+    'MODEL_CONTEXT_LIMIT': '本轮上下文超过模型容量，未执行动作。请新建会话后重试。',
+    'RUN_BUDGET_EXCEEDED': '本轮处理达到限制，未执行动作。请稍后重试；查询状态可使用“刷新状态”。',
     'MODEL_ERROR': '未获得可靠的动作建议，请补充或重试。',
 }
 
@@ -161,7 +191,7 @@ def _model_failure_code(error):
     if isinstance(error, ModelOutputTruncatedError):
         return 'MODEL_OUTPUT_TRUNCATED'
     if isinstance(error, PromptBudgetExceeded):
-        return 'RUN_BUDGET_EXCEEDED'
+        return 'MODEL_CONTEXT_LIMIT'
     return 'MODEL_ERROR'
 
 
@@ -874,8 +904,28 @@ class CockpitService:
             # must not leave an immortal IN_PROGRESS entry.
             history = self._history(session_id)[-10:]
             state = self._state()
+            direct_state_query = _STATE_QUERY.fullmatch(text) is not None
+            if direct_state_query:
+                self._version(payload)
             session.turns += 1
             session.requests[request_id] = (fingerprint, None)
+            if direct_state_query:
+                unavailable = state.get('available') is False or bool(state.get('error_code'))
+                result = self._base(status='error' if unavailable else 'final', kind='state_query',
+                    message=('暂时无法获取有效的设备状态，请刷新状态或查看原平台遥测；未发送控制指令。'
+                             if unavailable else _state_summary(state)),
+                    request_id=request_id, state=state,
+                    **({'error_code': 'STATE_UNAVAILABLE'} if unavailable else {}))
+                session.active_intent, session.clarification = '', False
+                session.completed_steps.clear()
+                session.ordered_steps = None
+                session.motion_source = None
+                session.requests[request_id] = (fingerprint, result)
+                self._save_history(session_id, [
+                    {'role': 'user', 'text': text},
+                    {'role': 'assistant', 'status': result['status'], 'text': result['message']},
+                ])
+                return result
             immediate_text, motion_constraints = _separate_motion_constraints(text)
             if (not immediate_text or contains_unsafe_content(text) or _AUTHORITY_CLAIM.search(text)
                     or any(phrase in immediate_text.lower() for phrase in _DENY_PHRASES)
@@ -965,7 +1015,7 @@ class CockpitService:
                     if session.epoch != epoch:
                         raise ValueError('run cancelled')
                     if time.monotonic() - started > owner._timeout:
-                        model_failure_code = 'RUN_BUDGET_EXCEEDED'
+                        model_failure_code = 'RUN_TIMEOUT'
                         raise ValueError(_MODEL_FAILURE_MESSAGES[model_failure_code])
 
                 def decide(self, user_message, checkpoint, tools):
@@ -1031,7 +1081,7 @@ class CockpitService:
                 if session.epoch != epoch:
                     raise ValueError('run cancelled')
                 if time.monotonic() - started > owner._timeout:
-                    plan_failure = 'RUN_BUDGET_EXCEEDED'
+                    plan_failure = 'RUN_TIMEOUT'
                     raise ValueError(_MODEL_FAILURE_MESSAGES[plan_failure])
 
             def decide(self, user_message, checkpoint, tools):
@@ -1071,7 +1121,7 @@ class CockpitService:
                                   message=result.message or '本轮没有需要执行的动作。',
                                   request_id=request_id, state=self._state()), None
         else:
-            code = plan_failure or ('RUN_BUDGET_EXCEEDED'
+            code = plan_failure or ('MODEL_STEP_LIMIT'
                 if result.status == LoopStatus.MAX_STEPS_EXCEEDED else 'MODEL_ERROR')
             return self._base(status='error', error_code=code,
                               message=_MODEL_FAILURE_MESSAGES[code],
@@ -1263,7 +1313,7 @@ class CockpitService:
             return self._base(status='clarification', message=result.message, **common)
         if result.status == LoopStatus.FINAL:
             return self._base(status='final', message='本轮没有执行新动作。当前状态见状态栏；如需控制，请明确动作和参数。', **common)
-        code = model_failure_code or ('RUN_BUDGET_EXCEEDED'
+        code = model_failure_code or ('MODEL_STEP_LIMIT'
             if result.status == LoopStatus.MAX_STEPS_EXCEEDED else 'MODEL_ERROR')
         return self._base(status='error', error_code=code,
             message=_MODEL_FAILURE_MESSAGES[code], **common)

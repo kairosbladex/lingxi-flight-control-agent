@@ -200,7 +200,7 @@ class CockpitModelFailureTests(unittest.TestCase):
         self.configure(max_model_steps=1)
         with mock.patch('urllib.request.urlopen',
                         return_value=http_response(tool_response(distance=999))) as transport:
-            self.assert_failure(self.message(), 'RUN_BUDGET_EXCEEDED')
+            self.assert_failure(self.message(), 'MODEL_STEP_LIMIT')
         self.assertEqual(transport.call_count, 1)
 
     def test_late_complete_tool_is_a_run_budget_failure_without_a_card(self):
@@ -210,7 +210,7 @@ class CockpitModelFailureTests(unittest.TestCase):
                 clock.return_value = 12
                 return http_response(tool_response())
             with mock.patch('urllib.request.urlopen', side_effect=late_response) as transport:
-                self.assert_failure(self.message(), 'RUN_BUDGET_EXCEEDED')
+                self.assert_failure(self.message(), 'RUN_TIMEOUT')
         self.assertEqual(transport.call_count, 1)
 
     def test_budget_exhausted_before_model_call_does_not_contact_transport(self):
@@ -220,14 +220,14 @@ class CockpitModelFailureTests(unittest.TestCase):
                 return self.decider
             self.configure(factory=slow_factory, timeout_sec=1)
             with mock.patch('urllib.request.urlopen') as transport:
-                self.assert_failure(self.message(), 'RUN_BUDGET_EXCEEDED')
+                self.assert_failure(self.message(), 'RUN_TIMEOUT')
         transport.assert_not_called()
 
     def test_prompt_budget_exhaustion_does_not_contact_transport(self):
         self.decider = OllamaDecider(model='fixture', base_url='http://model.invalid',
                                     num_ctx=32, output_reserve=0)
         with mock.patch('urllib.request.urlopen') as transport:
-            self.assert_failure(self.message(), 'RUN_BUDGET_EXCEEDED')
+            self.assert_failure(self.message(), 'MODEL_CONTEXT_LIMIT')
         transport.assert_not_called()
 
     def test_complete_tool_still_requires_explicit_confirmation(self):

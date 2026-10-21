@@ -137,12 +137,17 @@ def _service_candidate(response, read_calls):
     if status in {"clarification", "rejected"}:
         return {**metadata, "kind": status, "service_stage": "service_policy_or_model"}
     if status == "final":
+        if payload.get('kind') == 'state_query':
+            return {**metadata, 'kind': 'action', 'action': 'read_state', 'arguments': {},
+                    'service_stage': 'direct_state_query'}
         return {**metadata, "kind": "action", "action": "read_state", "arguments": {}, "service_stage": "read_only_tool"} if read_calls else {
             **metadata, "kind": "no_action", "basis": "service_final", "service_stage": "service_final"}
     if status == "error":
         code = payload.get("error_code")
-        return {**metadata, "status": "timeout" if code == "MODEL_TIMEOUT" else "error",
+        return {**metadata, "status": "timeout" if code in {"MODEL_TIMEOUT", "RUN_TIMEOUT"} else "error",
                 "reason": {"MODEL_TIMEOUT": "model_timeout", "MODEL_OUTPUT_TRUNCATED": "model_output_truncated",
+                           "RUN_TIMEOUT": "service_run_timeout", "MODEL_STEP_LIMIT": "service_step_limit",
+                           "MODEL_CONTEXT_LIMIT": "model_context_limit",
                            "RUN_BUDGET_EXCEEDED": "service_run_budget_exhausted"}.get(code, "model_or_service_error")}
     return {**metadata, "status": "uncertain", "reason": "unexpected_service_status"}
 
