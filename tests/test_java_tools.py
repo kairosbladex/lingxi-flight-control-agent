@@ -77,7 +77,7 @@ class JavaToolTests(unittest.TestCase):
     def test_original_simulator_tool_surface_does_not_gain_platform_tools(self):
         simulator=MemoryFlightControlSimulator(RuntimeBinding('a','p','h','d','b',1))
         names={tool.name for tool in build_proposal_registry(simulator).definitions()}
-        self.assertEqual(len(names),65)
+        self.assertEqual(len(names),66)
         self.assertFalse(names.intersection(TOOLS))
 
     def test_no_camera_means_no_new_camera_write(self):

@@ -48,6 +48,16 @@ _STICK_AXES = {"forward": 202, "backward": 203, "left": 204, "right": 205,
                "up": 201, "down": -201, "yaw_right": 206, "yaw_left": -206}
 _ROUTE_TYPES = {"route_pause": 110, "route_resume": 112, "emergency_stop": 113,
                 "return_home": 114, "cancel_return_home": -114}
+#: 指点飞行/环绕走 /screen/uav/fly/control：119 进入指点、120 退出；121 进入环绕、122 退出。
+#: 这两个接口在 Java 侧由 UavFlyDTO 承载，经纬度/高度字段名与 operation/control 不同。
+_FLY_TYPES = {"point_flight": 119, "point_orbit": 121}
+#: 悬停在各运动模式下的落点。平台没有统一的“悬停”操作码，只能按当前运动方式取消它。
+_HOVER_STOP_TYPES = {"displacement": 120, "orbit": 122}
+#: Java 自己的位移实现用固定 5 m/s 调 fly_to_point（DJHangarOperation 的 mode=2 分支），
+#: 这里沿用同一档，不新增速度猜测。
+_FLY_SPEED_MPS = 5
+#: 平台高度字段是 WGS84 椭球高，官方范围 2–10000 米。
+_MIN_ELLIPSOID_HEIGHT_M, _MAX_ELLIPSOID_HEIGHT_M = 2.0, 10000.0
 _CAMERA_TYPES = {"camera_photo": 100, "camera_start_recording": 101, "camera_stop_recording": 102}
 _LENS_MODES = {"camera_electro_optical": 6, "camera_infrared": 2, "camera_wide": 5}
 _EXTRA_CAMERA = frozenset(_LENS_MODES) | {"camera_zoom", "camera_panorama", "infrared_set_limits"}
@@ -56,7 +66,7 @@ _PAYLOAD_TYPES = {'speaker_speak': ('/screen/speaker/control', 201),
                   'searchlight_brightness': ('/screen/lighting/control', 103)}
 SUPPORTED_ACTIONS = (frozenset(_MOVE_TYPES) | frozenset(_TURN_TYPES)
                      | frozenset(_GIMBAL_TYPES) | frozenset(_ROUTE_TYPES)
-                     | frozenset(_CAMERA_TYPES) | _EXTRA_CAMERA | frozenset(JAVA_TOOLS) | frozenset(_PAYLOAD_TYPES) | {"read_state", 'task_end_current', 'task_end_all'})
+                     | frozenset(_CAMERA_TYPES) | _EXTRA_CAMERA | frozenset(JAVA_TOOLS) | frozenset(_PAYLOAD_TYPES) | frozenset(_FLY_TYPES) | {"read_state", 'task_end_current', 'task_end_all', 'hover'})
 _PATHS = frozenset({"/screen/uav/operation/control", "/screen/uav/route/control",
                     "/screen/uav/camera/control", "/screen/uav/gimbal/control", "/screen/uav/fly/control",
                     '/screen/speaker/control', '/screen/lighting/control'})
@@ -629,6 +639,10 @@ class KtdPlatformExecutor:
         self._turn_gain = float(turn_gain)
         self._stick_max_sec = float(stick_max_sec)
         self._pending: dict[str, _Pending] = {}
+        #: 最近一次成功下发的运动方式：displacement（位移/指点）| stick（杆量/转向）| orbit（环绕）。
+        #: 平台没有统一悬停操作码，悬停只能按这个方式选择对应的“取消运动”指令；
+        #: 进程重启后为 None，此时只发 207（对没有运动指令的无人机是安全空操作）。
+        self._last_motion: str | None = None
         self._path_checker = path_checker
         self._lock = threading.RLock()
 
@@ -943,6 +957,10 @@ class KtdPlatformExecutor:
             if step is not None:
                 body["stepPercentage"] = step
             return KtdCommand("/screen/uav/gimbal/control", body)
+        if action == "hover":
+            return self._compile_hover(snapshot, body)
+        if action in _FLY_TYPES:
+            return self._compile_fly(action, request, snapshot, body)
         if action in _ROUTE_TYPES:
             if action in ("route_pause", "route_resume", "cancel_return_home") and self.task_id is None:
                 raise KtdPlatformError("JAVA_TASK_REQUIRED")
@@ -975,6 +993,78 @@ class KtdPlatformExecutor:
                     "lowerLimit": int(low), "upperLimit": int(high)}))
             return KtdCommand("/screen/uav/camera/control", body)
         raise KtdPlatformError("ACTION_UNSUPPORTED")
+
+    def _compile_hover(self, snapshot, body):
+        """把“悬停”折算成当前运动方式对应的取消指令。
+
+        平台没有统一的悬停操作码（`UavOpeConstant` 只有 110 暂停航线、111 停止航线、
+        113 紧急停止、207 移动停止）。207 只清 Java 侧的重发记录，对 mode=2 的
+        一次性 fly_to_point 无效，所以必须先看最近一次运动方式再选指令；
+        绝不用 113 顶替——那是紧急停止，会改变任务状态。
+        """
+        if snapshot.state.get("airborne") is not True:
+            raise KtdPlatformError("FLIGHT_STATE_UNAVAILABLE")
+        route_status = snapshot.state.get("route_status")
+        if not isinstance(route_status, str) or not route_status:
+            # 不知道航线状态就无法判断该暂停还是该停运动；宁可拒绝也不发一条无效指令。
+            raise KtdPlatformError("ROUTE_STATE_UNAVAILABLE")
+        if route_status == "running":
+            if self.task_id is None:
+                raise KtdPlatformError("JAVA_TASK_REQUIRED")
+            body.update(type=_ROUTE_TYPES["route_pause"])
+            return KtdCommand("/screen/uav/route/control", body)
+        if self._last_motion in _HOVER_STOP_TYPES:
+            body.update(type=_HOVER_STOP_TYPES[self._last_motion])
+            return KtdCommand("/screen/uav/fly/control", body)
+        body.update(type=207, mode=3, param=0)
+        return KtdCommand("/screen/uav/operation/control", body)
+
+    def _compile_fly(self, action, request, snapshot, body):
+        """指点飞行（119）与进入环绕（121），都走 /screen/uav/fly/control。"""
+        if snapshot.profile != "DJI_HANGAR":
+            raise KtdPlatformError("PROFILE_UNSUPPORTED")
+        if snapshot.state.get("airborne") is not True:
+            raise KtdPlatformError("FLIGHT_STATE_UNAVAILABLE")
+        p = request.parameters
+        if action == "point_flight":
+            height = p["altitude_m"]
+            body.update(type=_FLY_TYPES[action], longitude=float(p["longitude"]),
+                        latitude=float(p["latitude"]), speed=_FLY_SPEED_MPS)
+        else:
+            # DJI 的 poi_mode_enter 只收经纬度和高度：半径由进入时的水平距离决定，
+            # 速度符号表示方向（负数顺时针）。半径无法通过该接口下发。
+            height = snapshot.state.get("altitude_m")
+            body.update(type=_FLY_TYPES[action], longitude=float(p["longitude"]),
+                        latitude=float(p["latitude"]), speed=-float(_FLY_SPEED_MPS))
+        if not _finite(height, _MIN_ELLIPSOID_HEIGHT_M, _MAX_ELLIPSOID_HEIGHT_M):
+            raise KtdPlatformError("TARGET_ALTITUDE_OUT_OF_RANGE")
+        body["height"] = float(height)
+        return KtdCommand("/screen/uav/fly/control", body)
+
+    @staticmethod
+    def _platform_warnings(action, parameters):
+        """确认卡上必须可见的平台语义差异；不改变用户参数，只如实说明。"""
+        if action == "point_orbit":
+            return ["大疆环绕半径由进入时的水平距离决定，请求的 radius_m 不会下发；"
+                    "需要精确半径请先指点飞到该距离再进入环绕。"]
+        if action == "hover":
+            return ["悬停通过取消当前运动指令实现，平台只返回受理，"
+                    "设备是否已保持位置未经回执验证。"]
+        return []
+
+    def _record_motion(self, action, status):
+        """只在平台确认受理后更新最近运动方式，供后续悬停选择取消指令。"""
+        if status not in {"submitted", "accepted", "unknown"}:
+            return
+        if action in _MOVE_TYPES or action == "point_flight":
+            self._last_motion = "displacement"
+        elif action in _TURN_TYPES or action == "stick":
+            self._last_motion = "stick"
+        elif action == "point_orbit":
+            self._last_motion = "orbit"
+        elif action in {"hover", "emergency_stop", "route_pause", "point_flight_stop",
+                        "point_orbit_stop", "land", "land_alternate", "return_home"}:
+            self._last_motion = None
 
     # ---- 姿态控制：旧控制接口 + 姿态回读闭环 -----------------------------
 
@@ -1042,6 +1132,8 @@ class KtdPlatformExecutor:
         self._send_operation(self._control_body(type_=207, mode=3, param=0),
                              trace_id=trace_id, idempotency_key=idempotency_key,
                              counter=counter + 1)
+        # 回中并停止重发之后没有持续运动，后续悬停不应再取消已经不存在的运动。
+        self._last_motion = None
 
     def _run_turn(self, request, snapshot, *, trace_id: str) -> tuple[str, str]:
         action = FlightControlAction(request.action).value
@@ -1307,7 +1399,8 @@ class KtdPlatformExecutor:
                                         expires_at=datetime.fromtimestamp(deadline, timezone.utc).isoformat(), trace_id=trace_id,
                                         message="待确认平台指令，设备效果尚未验证", adjustments=adjustments)
                 warning = check_path(self._path_checker, self.binding, action_value, request.parameters, snapshot.state)
-                receipt = replace(receipt, warnings=[warning] if warning else [])
+                receipt = replace(receipt, warnings=([warning] if warning else [])
+                                  + self._platform_warnings(action_value, request.parameters))
                 self._pending[confirmation_id] = _Pending(copy.deepcopy(request), receipt, snapshot_hash, command, deadline)
                 return receipt
             except PolicyError as error:
@@ -1437,6 +1530,8 @@ class KtdPlatformExecutor:
                         action_value = (request.action.value
                                         if isinstance(request.action, FlightControlAction)
                                         else str(request.action))
+                        # 结果未知也要记：指令可能已经发出，后续悬停必须按运动方式取消。
+                        self._record_motion(action_value, status)
                         message = ("平台已受理，设备动作是否完成尚未验证" if status == 'submitted'
                                    else '平台结果未知，请查询回执，勿重复提交')
                         error_code = None

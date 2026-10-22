@@ -64,6 +64,7 @@ class FlightControlAction(str, Enum):
     TURN_RIGHT = "turn_right"
     # safety
     EMERGENCY_STOP = "emergency_stop"
+    HOVER = "hover"
     TAKEOFF = "takeoff"
     LAND = "land"
     LAND_ALTERNATE = "land_alternate"
@@ -681,7 +682,7 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         if error is not None:
             return _status_receipt(FlightControlStatus.REJECTED, request, self.binding, self.state,
                                    error_code=error[0], message=error[1])
-        route_context = self._route_context() if action in _ROUTE_REQUIRED_STATES or action.value in MICRO_ACTIONS | TEMPORARY_ACTIONS | RESUME_ACTIONS | {'task_end_current', 'task_end_all'} else None
+        route_context = self._route_context() if action in _ROUTE_REQUIRED_STATES or action.value in MICRO_ACTIONS | TEMPORARY_ACTIONS | RESUME_ACTIONS | {'task_end_current', 'task_end_all', 'hover'} else None
         confirmation_id = uuid4().hex
         binding_data = {"binding": self.binding.to_dict(), "request": request.to_dict()}
         if route_context is not None:
@@ -912,6 +913,16 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             s.task_status = "emergency_stopped"
             s.ground_speed_mps = 0.0
             s.vertical_speed_mps = 0.0
+        elif action == FlightControlAction.HOVER:
+            # 悬停只清速度并保持任务；航线执行中等价于暂停并保留断点（V1.3 2.4）。
+            # 它绝不改 task_status，因此不能当作急停或结束任务使用。
+            s.ground_speed_mps = 0.0
+            s.vertical_speed_mps = 0.0
+            s.air_speed_mps = 0.0
+            if s.route_status == "running":
+                s.route_status = "paused"
+                if not s.mapping_invalidated and s.breakpoint_index is None:
+                    s.breakpoint_index = 0
         elif action == FlightControlAction.TAKEOFF:
             s.altitude_m = float(p["altitude_m"])
             s.task_status = "flying"
@@ -1018,6 +1029,7 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
 
 _TEXT_ACTIONS: tuple[tuple[str, FlightControlAction, dict[str, Any]], ...] = (
     ("急停", FlightControlAction.EMERGENCY_STOP, {}),
+    ("悬停", FlightControlAction.HOVER, {}),
     ("取消返航", FlightControlAction.CANCEL_RETURN_HOME, {}),
     ("返航", FlightControlAction.RETURN_HOME, {}),
     ("起飞", FlightControlAction.TAKEOFF, {"altitude_m": 10}),
@@ -1164,6 +1176,9 @@ ACTION_SPECS: dict[FlightControlAction, ActionSpec] = {
     FlightControlAction.TURN_RIGHT: _spec("flight", "原地向右偏航转向，只改变航向不产生位移",
                                           {"angle_deg": _P_ANGLE}, ("angle_deg",)),
     FlightControlAction.EMERGENCY_STOP: _spec("flight", "紧急停止所有运动"),
+    FlightControlAction.HOVER: _spec(
+        "flight", "在当前点保持位置不动；自动航线执行中等价于暂停航线并保留断点，"
+                  "与紧急停止不同，不终止任务"),
     FlightControlAction.TAKEOFF: _spec("flight", "起飞至指定高度",
                                        {"altitude_m": _P_ALTITUDE}, ("altitude_m",)),
     FlightControlAction.LAND: _spec("flight", "在当前点垂直降落"),

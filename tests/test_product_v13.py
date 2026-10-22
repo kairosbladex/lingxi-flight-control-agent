@@ -184,13 +184,15 @@ class ProductV13Tests(unittest.TestCase):
             'text': text, 'request_id': str(self.counter), 'context_version': 1}),
             {'X-Agent-Session': 'v13'}).payload
 
-    def test_cockpit_hover_resolves_route_pause_without_model(self):
+    def test_cockpit_hover_is_its_own_action_and_never_emergency_stop(self):
+        # V1.3 2.4：悬停是独立动作，由执行器折算成暂停航线或停止运动；
+        # 手动模式下也不得降级成紧急停止（两者语义不同）。
         self.route()
         result = self.message(self.service(), '悬停')
-        self.assertEqual(result['card']['action'], 'route_pause')
+        self.assertEqual(result['card']['action'], 'hover')
         self.sim.state.route_status = 'idle'
         result = self.message(self.service(), '悬停')
-        self.assertEqual(result['card']['action'], 'emergency_stop')
+        self.assertEqual(result['card']['action'], 'hover')
 
     def test_cockpit_raw_zoom_is_grounded_before_adjustment(self):
         result = self.message(self.service('camera_zoom', {'value': 100}), '变焦100倍')

@@ -58,6 +58,7 @@
 | `turn_left` | 原地向左偏航转向 | `angle_deg`：0 < a ≤ 360 度 | 原地向左转九十度；向左偏航45度，不要产生位移 | 已持有控制权 |
 | `turn_right` | 原地向右偏航转向 | `angle_deg`：0 < a ≤ 360 度 | 向右偏航45度，不要产生位移；原地右转180度 | 已持有控制权 |
 | `emergency_stop` | 紧急停止所有运动 | 无 | 急停；紧急停止；马上停；停止所有动作 | 无需前置控制权；走安全快路径 |
+| `hover` | 在当前点保持位置；航线执行中等价于暂停并保留断点 | 无 | 悬停；请悬停；立即悬停 | 已持有控制权；走安全快路径；绝不降级成急停 |
 | `takeoff` | 起飞至指定高度 | `altitude_m`：1–500 米 | 起飞到30米高度；起飞到30米；升空到50米 | 已持有控制权 |
 | `land` | 在当前点垂直降落 | 无 | 就在当前位置降落；原地降落；降落 | 已持有控制权 |
 | `land_alternate` | 飞往备降点降落 | 无 | 去备降点降落；飞往备降点落地 | 已持有控制权 |
@@ -247,12 +248,18 @@ PYTHONPATH=src python3 tools/cockpit_server.py --enable-plan-execution
 | `move_forward` / `move_backward` / `move_left` / `move_right` / `move_up` / `move_down` | POST `/screen/uav/operation/control` | `mode:2`；`type:202/203/204/205/201/-201`；`param:distance_m` | DJI_HANGAR / PZ_HANGAR；`UAV_MOVE_DISTANCE=true`；距离 0.01–20 米；在线且空中；经纬度、高度、yaw 有效；DJI 相对高度 ≥20 米且目标不低于 20 米 |
 | `route_pause` / `route_resume` | POST `/screen/uav/route/control` | `type:110/112` | DJI_HANGAR；空中；`route_pause`/`route_resume`/`cancel_return_home` 还要求真实 Java 任务 ID |
 | `emergency_stop` / `return_home` / `cancel_return_home` | POST `/screen/uav/route/control` | `type:113/114/-114`；返航附 `interrupt:false` | DJI_HANGAR；空中；取消返航要求真实 Java 任务 |
+| `hover` | 按当前运动方式折算：航线中 → `/screen/uav/route/control` `type:110`；位移后 → `/screen/uav/fly/control` `type:120`；环绕后 → `type:122`；其余 → `/screen/uav/operation/control` `type:207,mode:3,param:0` | 无参数 | 空中；`hover` 能力声明；航线中要求真实 Java 任务；平台无统一悬停码，回执只到 `submitted`，不声称已保持位置 |
+| `point_flight` | POST `/screen/uav/fly/control` | `type:119`；`longitude/latitude/height`；`speed` 固定 5 m/s（与 Java 位移实现同档） | DJI_HANGAR；空中；`point_flight` 能力声明；`height` 为 WGS84 椭球高 2–10000 米 |
+| `point_orbit` | POST `/screen/uav/fly/control` | `type:121`；`longitude/latitude/height`（取当前椭球高）；`speed` 固定 −5（顺时针） | DJI_HANGAR；空中；`point_orbit` 能力声明；**半径由进入时水平距离决定，`radius_m` 不下发**，确认卡带告警 |
 | `camera_photo` / `camera_start_recording` / `camera_stop_recording` | POST `/screen/uav/camera/control` | `type:100/101/102` | DJI_HANGAR；对应载荷能力须由权威适配器确认 |
 | `gimbal_reset` | POST `/screen/uav/gimbal/control` | `type:403` | DJI_HANGAR；Java 侧会涉及飞行与负载控制权调用 |
 | `read_state` | 注入的权威快照提供器（不发送控制 HTTP） | 返回 `observed` | 快照须新鲜、资源绑定一致 |
 | `request_vendor_control`（条件启用） | POST `/screen/uav/operation/control/vendor-request` | `schemaVersion/commandId/idempotencyKey/traceId/method/siteId/hangarId/droneId/snapshotVersion/expiresAt` | Java 员工 `taskManage:Issued`、资源和 owner 鉴权；只表示本次厂商请求结果 |
 
-**未映射到 Java 的工具**（43 个，平台模式下不可用）：`turn_left/right`、`takeoff`、`land`、`land_alternate`、`continue_from_breakpoint`、`point_flight/orbit`、`upload_route`、`execute_route`、5 个速度参数设置、`reset_parameters`、可见光/红外/广角切换、光学变焦、云台上下左右/数字变焦/45/90、锁定对焦、全景、红外测温、全部载荷、控制权申请/释放/远端接管、键盘/摇杆模式和虚拟按键。
+**未映射到 Java 的工具**（28 个，平台模式下返回 `ACTION_UNSUPPORTED`）：`takeoff`、`land`、`land_alternate`、`continue_from_breakpoint`、`upload_route`、`execute_route`、`control_acquire`/`control_release`/`remote_request`/`remote_approve`/`remote_reject`、`set_keyboard_mode`/`set_joystick_mode`/`set_virtual_button`、5 个速度参数设置与 `reset_parameters`、`gimbal_digital_zoom`、`camera_lock_focus`、`ai_algorithm_set`，以及 `payload_megaphone`/`payload_searchlight`/`payload_methane`/`payload_dropper`/`payload_dynamic`。
+
+该清单由 `SUPPORTED_ACTIONS` 与 `FlightControlAction` 的差集决定；改动作时请用
+`set(FlightControlAction) - SUPPORTED_ACTIONS` 重新核对，不要手工维护。
 
 原因见 [ktd-platform-contract.md](ktd-platform-contract.md)：角度语义、起飞高度基准、当前点降落、逐动作授权和心跳租约等尚未取得可验证契约，不能靠"近似映射"扩大支持。
 
@@ -294,7 +301,7 @@ PYTHONPATH=src python3 tools/cockpit_server.py --enable-plan-execution
 ## 八、口径说明
 
 - 本文的话术是**给模型理解的自然语言**，不是确定性解析器。仓库里另有一个导出的精确文本辅助函数 `parse_flight_control_text`，只接受完全匹配的短语（如"往前飞10米""拍照"），"帮我拍照"这类客套前缀会被它拒绝；驾驶舱 Agent 路径不依赖它，而是交给模型理解。旧的独立预览接口只挂了 4 个移动工具且不允许派发，也不等同于本文的 59 工具驾驶舱。
-- 59 个工具始终出现在模型上下文中，`available` 标记只影响前端可用态；平台不可用的工具被模型提议后会被后端拒绝，而不是从列表里消失。
-- 计划模式不新增动作、不改变 59 个工具的参数契约，只改变编排和确认方式；当前只在模拟器启用，平台模式未开放。
+- 66 个工具始终出现在模型上下文中，`available` 标记只影响前端可用态；平台不可用的工具被模型提议后会被后端拒绝，而不是从列表里消失。
+- 计划模式不新增动作、不改变 66 个工具的参数契约，只改变编排和确认方式；当前只在模拟器启用，平台模式未开放。
 - 后端计划卡使用 `kind=flight_plan` 和 `steps`。当前前端 `flightControl.ts` 只接受无 `kind` 或 `kind=vendor_control_request` 的卡片，浏览器端要使用计划模式还需同步增加计划卡渲染与确认逻辑；本次未改前端。
 - 本文未新增任何动作、未改变参数契约、未启用真实设备、未连接测试环境。

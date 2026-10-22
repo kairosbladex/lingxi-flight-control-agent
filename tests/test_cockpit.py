@@ -285,7 +285,7 @@ class CockpitTests(unittest.TestCase):
         code, response = self.request('context', method='GET')
         self.assertEqual(code, 200)
         self.assertEqual(response['context']['drone_id'], 'drone-1')
-        self.assertEqual(len(response['tools']), 65)
+        self.assertEqual(len(response['tools']), 66)
         self.assertNotIn('actor_id', response['context'])
         for field in ('actor_id', 'url', 'drone_id', 'confirmed', 'parameters'):
             with self.subTest(field=field):

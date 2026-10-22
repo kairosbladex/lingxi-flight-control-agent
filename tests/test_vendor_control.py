@@ -107,7 +107,7 @@ class VendorExecutorTests(unittest.TestCase):
     def test_default_vendor_method_property_is_closed_and_never_fetches(self):
         executor = self.executor(enable_vendor_requests=False, allowed_vendor_methods=())
         self.assertEqual(executor.vendor_request_methods, ())
-        self.assertEqual(len(ACTION_SPECS), 65)
+        self.assertEqual(len(ACTION_SPECS), 66)
         self.assertEqual(self.http.requests, [])
 
     def test_vendor_preview_confirm_and_query_use_separate_fixed_contract(self):

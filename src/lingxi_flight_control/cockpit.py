@@ -1087,7 +1087,9 @@ class CockpitService:
         try:
             safety_call = None if any(mark in text for mark in '?？') else SafetyFastPath().recognize(text)
             if re.fullmatch(r'(?:请|立即|马上)?悬停[。!！]?', text):
-                safety_call = ToolCall('route_pause' if state.get('route_status') == 'running' else 'emergency_stop', {})
+                # 悬停是独立动作：航线中由执行器折算成暂停并保留断点，
+                # 手动模式折算成停止运动指令。绝不降级成紧急停止。
+                safety_call = ToolCall('hover', {})
             product_call = _product_command(text)
             direct_call = _direct_command(text) if self._direct_commands and not self._plan_enabled else None
             fixed_call = safety_call or product_call or direct_call
