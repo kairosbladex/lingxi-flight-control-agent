@@ -35,6 +35,10 @@ from .standalone_preview import StandaloneResponse
 from .arrival import arrival_observed
 from .flight_policy import (POLICY_VERSION, MAPPING_MESSAGE, PATH_ACTIONS, PolicyError, check_flight_policy,
                             mapping_interruption, normalize_parameters, proposal_parameters)
+from .flight_policy import (BODY_TARGET_MESSAGE, COMPLEX_ROUTE_MANUAL_MESSAGE,
+                            COMPOUND_DISTANCE_CLARIFICATION_REQUIRED, MIXED_TARGET_MESSAGE,
+                            compound_distance_question, payload_mount_message)
+from .task_events import temporary_task_return_notice
 from .ai_lifecycle import (
     ALGORITHM_REPLACE_UNSUPPORTED, CONFLICT_ANSWERS, REPLACE_UNSUPPORTED_MESSAGE,
     conflict_clarification,
@@ -205,6 +209,49 @@ _STATE_QUERY = re.compile(
     r'|(?:当前|现在)?(?:无人机|飞机|设备)?(?:现在|当前)?(?:的)?(?:状态|电量|高度|控制权)(?:(?:是)?(?:什么|多少)|怎么样|如何)?'
     r'|(?:无人机|飞机|设备)(?:现在|当前)?什么状态)[？?。！!]*')
 
+# V1.4 4.4 表6：飞行中明确不支持的目标类型/航线类型，按规范原文拦截。
+# 只认这些确定措辞；其余复合/未知表达仍交给原模型澄清，不用近似动作替换。
+_BODY_TARGET_MENTION = re.compile(r'立体目标|立体大楼|立体建筑|立体楼|外立面|体目标|体积目标')
+_COMPLEX_ROUTE_MENTION = re.compile(r'网格航线|网格航|螺旋飞|螺旋航线|螺旋拍摄|复杂路径')
+_MAPPING_MENTION = re.compile(r'三维建模|倾斜摄影|正射影像')
+_MIXED_POINT_MENTION = re.compile(
+    r'(?:去|到|飞往|前往|巡检|检查)[^，,。；;、\n]{0,24}(?:塔|楼|点|标注|目标|基站|电站|水塔|厂房|屋顶)')
+# 线/面目的地措辞：必须像「目的地」而不是载荷动作；「到点后全域拍照」不得算混合目标。
+_MIXED_SHAPE_CLAUSE = re.compile(
+    r'沿(?:着|线)?[^，,。；;、\n]{1,20}(?:河|路|线|道)(?:[^，,。；;、\n]{0,12}(?:巡视|巡检|检查|飞行|飞|扫描|覆盖))?'
+    r'|(?:面状|全域|整体|区域|范围)[^，,。；;、\n]{0,12}(?:航线|巡检|扫描|覆盖|巡视|检查|飞行)')
+# 顺序/并列的第二个目的地；单目标 + 载荷动作不构成混合目标。
+_MIXED_ORDER = re.compile(r'(?:再|然后|接着|并且|同时)')
+# 否定/替换/假设句不是执行意图：交给既有否定门禁或模型澄清，不按「不支持」话术拒绝。
+_NEGATED_OR_HYPOTHETICAL = re.compile(
+    r'不要|不用|不需要|别用|禁止|而不是|是否支持|能不能|能否|可不可以|如果|假如|假设')
+_MAPPING_IN_FLIGHT_MESSAGE = '飞控助手不支持飞行中发起测绘、立体或网格航线规划，请结束当前控制后使用任务规划入口。'
+
+
+def _mixed_target_mentioned(text):
+    """点目标 + 线/面目的地按顺序/并列复合才算混合；其余（单目标+全域拍照等）不算。"""
+    return bool(_MIXED_POINT_MENTION.search(text) and _MIXED_SHAPE_CLAUSE.search(text)
+                and _MIXED_ORDER.search(text))
+
+
+def _in_flight_unsupported(text):
+    """返回 4.4 表6 的确定性拦截 ``(error_code, 规范原文)``；不匹配返回 ``None``。
+
+    只对**执行意图**生效：否定/替换/假设句（``不要用网格航线，改用正射影像``）
+    不按「不支持」话术拒绝，留给既有否定门禁或模型澄清。
+    """
+    if _NEGATED_OR_HYPOTHETICAL.search(text):
+        return None
+    if _BODY_TARGET_MENTION.search(text):
+        return 'UNSUPPORTED_TARGET_GEOMETRY', BODY_TARGET_MESSAGE
+    if _COMPLEX_ROUTE_MENTION.search(text):
+        return 'UNSUPPORTED_IN_FLIGHT_TASK', COMPLEX_ROUTE_MANUAL_MESSAGE
+    if _mixed_target_mentioned(text):
+        return 'MIXED_TARGET_UNSUPPORTED', MIXED_TARGET_MESSAGE
+    if _MAPPING_MENTION.search(text):
+        return 'UNSUPPORTED_IN_FLIGHT_TASK', _MAPPING_IN_FLIGHT_MESSAGE
+    return None
+
 
 def _state_summary(state):
     def number(key, unit):
@@ -217,13 +264,16 @@ def _state_summary(state):
         return yes if value is True else no if value is False else '未知'
 
     source = '模拟器读数' if state.get('execution_mode') == 'simulator' else '平台读数'
-    return (f'当前状态（{source}；缺失字段标为未知）：'
+    summary = (f'当前状态（{source}；缺失字段标为未知）：'
         f'在线：{flag("online", "是", "否")}；'
         f'空中：{flag("airborne", "是", "否")}；'
         f'电量：{number("battery_percent", "%")}；'
         f'高度：{number("altitude_m", "米")}；'
         f'控制权：{flag("control_owned", "当前用户持有", "当前用户未持有")}。'
         '仅查询，未发送控制指令。')
+    # V1.4 4.2：低电量返航中断了未完成临时任务时，前端必须提示充电重启后的续飞结论。
+    notice = temporary_task_return_notice(state)
+    return summary + (notice or '')
 
 
 _MODEL_FAILURE_MESSAGES = {
@@ -1002,10 +1052,11 @@ class CockpitService:
                 ])
                 return result
             immediate_text, motion_constraints = _separate_motion_constraints(text)
-            if re.search(r'网格航线|螺旋飞|外立面|立体目标|三维建模|倾斜摄影|正射影像', text):
-                result = self._base(status='rejected', error_code='UNSUPPORTED_IN_FLIGHT_TASK',
-                    message='飞控助手不支持飞行中发起测绘、立体或网格航线规划，请结束当前控制后使用任务规划入口。',
-                    request_id=request_id, state=state)
+            unsupported = _in_flight_unsupported(text)
+            if unsupported is not None:
+                error_code, unsupported_message = unsupported
+                result = self._base(status='rejected', error_code=error_code,
+                    message=unsupported_message, request_id=request_id, state=state)
                 session.active_intent, session.clarification = '', False
                 session.requests[request_id] = (fingerprint, result)
                 return result
@@ -1284,7 +1335,26 @@ class CockpitService:
         if control_error is not None:
             return self._base(status='rejected', error_code='CONTROL_NOT_OWNED',
                               message=control_error, request_id=request_id, state=self._state()), None
+        # V1.4 4.3.4：顺序计划包含两个不同目标点且距离较远时，先追问电量风险再出确认卡。
+        question = compound_distance_question(self._plan_target_points(steps))
+        if question is not None:
+            return self._base(status='clarification',
+                              error_code=COMPOUND_DISTANCE_CLARIFICATION_REQUIRED,
+                              message=question, request_id=request_id,
+                              state=self._state()), None
         return self._plan_card(session, steps, request_id, raw_state)
+
+    @staticmethod
+    def _plan_target_points(steps):
+        """取顺序计划中的目标点坐标；缺失/非法坐标由追问函数保守跳过，不猜距离。"""
+        points = []
+        for step in steps:
+            if step.get('action') not in {'point_flight', 'point_orbit'}:
+                continue
+            parameters = step.get('parameters') or {}
+            points.append({'longitude': parameters.get('longitude'),
+                           'latitude': parameters.get('latitude')})
+        return points
 
     def _validate_plan_steps(self, calls, text, session):
         if not calls:
@@ -1304,6 +1374,10 @@ class CockpitService:
             if not isinstance(arguments, dict):
                 raise _PlanRejected('计划中的动作参数不合法，请重新说明。')
             original = dict(arguments)
+            # V1.4 4.3.2：镜头/探照灯未挂载时按规范原文拒绝整份计划。
+            mount_message = payload_mount_message(action.value, policy_state)
+            if mount_message is not None:
+                raise _PlanRejected(mount_message)
             try:
                 arguments, adjustments = normalize_parameters(action.value, original, policy_state)
                 if mapping_interruption(action.value, policy_state):
@@ -1406,7 +1480,8 @@ class CockpitService:
     def _describe_plan_step(step):
         spec = ACTION_SPECS[FlightControlAction(step['action'])]
         details = '，'.join(f'{key}={value}' for key, value in step['parameters'].items())
-        notices = ''.join(item['message'] for item in step.get('adjustments', []))
+        notices = ''.join(item.get('message', '') + item.get('policy_message', '')
+                          for item in step.get('adjustments', []))
         return spec.description + (f'（{details}）' if details else '') + notices
 
     def _save_history(self, session_id, entries):
@@ -1455,6 +1530,11 @@ class CockpitService:
                     or (call.name, call.arguments) != ordered[len(completed)]):
                 return self._base(status='clarification',
                     message='动作建议与明确顺序中的下一项不一致，请重新说明要执行的下一项。', **common)
+            # V1.4 4.3.2：镜头/探照灯未挂载时用规范原文拒绝，不生成确认卡。
+            mount_message = payload_mount_message(call.name, self.executor.read_state())
+            if mount_message is not None:
+                return self._base(status='rejected', error_code='PAYLOAD_NOT_MOUNTED',
+                                  message=mount_message, **common)
             command = uuid4().hex
             if vendor:
                 from .vendor_control import VendorControlRequest
@@ -1483,7 +1563,8 @@ class CockpitService:
             return self._base(status='preview_required',
                 message=('请核对厂商请求；结果不代表持续航权或DRC链路，确认后仅提交这一项。'
                          if vendor else '请核对动作与参数，确认后仅执行这一项。')
-                        + ''.join(item['message'] for item in card['adjustments']) + ''.join(card['warnings']),
+                        + ''.join(item.get('message', '') + item.get('policy_message', '')
+                                  for item in card['adjustments']) + ''.join(card['warnings']),
                 card=deepcopy(card), **common)
         if result.status == LoopStatus.CLARIFICATION:
             return self._base(status='clarification', message=result.message, **common)
