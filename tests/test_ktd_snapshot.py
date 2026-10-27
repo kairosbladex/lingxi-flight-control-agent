@@ -408,5 +408,81 @@ class KtdSnapshotTests(unittest.TestCase):
         self.assertTrue(all(request.get_method() == 'GET' for request, _ in self.opener.requests))
 
 
+    def test_java_contract_block_is_parsed_and_surfaced_as_a_typed_gap(self):
+        self.opener.payload['data']['contract'] = {
+            'schema_version': 'lingxi-platform-contract/v1',
+            'unavailable': {'route_status': 'ROUTE_STATE_SOURCE_UNAVAILABLE',
+                            'target_binding': 'STATIC_ANNOTATION_SOURCE_UNAVAILABLE'},
+        }
+        snapshot = self.provider()()
+        self.assertEqual(dict(snapshot.platform_unavailable),
+                         {'route_status': 'ROUTE_STATE_SOURCE_UNAVAILABLE',
+                          'target_binding': 'STATIC_ANNOTATION_SOURCE_UNAVAILABLE'})
+
+    def test_declared_capability_gap_wins_over_a_generic_incomplete_state(self):
+        self.opener.payload['data']['contract'] = {
+            'schema_version': 'lingxi-platform-contract/v1',
+            'unavailable': {'route_status': 'ROUTE_STATE_SOURCE_UNAVAILABLE'},
+        }
+        self.opener.payload['data']['permissions'] = ['read_state', 'hover']
+        self.opener.payload['data']['capabilities']['hover'] = True
+        self.opener.payload['data']['action_availability']['hover'] = {'available': True, 'reasons': []}
+        provider = self.provider()
+        with tempfile.TemporaryDirectory() as directory:
+            executor = KtdPlatformExecutor(self.binding, site_id='site-1', task_id='java-task-1',
+                transport=self.transport, snapshot_provider=provider, enabled=True,
+                journal=SqliteCommandJournal(directory + '/commands.db'), clock=lambda: self.now)
+            receipt = executor.preview(FlightControlActionRequest('c', 'k', 'hover', {}, 7))
+        # route_status 是 null，但平台已声明“拿不到”，应返回该能力的错误码而不是笼统的不完整。
+        self.assertEqual(receipt.error_code, 'ROUTE_STATE_SOURCE_UNAVAILABLE')
+
+    def test_unknown_route_status_blocks_micro_actions_before_any_compile(self):
+        # V1.4 2.2.3：微操放行取决于航线状态。平台把 route_status 留空时不能
+        # 默认成“没在自动航线”；已声明不可用时返回该能力自己的错误码。
+        self.opener.payload = snapshot_payload(writable=True)
+        self.opener.payload['data']['contract'] = {
+            'schema_version': 'lingxi-platform-contract/v1',
+            'unavailable': {'route_status': 'ROUTE_STATE_SOURCE_UNAVAILABLE'},
+        }
+        provider = self.provider()
+        with tempfile.TemporaryDirectory() as directory:
+            executor = KtdPlatformExecutor(self.binding, site_id='site-1', task_id='java-task-1',
+                transport=self.transport, snapshot_provider=provider, enabled=True,
+                journal=SqliteCommandJournal(directory + '/commands.db'), clock=lambda: self.now)
+            receipt = executor.preview(
+                FlightControlActionRequest('c', 'k', 'move_forward', {'distance_m': 5}, 7))
+        self.assertEqual(receipt.error_code, 'ROUTE_STATE_SOURCE_UNAVAILABLE')
+        self.assertIsNone(receipt.confirmation_id)
+        # 拒绝发生在编译前：没有任何写请求被发出。
+        self.assertTrue(all(request.get_method() == 'GET' for request, _ in self.opener.requests))
+
+    def test_malformed_contract_block_rejects_the_snapshot(self):
+        for block in (
+            {'schema_version': 'unknown', 'unavailable': {}},
+            {'schema_version': 'lingxi-platform-contract/v1', 'unavailable': {'': 'X'}},
+            {'schema_version': 'lingxi-platform-contract/v1', 'unavailable': {'route_status': 'unavailable'}},
+            {'schema_version': 'lingxi-platform-contract/v1', 'unavailable': {}, 'extra': 1},
+        ):
+            with self.subTest(block=block):
+                self.opener.payload = snapshot_payload()
+                self.opener.payload['data']['contract'] = block
+                with self.assertRaises(KtdPlatformError) as error:
+                    self.provider()()
+                self.assertEqual(str(error.exception), 'INVALID_PLATFORM_CONTRACT')
+
+    def test_newer_capability_name_does_not_invalidate_the_snapshot(self):
+        self.opener.payload['data']['contract'] = {
+            'schema_version': 'lingxi-platform-contract/v1',
+            'unavailable': {'future_capability': 'FUTURE_CAPABILITY_UNAVAILABLE'},
+        }
+        snapshot = self.provider()()
+        self.assertEqual(dict(snapshot.platform_unavailable),
+                         {'future_capability': 'FUTURE_CAPABILITY_UNAVAILABLE'})
+
+    def test_snapshot_without_contract_block_makes_no_unavailability_claim(self):
+        snapshot = self.provider()()
+        self.assertEqual(dict(snapshot.platform_unavailable), {})
+
+
 if __name__ == '__main__':
     unittest.main()

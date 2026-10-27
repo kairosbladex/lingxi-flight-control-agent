@@ -1,0 +1,19 @@
+{
+  "timestamp": "2026-10-27 16:11:09",
+  "total_score": 100.0,
+  "sign_off_threshold": 95.0,
+  "sign_off_passed": true,
+  "dimension_scores": {
+    "1_architecture_and_contract": 20.0,
+    "2_concurrency_and_deadlock": 20.0,
+    "3_boundary_and_fail_closed": 20.0,
+    "4_intent_and_simulation": 20.0,
+    "5_code_cleanliness_and_regression": 20.0
+  },
+  "veto_failures": [],
+  "total_offline_tests": 1163,
+  "test_pass_rate": 1.0,
+  "eval_action_accuracy": 1.0,
+  "eval_param_accuracy": 1.0,
+  "elapsed_seconds": 17.83
+}

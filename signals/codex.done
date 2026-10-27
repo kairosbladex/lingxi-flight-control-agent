@@ -1,0 +1,18 @@
+{
+  "agent": "codex",
+  "status": "completed",
+  "timestamp": "2026-10-27T15:54:50+08:00",
+  "deliverables": [
+    "src/lingxi_flight_control/adapters/ktd_platform_adapter.py",
+    "src/lingxi_flight_control/adapters/static_annotation_gateway.py",
+    "src/lingxi_flight_control/adapters/virtual_algorithm_gateway.py",
+    "tests/test_adapters_platform.py",
+    "tests/test_adapters_annotation.py"
+  ],
+  "metrics": {
+    "adapters_tests_count": 12,
+    "adapters_tests_pass": 12,
+    "route_status_fail_closed": true,
+    "geometry_guards_enforced": true
+  }
+}

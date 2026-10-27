@@ -1,0 +1,88 @@
+{
+  "schema": "lingxi-v14-confirm-order-evidence/v1",
+  "date": "2026-10-22",
+  "repo": "lingxi-flight-control-agent",
+  "branch": "test",
+  "head": "d6d284d04b38946e92ca5a10df244a2db487b3b0",
+  "spec_sha256": "e4e42b712e3249d1fc09d0968445525c0702808e894290d49df2b70301108c78",
+  "issue": "V1.4 acceptance P1: platform confirm() voided mapping atomically before re-checking the path fence",
+  "denominator": 1085,
+  "tests_run": 1085,
+  "tests_result": "OK",
+  "duration_sec": 14.041,
+  "command": "bash tools/ci/offline_tests.sh",
+  "diff_check": "git diff --check -> no output, exit 0",
+  "compileall": "python3 -m compileall -q src tests -> no output, exit 0",
+  "targeted": {
+    "command": "PYTHONPATH=src:tests python3 -m unittest -v test_path_fence test_mapping_interruption",
+    "tests_run": 119,
+    "result": "OK",
+    "duration_sec": 3.264
+  },
+  "offline": true,
+  "network": "none",
+  "execution_mode": "simulator + fake transport + fake mapping gateway + same-host SQLite reservation",
+  "confirm_order": [
+    {"step": 1, "name": "confirmation card / idempotency key / context version / expiry", "external_effect": "none"},
+    {"step": 2, "name": "journal replay lookup", "external_effect": "journal read only"},
+    {"step": 3, "name": "authoritative snapshot + resource binding, control, capability, state version", "external_effect": "snapshot read only"},
+    {"step": 4, "name": "_compile()", "external_effect": "none"},
+    {"step": 5, "name": "_task_end_precheck()", "external_effect": "read-only check (task_end_* only)"},
+    {"step": 6, "name": "confirm-stage path fence", "external_effect": "read-only fence query"},
+    {"step": 7, "name": "snapshot_hash + compiled command re-comparison", "external_effect": "none"},
+    {"step": 8, "name": "reserve_mapping() then CAS pending->unknown, then mapping interruption gateway", "external_effect": "irreversible gateway call (only step)"},
+    {"step": 9, "name": "receipt must be atomic + confirmed + error-free", "external_effect": "none"},
+    {"step": 10, "name": "journal claim then platform submit", "external_effect": "platform write"}
+  ],
+  "reservation": {
+    "table": "mapping_reservations",
+    "states": ["mapping_reservation_pending", "mapping_interruption_unknown",
+               "mapping_interruption_succeeded", "mapping_interruption_failed"],
+    "acquire": "INSERT in BEGIN IMMEDIATE; scope primary key; returns acquired/existing/conflict",
+    "invoke_rule": "CAS pending->unknown before the gateway call; CAS unknown->succeeded/failed after",
+    "lease_sec_default": 30,
+    "lease_rule": "only a pending reservation whose lease expired may be taken over; unknown is terminal",
+    "manual_resolution": "resolve_mapping_interruption(command_id, idempotency_key, context_version, resolution, authority_ref)"
+  },
+  "side_effects_by_status": {
+    "fence_clear": {"gateway_calls": 1, "submit_calls": 1, "mapping_voided": true},
+    "fence_blocked": {"gateway_calls": 0, "submit_calls": 0, "mapping_voided": false, "error_code": "PATH_BLOCKED"},
+    "fence_timeout": {"gateway_calls": 1, "submit_calls": 1, "mapping_voided": true, "degraded": true, "warning_kept": true},
+    "fence_unavailable": {"gateway_calls": 1, "submit_calls": 1, "mapping_voided": true, "degraded": true, "warning_kept": true},
+    "gateway_unavailable": {"gateway_calls": 1, "submit_calls": 0, "mapping_voided": false, "error_code": "MAPPING_INTERRUPTION_UNAVAILABLE"},
+    "gateway_partial": {"gateway_calls": 1, "submit_calls": 0, "mapping_voided": "partial", "error_code": "MAPPING_INTERRUPTION_PARTIAL"},
+    "gateway_not_confirmed": {"gateway_calls": 1, "submit_calls": 0, "mapping_voided": false, "error_code": "MAPPING_INTERRUPTION_NOT_CONFIRMED"},
+    "gateway_unknown": {"gateway_calls": 1, "submit_calls": 0, "reservation": "mapping_interruption_unknown", "error_code": "MAPPING_INTERRUPTION_UNKNOWN", "auto_retry": false},
+    "submit_unknown": {"gateway_calls": 1, "submit_calls": 1, "status": "unknown", "auto_retry": false},
+    "replay_after_unknown": {"gateway_calls": 0, "submit_calls": 0, "status": "unknown"},
+    "non_mapping_task": {"gateway_calls": 0, "submit_calls": 1}
+  },
+  "idempotency": {
+    "sequential_replay": "journal hit at step 2, gateway and submit not called",
+    "in_process_concurrency": "SQLite mapping_reservations primary key + BEGIN IMMEDIATE; module lock removed",
+    "cross_process_concurrency": "verified on same-host SQLite: gateway and submit at most once in all measured scenarios",
+    "unknown_result": "reservation stays mapping_interruption_unknown; no automatic gateway retry and no submit"
+  },
+  "cross_process_measurements": [
+    {"scenario": "same card, two processes", "processes": 2, "gateway_calls": 1, "submit_calls": 1,
+     "statuses": ["unknown", "submitted"]},
+    {"scenario": "same key, different fingerprint", "processes": 2, "gateway_calls": 1, "submit_calls": 1,
+     "statuses": ["submitted", "rejected"], "error_codes": [null, "IDEMPOTENCY_CONFLICT"]},
+    {"scenario": "gateway crash then two replays", "processes": 3, "gateway_calls": 1, "submit_calls": 0,
+     "statuses": ["unknown", "unknown"], "error_codes": ["MAPPING_INTERRUPTION_UNKNOWN", "MAPPING_INTERRUPTION_UNKNOWN"]}
+  ],
+  "verified_by": [
+    "tests/test_path_fence.py::PlatformMappingFenceTests",
+    "tests/test_mapping_interruption.py::PlatformConfirmOrderTests",
+    "tests/test_mapping_interruption.py::MappingReservationStateMachineTests",
+    "tests/test_mapping_interruption.py::CrossProcessReservationTests",
+    "tests/test_authority_contract.py::ExecutorAuthorityTests"
+  ],
+  "not_verified": [
+    "real platform atomic mapping-interruption contract",
+    "real gateway support for idempotency keys (not assumed)",
+    "real platform acceptance of the reordered submission",
+    "cross-host reservation consistency (same-host SQLite only)",
+    "any device action or displacement effect"
+  ]
+}

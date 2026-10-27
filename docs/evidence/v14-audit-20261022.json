@@ -1,0 +1,267 @@
+{
+  "schema": "lingxi-flight-acceptance-evidence/v1",
+  "phase": "V1.4-final-audit-closeout",
+  "date": "2026-10-22",
+  "repo": "lingxi-flight-control-agent",
+  "branch": "test",
+  "head": "d6d284d04b38946e92ca5a10df244a2db487b3b0",
+  "spec": {
+    "file": "灵犀平台自然语言智能控制功能设计规范V1.4.docx",
+    "sha256": "e4e42b712e3249d1fc09d0968445525c0702808e894290d49df2b70301108c78",
+    "sha256_recomputed_at_closeout": true
+  },
+  "execution_mode": "offline-unit-simulator-fake-transport-loopback-only",
+  "denominator": 1085,
+  "network": {
+    "mqtt": false,
+    "real_platform_writes": false,
+    "shared_environment": false,
+    "device_connections": false,
+    "offline_guard": "tests/test_offline_guard.py asserts zero socket connection attempts"
+  },
+  "fixes_this_round": [
+    {
+      "id": "F1",
+      "issue": "route_status null allowed micro/temporary actions (unknown treated as safe)",
+      "change": [
+        "authority_contract.ROUTE_GATED_ACTIONS added; route_status promoted to core requirement",
+        "handoff_contract.CAPABILITY_ACTIONS['route_status'] extended to 8 micro actions"
+      ],
+      "tests": [
+        "tests.test_authority_contract.AuthorityAuditTests.test_unknown_route_status_alone_blocks_micro_and_temporary_actions",
+        "tests.test_ktd_snapshot.KtdSnapshotTests.test_unknown_route_status_blocks_micro_actions_before_any_compile"
+      ]
+    },
+    {
+      "id": "F2",
+      "issue": "system prompt taught manual hover as emergency_stop",
+      "change": [
+        "cockpit.COCKPIT_SYSTEM_PROMPT: manual hover uses hover, never emergency_stop"
+      ],
+      "tests": [
+        "tests.test_product_v13.ProductV13Tests.test_system_prompt_never_teaches_hover_as_emergency_stop"
+      ]
+    }
+  ],
+  "follow_up_fixes_included": [
+    {
+      "id": "P1-confirm-order",
+      "change": "confirm() re-checks the path fence before the irreversible mapping-interruption gateway",
+      "doc": "docs/ACCEPTANCE_FLIGHT-V14-P1-CONFIRM-ORDER.md"
+    },
+    {
+      "id": "P1-fence-hard-bounded",
+      "change": "fence providers split into hard-bounded / cooperative / unbounded; cooperative never enters the platform path",
+      "doc": "docs/ACCEPTANCE_FLIGHT-V14-FENCE-BOUNDED.md"
+    },
+    {
+      "id": "P5-mapping-reservation",
+      "change": "persistent SQLite mapping reservation makes the gateway at-most-once across processes",
+      "doc": "docs/ACCEPTANCE_FLIGHT-V14-P5-MAPPING-RESERVATION.md"
+    }
+  ],
+  "kept_interpretation_divergence": {
+    "topic": "V1.4 2.2.3 vs 4.1.1 for point_flight/point_orbit during a running auto route",
+    "decision": "kept 4.1.1 temporary-task takeover semantics; not added to the 2.2.3 block set",
+    "needs": "product confirmation",
+    "behavior_changed": false
+  },
+  "tests": {
+    "denominator": 1085,
+    "denominator_note": "single denominator for all V1.4 docs and evidence; includes tests/test_offline_guard.py, which re-runs 1084 tests internally",
+    "python": {
+      "command": "bash tools/ci/offline_tests.sh",
+      "tests_run": 1085,
+      "result": "OK",
+      "duration_sec": 14.041,
+      "diff_check": "git diff --check -> no output, exit 0",
+      "compileall": "python3 -m compileall -q src tests -> no output, exit 0",
+      "targeted": {
+        "command": "PYTHONPATH=src:tests python3 -m unittest -v test_path_fence test_mapping_interruption",
+        "tests_run": 119,
+        "result": "OK",
+        "duration_sec": 3.264,
+        "test_path_fence": 73,
+        "test_mapping_interruption": 46
+      },
+      "module_counts": {
+        "test_path_fence": 73,
+        "test_mapping_interruption": 46,
+        "test_handoff_contract": 41,
+        "test_ktd_platform": 33,
+        "test_ai_lifecycle": 31,
+        "test_ktd_snapshot": 31,
+        "test_product_v13": 29,
+        "test_authority_contract": 19,
+        "test_vendor_control": 16,
+        "test_target_resolver": 15,
+        "test_task_events": 15,
+        "test_receipt_contract": 15,
+        "test_v13_hover_and_point": 13,
+        "test_product_v13_actions": 10,
+        "test_platform_runtime": 9,
+        "test_command_receipts": 8,
+        "test_v13_extension": 7,
+        "test_ktd_path": 6
+      }
+    },
+    "ui": {
+      "repo": "lingxi-flight-agent-ui",
+      "command": "npm test",
+      "tests": 171,
+      "pass": 171,
+      "fail": 0,
+      "rerun_this_round": false,
+      "note": "historical read-only result from earlier the same day; not part of this closeout denominator"
+    },
+    "java": {
+      "repo": "ktd_backend-real-flight-assistant",
+      "command": "JAVA_HOME=<zulu-8> mvn -o -s /tmp/mvn-offline-settings.xml -Dmaven.repo.local=$HOME/.m2/repository -pl biz-inspection -Dtest='com.fan.framework.inspection.platformsnapshot.*Test' test",
+      "result": "BUILD SUCCESS",
+      "tests_run": 53,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "rerun_this_round": false,
+      "scope": "platformsnapshot package only; other biz-inspection modules need MySQL/Redis",
+      "environment_notes": [
+        "JAVA_HOME must be JDK 8; Corretto 21 breaks the old Lombok with TypeTag UNKNOWN",
+        "offline settings must declare osgeo and nexus-public repository ids and disable maven-default-http-blocker"
+      ]
+    },
+    "cross_repo_isolation": {
+      "command": "python3 tools/ci/cross_repo_isolation.py",
+      "result": "17/17 PASS",
+      "port": 56106,
+      "threads": "1/1",
+      "real_platform_writes": 0,
+      "loopback_only": "127.0.0.1",
+      "rerun_this_round": true
+    },
+    "cross_process_reservation": {
+      "command": "tests/test_mapping_interruption.py::CrossProcessReservationTests (worker: tests/mapping_race_worker.py)",
+      "scenarios": [
+        {
+          "name": "same_card_two_processes",
+          "processes": 2,
+          "gateway_calls": 1,
+          "submit_calls": 1,
+          "statuses": ["unknown", "submitted"],
+          "error_codes": ["MAPPING_INTERRUPTION_UNKNOWN", null],
+          "reservation_final": "mapping_interruption_succeeded"
+        },
+        {
+          "name": "same_key_different_fingerprint",
+          "processes": 2,
+          "gateway_calls": 1,
+          "submit_calls": 1,
+          "statuses": ["submitted", "rejected"],
+          "error_codes": [null, "IDEMPOTENCY_CONFLICT"],
+          "reservation_final": "mapping_interruption_succeeded"
+        },
+        {
+          "name": "unknown_gateway_then_two_replays",
+          "processes": 3,
+          "gateway_calls": 1,
+          "submit_calls": 0,
+          "statuses": ["unknown", "unknown"],
+          "error_codes": ["MAPPING_INTERRUPTION_UNKNOWN", "MAPPING_INTERRUPTION_UNKNOWN"],
+          "reservation_final": "mapping_interruption_unknown",
+          "resolution": "manual resolve_mapping_interruption(authority_ref) is the only way out"
+        }
+      ],
+      "twenty_run_repeat": {
+        "runs": 20,
+        "processes_per_run": 2,
+        "outcome_pairs": {"submitted + submitted": 18, "submitted + unknown": 2},
+        "gateway_calls_per_run": {"1": 20},
+        "submit_calls_per_run": {"1": 20},
+        "max_gateway_calls": 1,
+        "max_submit_calls": 1,
+        "note": "distribution varies with scheduling; the invariant is gateway/submit at most once"
+      },
+      "cleanup": {
+        "threads_before_after": [1, 1],
+        "listening_ports_before": [],
+        "listening_ports_after": [],
+        "temp_dirs_removed": true,
+        "leftover_processes": 0
+      }
+    }
+  },
+  "safety_checks": {
+    "hover_mapped_to_emergency_stop": "fixed",
+    "control_exemption_for_emergency_or_payload": "none",
+    "route_status_unknown_treated_as_safe": "fixed",
+    "fence_timeout_blocks_request": "no, degrades with warning",
+    "fence_unavailable_bypasses_control_or_confirmation": "no",
+    "unknown_receipt_treated_as_success": "no",
+    "unconfirmed_action_executed": "no",
+    "model_side_parameter_truncation": "no",
+    "volume_or_mixed_target_silently_converted": "no",
+    "unconfigured_ai_replaced_by_approximation": "no",
+    "mapping_interruption_after_flight_action": "no, atomic gateway runs before dispatch",
+    "stale_temporary_event_pollutes_current_task": "no",
+    "stale_confirmation_card_reused": "no",
+    "cross_process_gateway_called_twice": "no in measured runs; persistent reservation serializes it",
+    "cooperative_fence_provider_enters_platform_path": "no, rejected at assembly or degraded without calling"
+  },
+  "verification_layers": {
+    "unit": {
+      "evidence": ["authority_contract 19", "target_resolver 15", "ai_lifecycle 31", "handoff_contract 41",
+                   "path_fence 73", "receipt_contract 15", "task_events 15", "ktd_snapshot 31"],
+      "proves": "deterministic rules and state machines only"
+    },
+    "simulator": {
+      "evidence": ["product_v13 29", "v13_hover_and_point 13", "product_v13_actions 10", "mapping_interruption 46"],
+      "proves": "in-memory execution loop; receipts carry execution_mode=simulator"
+    },
+    "fake_transport": {
+      "evidence": ["ktd_platform 33", "platform_runtime 9", "vendor_control 16", "receipt_contract 15"],
+      "proves": "protocol shape and error paths; no real network wait"
+    },
+    "loopback_isolation": {
+      "evidence": ["tools/ci/cross_repo_isolation.py 17/17 on 127.0.0.1:56106"],
+      "proves": "local fake-Java protocol loop; not shared test/uat/prod"
+    },
+    "real_platform": "not verified",
+    "real_device": "not verified"
+  },
+  "remaining_limits": [
+    "real platform mapping atomic transaction not verified",
+    "real gateway support for idempotency keys not verified; supports_idempotency_key defaults to False",
+    "DNS resolution is not covered by socket timeout (getaddrinfo happens before open)",
+    "reservation at-most-once is verified on same-host SQLite only; cross-host consistency not verified",
+    "isolation tests, HTTP 2xx, submitted receipts and simulator accepted are never device success",
+    "device_effect is always not_verified and device_completion_verified() is always False"
+  ],
+  "resource_cleanup": {
+    "background_processes": "none; all commands returned, subprocesses reaped",
+    "listening_ports": "lsof filtered for python/java/node: none",
+    "threads": "1 before and after cross-process probe",
+    "mqtt_connections": "none",
+    "temp_credentials": "none",
+    "build_artifacts_in_git": "none",
+    "temp_files": ["/tmp/v14_offline.log", "/tmp/v14_targeted.log", "/tmp/v14_full_verbose.log",
+                   "/tmp/v14_reservation_probe.py", "/tmp/wait_tree_stable.sh"]
+  },
+  "final_checks": {
+    "denominator_consistent": true,
+    "spec_sha256_consistent": true,
+    "branch_head_consistent": true,
+    "no_secrets": "no token, password, cookie or raw business payload written",
+    "no_background_processes_or_ports": true,
+    "git_status_consistent": "uncommitted, unpushed; P1-P5 changes preserved"
+  },
+  "git": {
+    "committed": false,
+    "pushed": false,
+    "deployed": false,
+    "porcelain_entries": 56,
+    "working_tree_preserved": [
+      ".workbuddy-ai/",
+      "P1-P5 changes"
+    ],
+    "rollback": "forward revert of the listed files; no destructive git command used"
+  }
+}

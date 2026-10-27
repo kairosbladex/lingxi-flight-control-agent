@@ -1,0 +1,196 @@
+{
+  "schema": "lingxi-v14-cross-repo-evidence/v1",
+  "generated_at": "2026-10-22T12:10+08:00",
+  "phase": "V14-P4",
+  "execution_mode": "isolated-loopback",
+  "network": {
+    "mqtt": false,
+    "real_device": false,
+    "shared_env": false,
+    "loopback_only": true,
+    "real_platform_write": false
+  },
+  "repos": {
+    "lingxi-flight-control-agent": {
+      "branch": "test",
+      "head": "d6d284d",
+      "worktree": "dirty (P1-P4 + .workbuddy-ai/)"
+    },
+    "lingxi-agent": {
+      "branch": "bugfix/algorithm-selection-integrity",
+      "head": "860d9ed",
+      "worktree": "dirty (pre-existing + P4)"
+    },
+    "ktd_backend-real-flight-assistant": {
+      "branch": "test",
+      "head": "ed13701f55",
+      "worktree": "2 modified files"
+    },
+    "lingxi-flight-agent-ui": {
+      "branch": "test",
+      "head": "f72b81a",
+      "worktree": "new src/v14 + tests/v14.test.mjs"
+    }
+  },
+  "tests": {
+    "flight_control_offline": {
+      "command": "bash tools/ci/offline_tests.sh",
+      "denominator": 1085,
+      "denominator_note": "unified for all V1.4 docs and evidence at closeout; phase-local totals are not used as denominators",
+      "result": "OK"
+    },
+    "java_platformsnapshot": {
+      "tests": 53,
+      "failures": 0,
+      "result": "BUILD SUCCESS"
+    },
+    "java_flightcommand_flightv13": {
+      "tests": 170,
+      "failures": 0,
+      "result": "BUILD SUCCESS"
+    },
+    "ui_npm_test": {
+      "tests": 171,
+      "pass": 171,
+      "fail": 0,
+      "baseline": 159,
+      "added": 12
+    },
+    "ui_typecheck": {
+      "command": "npx vue-tsc -b",
+      "result": "pass (no output)"
+    },
+    "ui_v14_build": {
+      "command": "npx vite build --config vite.v14.config.ts --outDir /tmp/v14-dist",
+      "result": "built in 193ms",
+      "modules": 13
+    },
+    "lingxi_agent": {
+      "targeted_handoff": {
+        "tests": 17,
+        "result": "OK"
+      },
+      "adapter_contract": {
+        "tests": 3,
+        "result": "OK",
+        "note": "修正航线类动作的既有跨仓口径漂移（HEAD d6d284d 同样失败）"
+      },
+      "control_subset": {
+        "tests": 54,
+        "result": "OK"
+      },
+      "full_excluding_java_switch": {
+        "tests": 1657,
+        "failures": 0,
+        "errors": 2,
+        "skipped": 4,
+        "errors_note": "环境限制：.tmp mkdir 被路径代理拒绝；多进程队列 15s 无结果"
+      },
+      "full_discover": {
+        "completed": false,
+        "reason": "test_agent_java_switch.test_concurrent_jar_change_prevents_replacement 被 SIGKILL(137)"
+      }
+    }
+  },
+  "isolation": {
+    "ok": true,
+    "audit_events": 3,
+    "scenarios": [
+      {
+        "scenario": "S0 权威快照可读且带显式不可用声明",
+        "ok": true,
+        "detail": "unavailable=['algorithm_lifecycle', 'mapping_transaction', 'route_status', 'target_binding']"
+      },
+      {
+        "scenario": "S1 点目标坐标进入飞控上下文",
+        "ok": true,
+        "detail": "action=point_flight"
+      },
+      {
+        "scenario": "S1b 交接信封与权威快照版本一致",
+        "ok": true,
+        "detail": "snapshot=16a0eeb0…"
+      },
+      {
+        "scenario": "S2 线/面/体/混合目标全部拒绝",
+        "ok": true,
+        "detail": "{\"line→flight\": \"HANDOFF_TARGET_GEOMETRY_UNSUPPORTED\", \"polygon→flight\": \"HANDOFF_TARGET_GEOMETRY_UNSUPPORTED\", \"volume\": \"HANDOFF_TARGET_GEOMETRY_UNSUPPORTED\", \"mixed\": \"HANDOFF_MIXED_TARGET_UNSUPPORTED\"}"
+      },
+      {
+        "scenario": "S3 多点串联保留用户顺序",
+        "ok": true,
+        "detail": "['t-3', 't-1', 't-2']"
+      },
+      {
+        "scenario": "S4 未确认草稿不产出可下发任务",
+        "ok": true,
+        "detail": "HANDOFF_DRAFT_NOT_DISPATCHABLE"
+      },
+      {
+        "scenario": "S5 飞行控制交接不创建第二个任务",
+        "ok": true,
+        "detail": "creates_task=False"
+      },
+      {
+        "scenario": "S6 旧上下文按 409 拒绝",
+        "ok": true,
+        "detail": "STALE_CONTEXT/409"
+      },
+      {
+        "scenario": "S7 同键同体幂等、同键异体冲突",
+        "ok": true,
+        "detail": "new/duplicate/HANDOFF_IDEMPOTENCY_CONFLICT"
+      },
+      {
+        "scenario": "S8 hover 返回平台声明的 typed 缺口",
+        "ok": true,
+        "detail": "ROUTE_STATE_SOURCE_UNAVAILABLE"
+      },
+      {
+        "scenario": "S8b 指点动作未被能力清单放行",
+        "ok": true,
+        "detail": "ACTION_NOT_PERMITTED"
+      },
+      {
+        "scenario": "S8c 预览阶段零飞控下发",
+        "ok": true,
+        "detail": "writes=0"
+      },
+      {
+        "scenario": "S9 围栏结论经回环 HTTP 校验",
+        "ok": true,
+        "detail": "clear/"
+      },
+      {
+        "scenario": "S10 unknown 不显示为成功且都不是设备效果",
+        "ok": true,
+        "detail": "{\"accepted\": \"accepted\", \"submitted\": \"submitted\", \"someday\": \"unknown\"}"
+      },
+      {
+        "scenario": "S11 服务结束后端口已关闭",
+        "ok": true,
+        "detail": "port=50951"
+      },
+      {
+        "scenario": "S11b 无遗留监听线程",
+        "ok": true,
+        "detail": "threads=1/1"
+      },
+      {
+        "scenario": "S11c 全程未触碰真实平台写接口",
+        "ok": true,
+        "detail": "writes=0"
+      }
+    ]
+  },
+  "not_verified": [
+    "real platform execution",
+    "real device motion",
+    "real route status",
+    "real static annotation lookup",
+    "real algorithm lifecycle",
+    "real mapping transaction",
+    "front-end with real data",
+    "planning main-chain wiring"
+  ]
+}

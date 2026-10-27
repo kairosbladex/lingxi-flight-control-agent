@@ -4,9 +4,11 @@ import json
 import unittest
 
 from lingxi_flight_control import (MemoryFlightControlSimulator, RuntimeBinding,
-    FlightControlActionRequest, ModelDecision, DecisionKind, ToolCall)
+    FlightControlActionRequest, FlightControlStatus, ModelDecision, DecisionKind, ToolCall)
 from lingxi_flight_control.cockpit import CockpitService
+from lingxi_flight_control.geometry import horizontal_distance_m
 from lingxi_flight_control.flight_policy import PathCheck, MAPPING_MESSAGE
+from fence_support import HardBoundedFenceProvider, StaticFenceProvider
 
 
 class ProductV13Tests(unittest.TestCase):
@@ -14,7 +16,7 @@ class ProductV13Tests(unittest.TestCase):
         self.binding = RuntimeBinding('actor', 'project', 'hangar', 'drone', 'batch', 1)
         self.path = PathCheck('clear')
         self.sim = MemoryFlightControlSimulator(self.binding,
-            path_checker=lambda *_: self.path)
+            path_checker=StaticFenceProvider(lambda *_: self.path))
         self.sim.state.control_owner = 'actor'
         self.sim.state.altitude_m = 50
         self.counter = 0
@@ -137,6 +139,17 @@ class ProductV13Tests(unittest.TestCase):
         self.sim.state.task_type = 'mapping'
         self.assertEqual(self.confirm(card).error_code, 'POLICY_STATE_CHANGED')
 
+    def test_point_orbit_stays_on_the_radius_and_never_moves_to_the_target(self):
+        self.sim.state.longitude = 113.0
+        self.sim.state.latitude = 23.0
+        receipt = self.execute('point_orbit', longitude=114.0, latitude=24.0, radius_m=30)
+        distance = horizontal_distance_m(
+            receipt.state['longitude'], receipt.state['latitude'], 114.0, 24.0)
+        self.assertAlmostEqual(distance, 30.0, delta=0.5)
+        self.assertNotEqual((round(receipt.state['longitude'], 5), round(receipt.state['latitude'], 5)),
+                            (114.0, 24.0))
+        self.assertEqual(receipt.state['route_status'], 'point_orbit')
+
     def test_latest_temporary_replaces_previous_and_preserves_main_breakpoint(self):
         self.route()
         first = self.execute('point_flight', longitude=113, latitude=23, altitude_m=50)
@@ -193,6 +206,13 @@ class ProductV13Tests(unittest.TestCase):
         self.sim.state.route_status = 'idle'
         result = self.message(self.service(), '悬停')
         self.assertEqual(result['card']['action'], 'hover')
+
+    def test_system_prompt_never_teaches_hover_as_emergency_stop(self):
+        # 模型路径（非精确“悬停”）同样不能把悬停教成急停：V1.4 2.2.4 与 4.3.1
+        # 把两者定义为不同动作，急停会改变任务状态。
+        from lingxi_flight_control.cockpit import COCKPIT_SYSTEM_PROMPT
+        self.assertNotIn('悬停使用emergency_stop', COCKPIT_SYSTEM_PROMPT)
+        self.assertIn('手动飞行悬停使用hover', COCKPIT_SYSTEM_PROMPT)
 
     def test_cockpit_raw_zoom_is_grounded_before_adjustment(self):
         result = self.message(self.service('camera_zoom', {'value': 100}), '变焦100倍')
@@ -303,7 +323,7 @@ class ProductV13PlatformTests(unittest.TestCase):
         fixture = ZhuoyiPlatformExecutorTests()
         fixture.setUp()
         path = [PathCheck('clear')]
-        fixture.executor._path_checker = lambda *_: path[0]
+        fixture.executor._path_checker = HardBoundedFenceProvider(lambda *_: path[0])
         card = fixture.executor.preview(fixture.request('move_forward', distance_m=10))
         self.assertEqual(card.status.value, 'preview_required')
         path[0] = PathCheck('blocked')
@@ -323,7 +343,7 @@ class ProductV13PlatformTests(unittest.TestCase):
             self.assertEqual(executor.preview(fixture.request()).error_code, 'ROUTE_PAUSE_REQUIRED')
             fixture.snapshot = replace(fixture.snapshot, state={**fixture.snapshot.state, 'route_status': 'paused'})
             path = [PathCheck('clear')]
-            executor._path_checker = lambda *_: path[0]
+            executor._path_checker = HardBoundedFenceProvider(lambda *_: path[0])
             card = executor.preview(fixture.request())
             path[0] = PathCheck('blocked')
             self.assertEqual(fixture.confirm(executor, card).error_code, 'PATH_BLOCKED')
@@ -338,8 +358,17 @@ class ProductV13PlatformTests(unittest.TestCase):
         try:
             fixture.snapshot = replace(fixture.snapshot, state={**fixture.snapshot.state,
                 'route_status': 'running', 'task_type': 'mapping'})
-            self.assertEqual(fixture.executor().preview(fixture.request()).error_code,
-                             'MAPPING_INTERRUPTION_UNAVAILABLE')
+            executor = fixture.executor()
+            # V1.4 4.1.1：首次 preview 必须展示「成果失效」确认，而不是静默拒绝，
+            # 也不是直接执行；此时不能有任何平台写入。
+            card = executor.preview(fixture.request())
+            self.assertIs(card.status, FlightControlStatus.PREVIEW_REQUIRED)
+            self.assertIn(MAPPING_MESSAGE, card.warnings)
             self.assertEqual(fixture.transport.calls, [])
+            # 确认后仍必须在缺少原子契约时拒绝，且不发送任何飞控动作。
+            receipt = fixture.confirm(executor, card)
+            self.assertEqual(receipt.error_code, 'MAPPING_INTERRUPTION_UNAVAILABLE')
+            self.assertEqual(fixture.transport.calls, [])
+            self.assertEqual(executor.mapping_interruption_audit()['execution_mode'], 'unavailable')
         finally:
             fixture.doCleanups()

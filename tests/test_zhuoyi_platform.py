@@ -46,6 +46,7 @@ class FakePlatform:
         self.commands = {}
         self.receipts = {}
         self.command_error = None
+        self.hold_accepted = False
 
     def __call__(self, method, url, body, headers, timeout):
         parts = urlsplit(url)
@@ -69,7 +70,7 @@ class FakePlatform:
             command_id = query["commandId"][0]
             receipt = dict(self.receipts[command_id])
             action = self.commands[command_id]["action"]
-            if action == "move_forward":
+            if action == "move_forward" and not self.hold_accepted:
                 receipt.update(status="completed", continuation_allowed=True)
             else:
                 receipt.update(status="accepted", continuation_allowed=True)
@@ -122,8 +123,60 @@ class ZhuoyiPlatformExecutorTests(unittest.TestCase):
             idempotency_key=request.idempotency_key,
             confirmation_binding=preview.confirmation_binding, context_version=1)
         self.assertEqual(receipt.status, FlightControlStatus.ACCEPTED)
+        # completed 只是接口终态，不是另一次位置回读。
+        self.assertFalse(receipt.arrival_verified)
         self.assertEqual(self.platform.receipts["cmd-1"]["status"], "completed")
         self.assertEqual(self.executor.supports_plan_execution, True)
+
+    def test_dji_move_below_20_metres_is_not_submitted(self):
+        self.platform.state["height_m"] = 10
+        request = self.request(FlightControlAction.MOVE_FORWARD, distance_m=10)
+        preview = self.executor.preview(request)
+        self.assertEqual(preview.status, FlightControlStatus.REJECTED)
+        self.assertEqual(preview.error_code, "DJI_FLYTO_IMPLICIT_CLIMB")
+        self.assertIn("未下发", preview.message)
+        self.assertEqual(self.platform.commands, {})
+
+    def test_dji_diagonal_point_flight_is_not_submitted(self):
+        self.platform.state["permissions"] = ["point_flight"]
+        self.platform.state["action_availability"]["point_flight"] = {"available": True, "reasons": []}
+        request = self.request(FlightControlAction.POINT_FLIGHT,
+                               longitude=113.01, latitude=23.01, altitude_m=80)
+        preview = self.executor.preview(request)
+        self.assertEqual(preview.status, FlightControlStatus.REJECTED)
+        self.assertEqual(preview.error_code, "FLYTO_TRAJECTORY_UNVERIFIED")
+        self.assertIn("未下发", preview.message)
+        self.assertEqual(self.platform.commands, {})
+
+    def test_dji_descent_below_20_metres_is_not_submitted(self):
+        self.platform.state["height_m"] = 25
+        self.platform.state["permissions"] = ["move_down"]
+        self.platform.state["action_availability"]["move_down"] = {"available": True, "reasons": []}
+        request = self.request(FlightControlAction.MOVE_DOWN, distance_m=10)
+        preview = self.executor.preview(request)
+        self.assertEqual(preview.error_code, "DJI_LOW_TARGET_UNVERIFIED")
+        self.assertEqual(self.platform.commands, {})
+
+    def test_move_acknowledgement_is_not_arrival(self):
+        self.platform.hold_accepted = True
+        original = self.platform
+
+        def transport(method, url, body, headers, timeout):
+            if "/receipt" in url:
+                self.clock[0] += 2
+            return original(method, url, body, headers, timeout)
+
+        self.executor._transport = transport
+        request = self.request(FlightControlAction.MOVE_FORWARD, distance_m=10)
+        preview = self.executor.preview(request)
+        receipt = self.executor.confirm(
+            preview.confirmation_id, command_id=request.command_id,
+            idempotency_key=request.idempotency_key,
+            confirmation_binding=preview.confirmation_binding, context_version=1)
+        self.assertEqual(receipt.status, FlightControlStatus.UNKNOWN)
+        self.assertEqual(receipt.error_code, "RECEIPT_PENDING")
+        self.assertFalse(receipt.arrival_verified)
+        self.assertEqual(self.platform.receipts["cmd-1"]["status"], "accepted")
 
     def test_control_and_availability_are_checked_before_a_card(self):
         self.platform.state = state(owner="actor-2")

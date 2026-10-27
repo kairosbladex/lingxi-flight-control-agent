@@ -1,0 +1,84 @@
+{
+  "schema": "lingxi-evidence/v1",
+  "topic": "v14-mapping-reservation",
+  "generated_at": "2026-10-22T07:31:09.291170+00:00",
+  "baseline": {
+    "branch": "test",
+    "head": "d6d284d",
+    "note": "工作树含 V1.4 P1–P4 未提交改动"
+  },
+  "verification": {
+    "offline_tests": {
+      "command": "bash tools/ci/offline_tests.sh",
+      "tests": 1085,
+      "result": "OK",
+      "duration_sec": 14.041
+    },
+    "git_diff_check": "git diff --check -> no output, exit 0",
+    "compileall": "python3 -m compileall -q src tests -> no output, exit 0",
+    "targeted": {
+      "command": "PYTHONPATH=src:tests python3 -m unittest -v test_path_fence test_mapping_interruption",
+      "tests": 119,
+      "result": "OK",
+      "duration_sec": 3.264
+    },
+    "mapping_module_tests": {
+      "MappingReservationStateMachineTests": 12,
+      "CrossProcessReservationTests": 5
+    }
+  },
+  "cross_process_race": {
+    "runs": 20,
+    "processes_per_run": 2,
+    "shared": [
+      "sqlite command journal",
+      "confirmation card (same confirmation_id)"
+    ],
+    "outcome_pairs": {
+      "submitted + submitted": 18,
+      "submitted + unknown": 2
+    },
+    "outcome_pairs_note": "distribution varies with scheduling (another 20-run sample was 10/10); the invariant is gateway and submit at most once",
+    "gateway_calls_per_run": {
+      "1": 20
+    },
+    "submit_calls_per_run": {
+      "1": 20
+    },
+    "max_gateway_calls": 1,
+    "max_submit_calls": 1,
+    "cleanup": {
+      "threads_before_after": [1, 1],
+      "listening_ports_before": [],
+      "listening_ports_after": [],
+      "temp_dirs_removed": true,
+      "leftover_processes": 0
+    }
+  },
+  "state_machine": {
+    "states": [
+      "mapping_reservation_pending",
+      "mapping_interruption_unknown",
+      "mapping_interruption_succeeded",
+      "mapping_interruption_failed"
+    ],
+    "transitions": [
+      "none -> mapping_reservation_pending (reserve_mapping, INSERT in BEGIN IMMEDIATE)",
+      "mapping_reservation_pending -> mapping_interruption_unknown (advance_mapping CAS, before gateway call)",
+      "mapping_interruption_unknown -> mapping_interruption_succeeded (gateway atomic+confirmed, CAS)",
+      "mapping_interruption_unknown -> mapping_interruption_failed (explicit gateway failure, CAS)",
+      "mapping_interruption_unknown -> mapping_interruption_succeeded (resolve_mapping_interruption voided)",
+      "mapping_interruption_unknown -> mapping_interruption_failed (resolve_mapping_interruption not_voided)",
+      "mapping_reservation_pending -> mapping_interruption_unknown (lease expired takeover, CAS)"
+    ],
+    "no_auto_retry_from": [
+      "mapping_interruption_unknown"
+    ]
+  },
+  "not_verified": [
+    "真实平台是否提供 atomic+confirmed 的测绘作废接口",
+    "真实平台是否按 X-Idempotency-Key 收敛（本仓不假设）",
+    "真实设备动作与位移效果",
+    "SQLite 文件所在文件系统是否满足跨主机一致性（仅同机多进程）"
+  ]
+}

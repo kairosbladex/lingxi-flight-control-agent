@@ -5,12 +5,14 @@ from dataclasses import replace
 from lingxi_flight_control import MemoryFlightControlSimulator, RuntimeBinding, FlightControlActionRequest
 from lingxi_flight_control.cockpit import CockpitService
 from lingxi_flight_control.flight_policy import PathCheck
+from fence_support import StaticFenceProvider
 
 
 class ProductActionsTests(unittest.TestCase):
     def setUp(self):
         self.binding = RuntimeBinding('actor', 'project', 'hangar', 'drone', 'batch', 1)
-        self.sim = MemoryFlightControlSimulator(self.binding, path_checker=lambda *_: PathCheck('clear'))
+        self.sim = MemoryFlightControlSimulator(self.binding,
+                                                         path_checker=StaticFenceProvider(PathCheck('clear')))
         self.sim.state.control_owner = 'actor'
         self.sim.state.configured_algorithms = ['烟火', '车辆']
         self.service = CockpitService(self.binding, self.sim, lambda: None,
@@ -82,7 +84,7 @@ class ProductActionsTests(unittest.TestCase):
 
     def test_parallel_preflight_failure_dispatches_neither(self):
         card = self.send('边向前飞10米边喊话：交通安全')['card']
-        self.sim._path_checker = lambda *_: PathCheck('blocked')
+        self.sim._path_checker = StaticFenceProvider(PathCheck('blocked'))
         before = self.sim.state.to_dict()
         result = self.confirm(card)
         self.assertEqual(result['error_code'], 'PARALLEL_PREFLIGHT_FAILED')

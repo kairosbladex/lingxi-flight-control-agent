@@ -80,7 +80,8 @@ def parse_command(text):
     simple = {'恢复航线': 'route_resume', '结束当前任务': 'end_current', '结束全部任务': 'end_all'}
     if text in simple:
         return {'action': simple[text]}
-    match = re.fullmatch(r'去东经' + _NUMBER + r'[，, ]+北纬' + _NUMBER + r'[，, ]+(?:相对)?高(?:度)?' + _NUMBER + r'米', text)
+    # V1.4 4.3.1 的原样表达是“去东经118，北纬34，高50”，单位可省略。
+    match = re.fullmatch(r'去东经' + _NUMBER + r'[，, ]+北纬' + _NUMBER + r'[，, ]+(?:相对)?高(?:度)?' + _NUMBER + r'米?', text)
     if match:
         longitude, latitude, altitude = map(float, match.groups())
         if not (-180 <= longitude <= 180 and -90 <= latitude <= 90 and 0 <= altitude <= 10000):

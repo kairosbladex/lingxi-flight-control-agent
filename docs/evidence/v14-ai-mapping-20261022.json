@@ -1,0 +1,107 @@
+{
+  "phase": "V1.4-P3",
+  "topic": "ai-lifecycle-and-mapping-interruption",
+  "date": "2026-10-22",
+  "repo": "lingxi-flight-control-agent",
+  "branch": "test",
+  "head_before_work": "d6d284d",
+  "spec": {
+    "file": "灵犀平台自然语言智能控制功能设计规范V1.4.docx",
+    "sha256": "e4e42b712e3249d1fc09d0968445525c0702808e894290d49df2b70301108c78",
+    "read_mode": "read-only text extraction, original file untouched"
+  },
+  "source_sha256": {
+    "src/lingxi_flight_control/ai_lifecycle.py": "febf9771980083190b2b02fc44ba509ad16a0569c6a46ec14e46b9b58d7aa416",
+    "src/lingxi_flight_control/mapping_interruption.py": "f93f88aa3b0ce2194f6ac3d05c29cff6dc00e933674f15cbe55ee09a801b4578",
+    "src/lingxi_flight_control/task_events.py": "77b8a24a1517e988bbab2b55dfbea8832f094f5fa29975f3c2163cc682a91ac7",
+    "src/lingxi_flight_control/full_control.py": "4da0700b6b30d837538760b84bccbe44363692f77634868738e116be357f747b",
+    "src/lingxi_flight_control/ktd_platform.py": "4d74dc0e91c5cb292b274ad8726e9d8dbaf63139b2e74e6a6c77e5fed7608201",
+    "src/lingxi_flight_control/flight_policy.py": "5e38d35c4227bac090f5a73f729b9ced39217c67d1b7efa82847a94ef739593e",
+    "src/lingxi_flight_control/cockpit.py": "116560e9ba10b228fc82435397e74d5f724e9a14231354a4f373692b7bd0e3dd",
+    "tests/test_ai_lifecycle.py": "907de0d6268b714a278f4ca6c36684551c148f043e7ed282db64ca943ebb8879",
+    "tests/test_mapping_interruption.py": "2824348ccbfa5b015dc785805910d6565f9946aaa9d166f3a3a09a7bd46a7a9c"
+  },
+  "tests": {
+    "command": "bash tools/ci/offline_tests.sh",
+    "denominator": 1085,
+    "denominator_note": "unified for all V1.4 docs and evidence at closeout; phase-local totals are not used as denominators",
+    "result": "OK",
+    "offline_guard": "tests/test_offline_guard.py asserts zero socket connections",
+    "diff_check": "git diff --check -> no output, exit 0"
+  },
+  "new_test_files": {
+    "tests/test_ai_lifecycle.py": 31,
+    "tests/test_mapping_interruption.py": 23
+  },
+  "contracts": {
+    "ai_lifecycle": {
+      "contract_version": "lingxi-ai-lifecycle/v1",
+      "stages": ["expected", "dispatched", "start_requested", "started", "stop_requested", "stopped"],
+      "default_gateways": ["UnavailableAnnotationAlgorithmGateway", "UnavailableAlgorithmLifecycleGateway"],
+      "simulator_gateway": "SimulatorAlgorithmLifecycleGateway (execution_mode=simulator)",
+      "error_codes": [
+        "ALGORITHM_LIFECYCLE_UNAVAILABLE",
+        "ANNOTATION_ALGORITHM_SOURCE_UNAVAILABLE",
+        "ALGORITHM_NOT_CONFIGURED",
+        "ALGORITHM_CONFLICT_CLARIFICATION_REQUIRED",
+        "ALGORITHM_REPLACE_UNSUPPORTED",
+        "BODY_ANNOTATION_AI_UNSUPPORTED"
+      ]
+    },
+    "mapping_interruption": {
+      "contract_version": "lingxi-mapping-interruption/v1",
+      "atomic_steps": [
+        "stop_auto_stitching",
+        "void_rebuild_type",
+        "void_break_info",
+        "invalidate_task_breakpoint",
+        "disable_route_resume",
+        "block_task_resume"
+      ],
+      "default_gateway": "UnavailableMappingInterruptionGateway",
+      "simulator_gateway": "SimulatorMappingInterruptionGateway (execution_mode=simulator)",
+      "error_codes": [
+        "MAPPING_INTERRUPTION_UNAVAILABLE",
+        "MAPPING_INTERRUPTION_NOT_CONFIRMED",
+        "MAPPING_INTERRUPTION_PARTIAL"
+      ]
+    }
+  },
+  "verification_layers": {
+    "simulator_verified": [
+      "six AI lifecycle stages recorded separately; only started feeds active_algorithms",
+      "global/annotation dedupe; shared algorithm not stopped when one annotation leaves",
+      "global algorithm never auto-closed",
+      "duplicate entered/left idempotent (no revision bump); stale sequence and stale annotation_version rejected",
+      "body annotation AI binding rejected; unconfigured algorithm never runs",
+      "mapping preview warns and changes nothing; confirm runs six atomic steps in order",
+      "mapping invalidation makes route_resume / continue_from_breakpoint fail permanently",
+      "temporary task replacement keeps main breakpoint; old completion event rejected",
+      "low battery return has top priority; recharge restores only a still-valid inspection mainline",
+      "end_all clears breakpoint; post-temporary choice is explicit (no default)"
+    ],
+    "fake_java_http_verified": [
+      "KtdPlatformExecutor calls the atomic gateway before any transport submit",
+      "unavailable gateway => MAPPING_INTERRUPTION_UNAVAILABLE with zero transport calls",
+      "ai_algorithm_set on platform => ALGORITHM_LIFECYCLE_UNAVAILABLE with zero transport calls",
+      "mapping preview returns a confirmation card with the invalidation warning instead of a silent reject"
+    ],
+    "real_platform_missing": [
+      "no algorithm-level start/stop interface found; only task-level AI switch exists",
+      "no atomic 'stop stitching + void rebuild/break info + disable resume' endpoint",
+      "no annotation AI configuration read API (default gateway raises ANNOTATION_ALGORITHM_SOURCE_UNAVAILABLE)",
+      "no event source contract for annotation enter/leave delivery"
+    ],
+    "real_ai_receipt_missing": [
+      "no real algorithm run receipt; simulator receipts are labelled execution_mode=simulator"
+    ],
+    "real_mapping_db_transaction_unverified": [
+      "six-step atomicity is only simulated in memory; no database transaction, no rollback proof"
+    ]
+  },
+  "resources": {
+    "network": "no socket connections (offline guard), no MQTT, no drone, no shared test/uat/prod service",
+    "writes": "no platform write operations, no deployment, no shared service restart",
+    "secrets": "no credentials, tokens, cookies, private keys or raw logs recorded"
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "schema": "lingxi-v14-phase2-evidence/v1",
+  "date": "2026-10-22",
+  "repo": "lingxi-flight-control-agent",
+  "branch": "test",
+  "head": "d6d284d04b38946e92ca5a10df244a2db487b3b0",
+  "denominator": 1085,
+  "denominator_note": "unified for all V1.4 docs and evidence at closeout; phase-local totals are not used as denominators",
+  "tests_result": "OK",
+  "command": "bash tools/ci/offline_tests.sh",
+  "diff_check": "git diff --check -> no output, exit 0",
+  "offline": true,
+  "network": "none",
+  "source_spec": {
+    "file": "灵犀平台自然语言智能控制功能设计规范V1.4.docx",
+    "sha256": "e4e42b712e3249d1fc09d0968445525c0702808e894290d49df2b70301108c78",
+    "read_locally": true,
+    "uploaded": false
+  },
+  "new_modules": {
+    "src/lingxi_flight_control/path_geometry.py": "061a6fc6ea13f52d6d571c2c93bd4b346c8745683b83faf91d36dfd4a80d038e"
+  },
+  "modified_modules": {
+    "src/lingxi_flight_control/ktd_path.py": "bd3fdee5155b6c46ad97d2c4a5312302878b5e9791e3a1c3f5624d075878a9ac",
+    "src/lingxi_flight_control/flight_policy.py": "aea631bd7075c9cb24165fcbdbb6594915916fbc9a7ba927868e6324b596c7e5",
+    "src/lingxi_flight_control/geometry.py": "b4f71fc2c825b4691189ff90b08bf8181e5af8efcf6b9adbbe4edcd85a39e9f8",
+    "src/lingxi_flight_control/ktd_platform.py": "f93ed8fd7b57a31f08528a28c4508f8980329c61ec7e2cbc66b44df72509d3f4",
+    "src/lingxi_flight_control/full_control.py": "e315bcc0b8fc3a375f12ed2d3ebfc550311a02d32fa3ab01ea066bd5a638776f"
+  },
+  "new_tests": [
+    "tests/test_path_fence.py"
+  ],
+  "modified_tests": [
+    "tests/test_ktd_path.py"
+  ],
+  "fence_contract": {
+    "statuses": ["clear", "blocked", "unavailable", "timeout", "malformed", "invalid"],
+    "passes_only_on": "clear",
+    "rejects_on": ["blocked", "invalid"],
+    "degrades_with_warning_on": ["unavailable", "timeout", "malformed"],
+    "degraded_warning_must_contain": "不代表路径安全或设备避障已验证",
+    "single_call_deadline_sec": {"default": 3.0, "min": 0.1, "max": 10.0},
+    "transport_timeout_sec": {"min": 0.1, "max": 30.0, "capped_by": "transport timeout_sec"},
+    "audit_events": ["flight_path_check", "flight_fence"],
+    "background_resources": "none: no thread, process, socket bind or listen"
+  },
+  "path_geometry": {
+    "micro_move_direction_reference": "aircraft heading (yaw_deg), 0/180/-90/+90 degrees",
+    "vertical_fields": {"moves": "height_m then altitude_m", "point_flight": "altitude_m", "point_orbit": "altitude_m then height_m"},
+    "orbit_segments": 36,
+    "orbit_closing_edge": true,
+    "orbit_entry_segment": "prepended when a current pose is available",
+    "max_segments": 64,
+    "ignored_response_fields": ["suggest", "alternate"]
+  },
+  "verification_matrix": {
+    "unit_verified": [
+      "six-state fence contract; only clear passes",
+      "late clear beyond declared deadline is downgraded to timeout",
+      "degraded warning text for unavailable / timeout / malformed",
+      "micro move geometry relative to heading, vertical delta on relative height",
+      "point flight target geometry and height datum consistency",
+      "orbit 36 segments + closing edge, ring points on the requested radius",
+      "radius, coordinate and altitude out of range rejected"
+    ],
+    "fake_transport_only": [
+      "polyline shape validation and per-call deadline forwarding",
+      "segment count / snapshot echo / scope validation of the fence response",
+      "platform executor preview and confirm both check; blocked withdraws the card",
+      "orbit confirmation card states the radius semantic difference"
+    ],
+    "simulator_only": [
+      "blocked at confirm withdraws the pending card",
+      "degraded fence still requires control and confirmation",
+      "pose change invalidates the path confirmation card"
+    ],
+    "not_verified_real_platform": [
+      "whether /electronicFence/path-route/with-clean accepts a 38-point polyline",
+      "the altitude datum of that endpoint",
+      "converge=ln_outside semantics and the structure of invalid[]",
+      "a fence data version field (does not exist in the current contract)",
+      "binding between static annotation resolution and the flight target point"
+    ],
+    "not_verified_real_device": [
+      "real obstacle avoidance, altitude limiting, no-fly detection or device motion"
+    ]
+  },
+  "known_limits": [
+    "DNS resolution is not bounded by the socket timeout; no thread is created to work around it",
+    "an uncancellable transport can only have its result discarded, never pre-empted",
+    "orbit point source labels (old/new) are this repo's usage, not a verified platform requirement"
+  ],
+  "untouched": [
+    "default executor remains the simulator",
+    "KtdPlatformExecutor stays disabled by default",
+    "no MQTT, no real drone, no shared test/uat/prod service",
+    "no change to the action registry or the preview/confirm/execute chain"
+  ]
+}

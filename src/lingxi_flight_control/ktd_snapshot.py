@@ -8,6 +8,7 @@ import time
 from collections.abc import Mapping
 
 from .full_control import ACTION_SPECS, RuntimeBinding
+from .handoff_contract import HandoffError, parse_platform_unavailable
 from .ktd_platform import (
     KtdHttpResponse, KtdPlatformError, KtdSnapshot, _finite, _identifier,
     _valid_snapshot_version,
@@ -19,8 +20,10 @@ _NUMERIC_STATE = {'longitude': (-180, 180), 'latitude': (-90, 90),
     'altitude_m': (-500, 10000), 'height_m': (-500, 10000),
     'yaw_deg': (-360, 360), 'battery_percent': (0, 100)}
 _STATE_FIELDS = frozenset(_NUMERIC_STATE) | {'online', 'airborne', 'flight_status', 'route_status'}
+#: V1.4 兼容扩展：平台真实返回时才校验，缺失保持“没有该事实”，不填默认值。
 _POLICY_FIELDS = frozenset({'task_type', 'mapping_invalidated', 'auto_stitching', 'low_battery_return',
-    'device_limits', 'gimbal_pitch_deg', 'breakpoint_index', 'temporary_task_id', 'task_scope'})
+    'device_limits', 'gimbal_pitch_deg', 'breakpoint_index', 'temporary_task_id', 'task_scope',
+    'route_id', 'task_batch_id'})
 
 
 def _reject(code='INVALID_SNAPSHOT_RESPONSE'):
@@ -77,6 +80,12 @@ class KtdSnapshotProvider:
         if profile not in (None, 'DJI_HANGAR', 'PZ_HANGAR'):
             _reject()
         state = self._state(data.get('state'))
+        self._validate_route_binding(state)
+        try:
+            unavailable = parse_platform_unavailable(data)
+        except HandoffError:
+            # 契约块格式非法：不能只忽略它，否则“声明不可用”会被静默丢掉。
+            _reject('INVALID_PLATFORM_CONTRACT')
         frame_complete = self._frame_complete(data['telemetry'], profile, state)
         permissions, capabilities, availability = self._authorization(
             data, state, owner, lease, profile, now, frame_complete)
@@ -85,7 +94,16 @@ class KtdSnapshotProvider:
             task_id=self.task_id, context_version=self.binding.context_version,
             version=data['snapshot_version'], observed_at=observed, control_owner=owner, profile=profile,
             permissions=permissions, capabilities=capabilities, state=state,
-            control_lease_expires_at=lease, action_availability=availability)
+            control_lease_expires_at=lease, action_availability=availability,
+            task_batch_id=self.binding.task_batch_id, platform_unavailable=unavailable)
+
+    def _validate_route_binding(self, state):
+        """断点必须挂在具体航线上；平台可选回显的批次必须与 Agent 绑定一致。"""
+        echoed = state.get('task_batch_id')
+        if echoed is not None and echoed != self.binding.task_batch_id:
+            _reject('RESOURCE_BINDING_MISMATCH')
+        if state.get('breakpoint_index') is not None and state.get('route_id') is None:
+            _reject('INVALID_POLICY_SNAPSHOT')
 
     @staticmethod
     def _observation_time(data, now):
@@ -151,7 +169,10 @@ class KtdSnapshotProvider:
 
     @staticmethod
     def _state(value):
-        if not isinstance(value, Mapping) or not _STATE_FIELDS <= set(value) or set(value) - (_STATE_FIELDS | _POLICY_FIELDS):
+        if not isinstance(value, Mapping) or not _STATE_FIELDS <= set(value):
+            # 基础 state 键缺失：平台没有给出这些事实，不能补默认值。
+            _reject('AUTHORITATIVE_STATE_INCOMPLETE')
+        if set(value) - (_STATE_FIELDS | _POLICY_FIELDS):
             _reject()
         for key, item in value.items():
             if key in _POLICY_FIELDS:
@@ -162,6 +183,12 @@ class KtdSnapshotProvider:
                 elif key == 'task_scope':
                     valid = item in {'bound_main_only', 'main_with_temporary'}
                 elif key == 'temporary_task_id':
+                    valid = item is None or _identifier(item)
+                elif key == 'route_id':
+                    # 航线绑定：空串不是“没有航线”，而是坏数据。
+                    valid = item is None or _identifier(item)
+                elif key == 'task_batch_id':
+                    # 平台可选回显；一旦返回就必须与 Agent 批次一致（见 __call__）。
                     valid = item is None or _identifier(item)
                 elif key == 'breakpoint_index':
                     valid = item is None or type(item) is int and item >= 0

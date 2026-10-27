@@ -101,7 +101,12 @@ class FakeJavaOpener:
                           'source': 'java-udp-cache', 'sequence': None, 'version': 'c' * 64},
             'state': {'online': True, 'airborne': True, 'longitude': 113, 'latitude': 23,
                       'altitude_m': 100, 'height_m': 50, 'yaw_deg': 90,
-                      'battery_percent': None, 'flight_status': None, 'route_status': None},
+                      # V1.4：权威快照把 flight_status 留空时不能当成可执行；
+                      # 这里给出真实飞行状态，避免用 None 冒充“安全”。
+                      # route_status 同理：null 无法证明“不在自动航线”，
+                      # 微操会被 AUTHORITATIVE_STATE_INCOMPLETE 拒绝。'idle'
+                      # 是本仓合成夹具取值，不是对平台取值的声明。
+                      'battery_percent': None, 'flight_status': 'FLYING', 'route_status': 'idle'},
             'permissions': ['read_state', 'move_forward'],
             'capabilities': {'read_state': True, 'move_forward': True, 'UAV_MOVE_DISTANCE': True},
             'action_availability': {'read_state': {'available': True, 'reasons': []},

@@ -1,0 +1,72 @@
+{
+  "schema": "lingxi-v14-phase1-evidence/v1",
+  "date": "2026-10-22",
+  "repo": "lingxi-flight-control-agent",
+  "branch": "test",
+  "head": "d6d284d04b38946e92ca5a10df244a2db487b3b0",
+  "denominator": 1085,
+  "denominator_note": "unified for all V1.4 docs and evidence at closeout; phase-local totals are not used as denominators",
+  "tests_result": "OK",
+  "command": "bash tools/ci/offline_tests.sh",
+  "diff_check": "git diff --check -> no output, exit 0",
+  "offline": true,
+  "network": "none",
+  "new_modules": {
+    "src/lingxi_flight_control/authority_contract.py": "d9862f5e995e6ef77028e1803dddd122e874b4f674cc35dd88fc39d779754bbf",
+    "src/lingxi_flight_control/target_resolver.py": "ea0a993fb583df97c5cedac84c200c146845248090e25a817a007f9d9e7bcf06",
+    "src/lingxi_flight_control/task_events.py": "faca6cc360d269f47ecfe220c25b3e387e3ce9c5044cd2934ea142315bab9853"
+  },
+  "modified_modules": {
+    "src/lingxi_flight_control/command_receipts.py": "b3323863a198eeca1ca457eaed70f8f5225317fd1fa55d6ce431012b8c6e1574",
+    "src/lingxi_flight_control/ktd_snapshot.py": "73d393e6d698d300897e791c0e757554ebb65d2c5ec59bc1e5b146abdec92e94",
+    "src/lingxi_flight_control/ktd_platform.py": "76c5094598ec08263021e416564d16649382880e6668530811cddc7aec329cad",
+    "src/lingxi_flight_control/full_control.py": "b0862fbe81e4e74efe6d73d3ddac76278b8fc5d82955118bf27a510d830c963e",
+    "src/lingxi_flight_control/zhuoyi_platform.py": "30b378b72793f2163f1a5c4708a72813e8f42c8a53720e31fbdd394c0b182c36",
+    "src/lingxi_flight_control/v13_extension.py": "1a9fb53d0dcad1311f80815e6166b1678b7c6d3416cd648bfe4a1beb700e90d8"
+  },
+  "fixtures": [
+    "fixtures/v14-authority-contract-v1.json",
+    "fixtures/v14-target-candidates-v1.json",
+    "fixtures/v14-task-events-v1.json",
+    "fixtures/v14-receipt-states-v1.json",
+    "fixtures/v14-contract-fixtures-v1.provenance.json"
+  ],
+  "new_tests": [
+    "tests/test_authority_contract.py",
+    "tests/test_target_resolver.py",
+    "tests/test_task_events.py",
+    "tests/test_receipt_contract.py"
+  ],
+  "verification_matrix": {
+    "unit_verified": [
+      "snapshot field contract accept/reject for route_id, breakpoint_index, task_type, mapping_invalidated, auto_stitching, temporary_task_id, low_battery_return, device_limits, task_batch_id echo",
+      "AUTHORITATIVE_STATE_INCOMPLETE for present-but-null flight facts",
+      "confirmation hash includes new snapshot fields; route_id/breakpoint/flags changes invalidate the card",
+      "target resolver: ambiguous, not found, volume, mixed, missing altitude, missing version, line/polygon vs flight intent, resolver unavailable, multi-target",
+      "task events: idempotent duplicate, stale sequence, stale temporary completion, low battery priority, recharge resume rules, mapping invalidation, end-all clearing breakpoint, wrong batch",
+      "receipt canonical states, retry policy, RECEIPT_UNAVAILABLE, binding revalidation, untracked actions"
+    ],
+    "simulator_only": [
+      "task event reduction on MemoryFlightControlSimulator state"
+    ],
+    "fake_transport_only": [
+      "KtdPlatformExecutor preview/confirm/receipt through injected transport",
+      "ZhuoyiPlatformExecutor status mapping"
+    ],
+    "not_verified_real_platform": [
+      "whether Java snapshot actually returns route_id / task_batch_id echo / device_limits / task_type",
+      "real platform task event stream (event_id, sequence, delivery guarantees)",
+      "per-command device receipt for hover / point_flight / point_orbit / emergency_stop",
+      "static annotation service contract and target versioning"
+    ],
+    "not_verified_real_device": [
+      "any device motion, receipt accuracy, or completion measurement"
+    ]
+  },
+  "untouched": [
+    "default executor remains the simulator",
+    "KtdPlatformExecutor stays disabled by default",
+    "no MQTT, no real drone, no shared test/uat/prod service",
+    "no change to the 59/65 action registry or the preview/confirm/execute chain"
+  ]
+}

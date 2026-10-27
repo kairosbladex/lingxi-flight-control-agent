@@ -6,6 +6,11 @@ from lingxi_flight_control import (
     DecisionKind, MemoryFlightControlSimulator, ModelDecision, RuntimeBinding, ToolCall,
 )
 from lingxi_flight_control.cockpit import CockpitService
+from lingxi_flight_control.full_control import (
+    FlightControlReceipt, FlightControlStatus,
+)
+from lingxi_flight_control.geometry import relative_target
+from lingxi_flight_control.models import ExecutionContext
 
 
 def action(name, **arguments):
@@ -222,3 +227,102 @@ class CockpitPlanExecutionTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class _UnsettledPlatform:
+    """平台回执只有 accepted，没有位移 completed。"""
+
+    execution_mode = "platform"
+    supports_plan_execution = True
+
+    def __init__(self, *, verify_arrival):
+        self.verify_arrival = verify_arrival
+        self.previews = []
+        self.confirms = []
+        self._requests = {}
+        self.pose = {"longitude": 113.0, "latitude": 23.0, "altitude_m": 50.0,
+                     "heading_deg": 90.0, "yaw_deg": 90.0, "revision": 1,
+                     "control_owner": "actor-1", "available": True}
+
+    def runtime_context(self):
+        return ExecutionContext("project-1:hangar-1:batch-1", "drone-1", 1, True)
+
+    def read_state(self):
+        return dict(self.pose)
+
+    def cancel(self, **_kwargs):
+        return None
+
+    def preview(self, request):
+        self.previews.append(request.action.value)
+        self._requests[request.command_id] = request
+        return FlightControlReceipt(
+            status=FlightControlStatus.PREVIEW_REQUIRED, execution_mode="platform",
+            action=request.action.value, command_id=request.command_id,
+            idempotency_key=request.idempotency_key, confirmation_id="c-" + request.command_id,
+            confirmation_binding="b-" + request.command_id, context_version=1,
+            state=self.read_state(), parameters=dict(request.parameters))
+
+    def confirm(self, confirmation_id, *, command_id, idempotency_key, confirmation_binding, context_version):
+        request = self._requests[command_id]
+        self.confirms.append(request.action.value)
+        if self.verify_arrival and request.action.value == "move_forward":
+            longitude, latitude = relative_target(
+                self.pose["longitude"], self.pose["latitude"], self.pose["heading_deg"],
+                "forward", float(request.parameters["distance_m"]))
+            self.pose["longitude"] = longitude
+            self.pose["latitude"] = latitude
+            self.pose["revision"] += 1
+        return FlightControlReceipt(
+            status=FlightControlStatus.ACCEPTED, execution_mode="platform",
+            action=request.action.value, command_id=command_id, idempotency_key=idempotency_key,
+            confirmation_id=confirmation_id, confirmation_binding=confirmation_binding,
+            context_version=context_version, state=self.read_state(),
+            parameters=dict(request.parameters), arrival_verified=False,
+            message="平台回执：completed；设备效果未验证")
+
+
+class PlatformPlanArrivalTests(unittest.TestCase):
+    def service(self, executor):
+        planner = Brain([])
+        service = CockpitService(
+            RuntimeBinding("actor-1", "project-1", "hangar-1", "drone-1", "batch-1", 1),
+            executor, lambda: Brain([]), gateway_token="x" * 32, enable_plan_execution=True,
+            plan_decider_factory=lambda: planner, max_plan_steps=5)
+        return service, planner
+
+    def test_next_motion_waits_until_the_previous_move_is_completed(self):
+        executor = _UnsettledPlatform(verify_arrival=False)
+        service, planner = self.service(executor)
+        planner.decisions = [action("move_forward", distance_m=10), action("camera_photo"), final()]
+        headers = {"X-Agent-Session": "arrival", "X-Agent-Gateway": "x" * 32,
+                   "X-Agent-Actor": "actor-1"}
+        proposal = service.handle("POST", "/api/flight-control/agent/messages", json.dumps({
+            "text": "往前飞10米，并帮我拍张照", "request_id": "plan-1", "context_version": 1}),
+            headers).payload
+        card = proposal["card"]
+        receipt = service.handle("POST", "/api/flight-control/agent/confirm", json.dumps({
+            key: card[key] for key in ("confirmation_id", "confirmation_binding",
+                                       "command_id", "idempotency_key", "context_version")}),
+            headers).payload
+        self.assertEqual(receipt["error_code"], "ARRIVAL_NOT_OBSERVED")
+        self.assertEqual(receipt["failed_step"], 1)
+        self.assertEqual(executor.previews, ["move_forward"])
+        self.assertEqual(executor.confirms, ["move_forward"])
+
+    def test_completed_move_allows_the_next_step(self):
+        executor = _UnsettledPlatform(verify_arrival=True)
+        service, planner = self.service(executor)
+        planner.decisions = [action("move_forward", distance_m=10), action("camera_photo"), final()]
+        headers = {"X-Agent-Session": "arrival-ok", "X-Agent-Gateway": "x" * 32,
+                   "X-Agent-Actor": "actor-1"}
+        proposal = service.handle("POST", "/api/flight-control/agent/messages", json.dumps({
+            "text": "往前飞10米，并帮我拍张照", "request_id": "plan-1", "context_version": 1}),
+            headers).payload
+        card = proposal["card"]
+        receipt = service.handle("POST", "/api/flight-control/agent/confirm", json.dumps({
+            key: card[key] for key in ("confirmation_id", "confirmation_binding",
+                                       "command_id", "idempotency_key", "context_version")}),
+            headers).payload
+        self.assertEqual(receipt["plan_status"], "completed", receipt)
+        self.assertEqual(executor.confirms, ["move_forward", "camera_photo"])

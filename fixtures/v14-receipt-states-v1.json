@@ -1,0 +1,18 @@
+{
+  "schema": "lingxi-v14-receipt-states/v1",
+  "synthetic": true,
+  "note": "平台回执线格式到规范状态的映射，以及自动重试策略。字段名来自既有 lingxi-command-receipt/v1，未新增平台字段。",
+  "mapping": [
+    {"wire": "dispatching", "state": "dispatching", "terminal": false, "retry_allowed": false},
+    {"wire": "submitted", "state": "submitted", "terminal": false, "retry_allowed": false},
+    {"wire": "accepted", "state": "accepted", "terminal": false, "retry_allowed": false},
+    {"wire": "in_progress", "state": "in_progress", "terminal": false, "retry_allowed": false},
+    {"wire": "completed", "state": "succeeded", "terminal": true, "retry_allowed": false},
+    {"wire": "failed", "state": "failed", "terminal": true, "retry_allowed": true},
+    {"wire": "cancelled", "state": "cancelled", "terminal": true, "retry_allowed": false},
+    {"wire": "expired", "state": "expired", "terminal": false, "retry_allowed": false},
+    {"wire": "unknown", "state": "unknown", "terminal": false, "retry_allowed": false},
+    {"wire": "conflict", "state": "conflict", "terminal": true, "retry_allowed": false}
+  ],
+  "invalid_wire_values": ["succeeded", "done", "", null, 1]
+}

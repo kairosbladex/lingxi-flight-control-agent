@@ -245,6 +245,9 @@ class VendorExecutorTests(unittest.TestCase):
     def test_cancel_and_kind_or_method_key_conflicts_never_post(self):
         self.http.snapshot = snapshot_payload(writable=True)
         self.http.snapshot['data']['state']['height_m'] = 30
+        # V1.4 2.2.3：微操是否放行取决于航线状态；合成夹具必须给出已知状态，
+        # 不能用 null 冒充“没在自动航线”。'idle' 是本仓模拟器取值，不是平台承诺。
+        self.http.snapshot['data']['state']['route_status'] = 'idle'
         executor = self.active(enabled=True)
         card = self.card(executor)
         self.assertEqual(self.card(executor, method='drc_mode_exit').error_code, 'IDEMPOTENCY_CONFLICT')

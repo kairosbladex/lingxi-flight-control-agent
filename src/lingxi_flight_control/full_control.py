@@ -28,9 +28,21 @@ from .models import (
 )
 from .safety import SafetyFastPath, normalize
 from .simulator import MemoryFlightSimulator
-from .geometry import relative_target
+from .geometry import offset_target, relative_target
+from .task_events import (
+    TaskEventKind, TaskEventLedger, apply_task_event as task_events_apply, coerce_kind,
+    event_from_legacy, post_temporary_decision, validate_post_temporary_choice,
+)
+from .ai_lifecycle import (
+    ALGORITHM_LIFECYCLE_UNAVAILABLE, AlgorithmLifecycleReceipt, AlgorithmStage,
+    SimulatorAlgorithmLifecycleGateway, annotation_active_set, apply_plan, plan_selection,
+)
+from .mapping_interruption import (
+    MAPPING_INTERRUPTION_UNAVAILABLE, MappingInterruptionRequest,
+    SimulatorMappingInterruptionGateway, interruption_required,
+)
 from .flight_policy import (
-    ADJUSTABLE, CONTROL_MESSAGE, MAPPING_MESSAGE, POLICY_VERSION, MICRO_ACTIONS,
+    ADJUSTABLE, CONTROL_MESSAGE, MAPPING_MESSAGE, PATH_ACTIONS, POLICY_VERSION, MICRO_ACTIONS,
     TEMPORARY_ACTIONS, INTERRUPTING_ACTIONS, RESUME_ACTIONS, PolicyError,
     check_flight_policy, check_path, mapping_interruption, normalize_parameters,
 )
@@ -128,6 +140,8 @@ class FlightControlStatus(str, Enum):
     CANCELLED = "cancelled"
     EXPIRED = "expired"
     REJECTED = "rejected"
+    #: 已发出但平台没有给出可判定的结果；禁止自动重试，也不代表未执行。
+    UNKNOWN = "unknown"
 
 
 _MOVES = {
@@ -241,6 +255,12 @@ class FlightControlState:
     task_type: str = "inspection"
     mapping_invalidated: bool = False
     auto_stitching: bool = False
+    #: V1.4 4.1.2 的测绘重建/断点配置。模拟器侧只做占位与作废记录，
+    #: 不声称真实 Java 持久化字段的形状；真实平台是否如此未验证。
+    rebuild_type: str | None = None
+    break_info: dict[str, Any] | None = None
+    #: 测绘中断后「恢复航线」被永久置灰（V1.4 4.1.2）。
+    route_resume_disabled: bool = False
     temporary_task_id: str | None = None
     low_battery_return: bool = False
     configured_algorithms: list[str] = field(default_factory=list)
@@ -303,6 +323,9 @@ class FlightControlState:
             "task_type": self.task_type,
             "mapping_invalidated": self.mapping_invalidated,
             "auto_stitching": self.auto_stitching,
+            "rebuild_type": self.rebuild_type,
+            "break_info": deepcopy(self.break_info),
+            "route_resume_disabled": self.route_resume_disabled,
             "temporary_task_id": self.temporary_task_id,
             "low_battery_return": self.low_battery_return,
             "device_limits": deepcopy(self.device_limits),
@@ -337,6 +360,10 @@ class FlightControlReceipt:
     parameters: Mapping[str, Any] = field(default_factory=dict)
     adjustments: list[dict[str, Any]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    #: 测绘中断的原子操作回执（仅在该动作触发测绘中断时出现）。
+    mapping_interruption: Mapping[str, Any] | None = None
+    #: 平台位移/转向只有在回执明确 completed 时才为真。缺省 False，不能把受理当成到位。
+    arrival_verified: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -355,6 +382,9 @@ class FlightControlReceipt:
             "parameters": deepcopy(dict(self.parameters)),
             "adjustments": deepcopy(self.adjustments),
             "warnings": list(self.warnings),
+            "mapping_interruption": deepcopy(dict(self.mapping_interruption))
+                if self.mapping_interruption else None,
+            "arrival_verified": self.arrival_verified,
             "policy_version": POLICY_VERSION,
         }
 
@@ -549,7 +579,7 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
     """纯内存完整控制面；不会触碰旧的真实控制接口。"""
 
     def __init__(self, binding: RuntimeBinding, *, clock=None, ttl_sec: float = 120.0,
-                 path_checker=None):
+                 path_checker=None, algorithm_gateway=None, mapping_gateway=None):
         binding.validate()
         # Keep the original MemoryFlightSimulator API available while adding
         # the complete action/state model around the same in-memory boundary.
@@ -562,6 +592,17 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         self._by_key: dict[str, FlightControlReceipt] = {}
         self._route_revision = 0
         self._path_checker = path_checker
+        # V1.4：任务事件走统一 typed 账本，重复幂等、旧序号拒绝。
+        self._task_events = TaskEventLedger()
+        # V1.4 2.1.2：算法启停走可注入网关。模拟器默认提供完整 seam，
+        # 但每条回执都带 execution_mode=simulator，不冒充真实平台运行状态。
+        self._algorithm_gateway = algorithm_gateway or SimulatorAlgorithmLifecycleGateway()
+        self._algorithm_running: dict[str, list[str]] = {}
+        self._algorithm_stages: dict[str, dict[str, Any]] = {}
+        self._algorithm_suppressed: set[str] = set()
+        # V1.4 4.1.2：测绘中断是一个原子业务操作，确认后才执行，失败即不下发。
+        self._mapping_gateway = mapping_gateway or SimulatorMappingInterruptionGateway(
+            lambda: self.state, clock=self._clock)
 
     def runtime_context(self) -> ExecutionContext:
         """始终由当前绑定派生。
@@ -591,6 +632,10 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         self.state = FlightControlState(context_version=binding.context_version)
         self.state.execution_mode = execution_mode
         self._route_revision = 0
+        # 换绑后算法运行集合必须重来：新绑定上没有任何已确认的启动回执。
+        self._algorithm_running.clear()
+        self._algorithm_stages.clear()
+        self._algorithm_suppressed.clear()
         # 同步父类持有的执行上下文，保持两套 API 一致。
         self.context = _context_for(binding)
 
@@ -601,7 +646,8 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
                 self.state.route_status, self.state.breakpoint_index)
 
     def _route_precondition_error(self, action: FlightControlAction) -> tuple[str, str] | None:
-        if action.value in RESUME_ACTIONS and self.state.mapping_invalidated:
+        if action.value in RESUME_ACTIONS and (self.state.mapping_invalidated
+                                              or self.state.route_resume_disabled):
             return "MAPPING_NOT_RESUMABLE", "原测绘任务已失效，不可恢复航线。"
         if action == FlightControlAction.CONTINUE_FROM_BREAKPOINT:
             if not self.state.route_id or self.state.breakpoint_index is None:
@@ -674,7 +720,10 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             check_flight_policy(action.value, self.state.to_dict())
             if action == FlightControlAction.AI_ALGORITHM_SET and parameters['algorithm'] not in self.state.configured_algorithms:
                 raise PolicyError('ALGORITHM_NOT_CONFIGURED', '当前项目未配置该AI算法。')
-            warning = check_path(self._path_checker, self.binding, action.value, parameters, self.state.to_dict())
+            # 模拟器允许协作式 provider（离线 fake），但每条回执都带
+            # execution_mode=simulator，不代表真实平台或设备已执行围栏检查。
+            warning = check_path(self._path_checker, self.binding, action.value, parameters,
+                                 self.state.to_dict(), allow_cooperative=True)
         except PolicyError as error:
             return _status_receipt(FlightControlStatus.REJECTED, request, self.binding, self.state,
                                    error_code=error.code, message=str(error))
@@ -701,7 +750,7 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
 
     def _policy_context(self, action):
         state = self.state.to_dict()
-        keys = ["task_type", "mapping_invalidated", "low_battery_return"]
+        keys = ["task_type", "mapping_invalidated", "route_resume_disabled", "low_battery_return"]
         if action in ADJUSTABLE:
             keys += ["device_limits"]
         if action in {"gimbal_up", "gimbal_down"}:
@@ -710,60 +759,209 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             keys += ['configured_algorithms', 'global_algorithms', 'annotation_algorithms', 'active_annotations']
         if action in INTERRUPTING_ACTIONS:
             keys += ["route_status", "auto_stitching"]
+        if action in PATH_ACTIONS:
+            # 围栏结论依赖当前位姿与机头航向；位姿变了，旧确认卡上的“路径已检查”
+            # 就不再成立，必须重新生成。
+            keys += ["longitude", "latitude", "altitude_m", "yaw_deg"]
         return _json_hash({key: state[key] for key in keys})
 
-    def apply_task_event(self, event, *, task_batch_id, temporary_task_id=None, annotation_id=None):
-        """Simulator-only platform event seam; never exposed as an LLM tool."""
+    def apply_task_event(self, event, *, task_batch_id, temporary_task_id=None, annotation_id=None,
+                         event_id=None, sequence=None, occurred_at=None, state_version=None,
+                         annotation_version=None):
+        """Simulator-only platform event seam; never exposed as an LLM tool.
+
+        事件契约、幂等与顺序判定在 ``task_events`` 中实现，这里只负责把
+        模拟器状态与账本接上，并在归约后刷新算法激活集合。
+        """
         if task_batch_id != self.binding.task_batch_id:
             raise ValueError("task binding mismatch")
-        s = self.state
-        if event in {'annotation_entered', 'annotation_left'}:
-            if annotation_id not in s.annotation_algorithms:
-                raise ValueError('unknown annotation')
-            if event == 'annotation_entered' and annotation_id not in s.active_annotations:
-                s.active_annotations.append(annotation_id)
-            elif event == 'annotation_left' and annotation_id in s.active_annotations:
-                s.active_annotations.remove(annotation_id)
-            self._refresh_algorithms()
-        elif event == "temporary_completed":
-            if not temporary_task_id or temporary_task_id != s.temporary_task_id:
-                raise ValueError("stale temporary task event")
-            s.temporary_task_id = None
-            s.route_status = "ended" if s.mapping_invalidated else "temporary_completed"
-            if s.mapping_invalidated:
-                s.task_status = "ended"
-        elif event == "low_battery_return":
-            if s.route_id and not s.mapping_invalidated and s.route_status != "ended" and s.breakpoint_index is None:
-                s.breakpoint_index = 0
-            s.temporary_task_id = None
-            s.low_battery_return = True
-            s.task_status = "returning_home"
-        elif event == "recharged_online":
-            if not s.low_battery_return:
-                raise ValueError("no low battery return to resume")
-            s.low_battery_return = False
-            s.temporary_task_id = None
-            resumable = s.route_id and s.breakpoint_index is not None and not s.mapping_invalidated
-            s.route_status = "running" if resumable else "ended"
-            s.task_status = "route_executing" if resumable else "ended"
-        elif event == "all_tasks_ended":
-            s.breakpoint_index = None
-            s.temporary_task_id = None
-            s.route_status = s.task_status = "ended"
-            s.active_annotations.clear()
-            self._refresh_algorithms()
-        else:
-            raise ValueError("unsupported task event")
+        kind = coerce_kind(event)
+        if sequence is None:
+            sequence = self._task_events.last_sequence + 1
+        if event_id is None:
+            # 内部调用没有平台事件 ID；生成一次性 ID，重复语义由归约阶段按
+            # temporary_task_id / 状态前置条件拒绝。
+            event_id = f"sim-{uuid4().hex}"
+        typed = event_from_legacy(kind.value, event_id=event_id, sequence=sequence,
+                                  binding=self.binding, occurred_at=self._clock() if occurred_at is None else occurred_at,
+                                  temporary_task_id=temporary_task_id, annotation_id=annotation_id,
+                                  state_version=state_version, annotation_version=annotation_version)
+        outcome = task_events_apply(self.state, self._task_events, typed, self.binding)
         self._route_revision += 1
-        s.revision += 1
-        return s.to_dict()
+        if kind in {TaskEventKind.ANNOTATION_ENTERED, TaskEventKind.ANNOTATION_LEFT,
+                    TaskEventKind.ALL_TASKS_ENDED}:
+            self._refresh_algorithms(reason=kind.value, annotation_id=annotation_id)
+        return self.state.to_dict()
 
-    def _refresh_algorithms(self):
+    def task_event_ledger(self) -> dict[str, Any]:
+        """事件账本摘要；只读，供排障与验收使用。"""
+        return self._task_events.snapshot()
+
+    def _stage(self, annotation_id: str) -> dict[str, Any]:
+        return self._algorithm_stages.setdefault(annotation_id, {
+            "annotation_id": annotation_id,
+            "expected": [], "dispatched": [],
+            "start_requested": [], "started": [],
+            "stop_requested": [], "stopped": [],
+            "execution_mode": getattr(self._algorithm_gateway, "execution_mode", "unavailable"),
+            "error_code": None,
+        })
+
+    def _refresh_algorithms(self, *, reason: str = "", annotation_id: str | None = None):
+        """把「应当运行」与「平台已确认运行」分开，并只按来源关闭算法。
+
+        - 期望集合由全局算法与**仍在活动**的标注共同决定，天然去重；
+        - 离开标注时只请求关闭「该标注来源且不再被全局或其他活动标注引用」的算法；
+        - ``active_algorithms`` 只包含已确认启动的算法；平台不可用时标注算法
+          不会出现在这里，不会被冒充成运行中。
+        """
         s = self.state
-        active = set(s.global_algorithms)
+        configured = set(s.configured_algorithms)
+        suppressed = self._algorithm_suppressed
+        desired: dict[str, list[str]] = {}
         for annotation in s.active_annotations:
-            active.update(s.annotation_algorithms.get(annotation, []))
-        s.active_algorithms = sorted(active.intersection(s.configured_algorithms))
+            wanted = [item for item in s.annotation_algorithms.get(annotation, [])
+                      if item in configured and item not in suppressed]
+            desired[annotation] = wanted
+            stage = self._stage(annotation)
+            stage["expected"] = list(s.annotation_algorithms.get(annotation, []))
+        # 阶段 2：任务下发时写入的算法配置（去重、限定项目配置集合）。
+        dispatched = [item for item in s.global_algorithms if item in configured]
+        for items in desired.values():
+            for item in items:
+                if item not in dispatched:
+                    dispatched.append(item)
+        for annotation in desired:
+            self._stage(annotation)["dispatched"] = list(dispatched)
+
+        # 阶段 5/6：先关闭不再需要的来源，再启动新增来源，避免同一算法被反复开关。
+        for annotation in list(self._algorithm_running):
+            current = list(self._algorithm_running.get(annotation, ()))
+            wanted = desired.get(annotation, [])
+            candidates = [item for item in current if item not in wanted]
+            still_referenced = set(s.global_algorithms)
+            for other, items in desired.items():
+                if other != annotation:
+                    still_referenced.update(items)
+            to_stop = [item for item in candidates if item not in still_referenced]
+            if not to_stop:
+                if not wanted:
+                    self._algorithm_running.pop(annotation, None)
+                else:
+                    self._algorithm_running[annotation] = list(wanted)
+                continue
+            stage = self._stage(annotation)
+            stage["stop_requested"] = list(to_stop)
+            try:
+                receipt = self._algorithm_gateway.stop(
+                    self.binding, annotation, to_stop,
+                    request_id=f"stop:{annotation}:{reason or 'sync'}")
+            except Exception:
+                receipt = AlgorithmLifecycleReceipt(
+                    stage=AlgorithmStage.STOP_REQUESTED, annotation_id=annotation,
+                    algorithms=tuple(to_stop),
+                    execution_mode=getattr(self._algorithm_gateway, "execution_mode", "unavailable"),
+                    confirmed=False, error_code=ALGORITHM_LIFECYCLE_UNAVAILABLE,
+                    message="算法停止请求失败。")
+            stage["execution_mode"] = receipt.execution_mode
+            stage["error_code"] = receipt.error_code
+            if receipt.confirmed:
+                stage["stopped"] = list(to_stop)
+                remaining = [item for item in current if item not in to_stop]
+                if remaining:
+                    self._algorithm_running[annotation] = remaining
+                else:
+                    self._algorithm_running.pop(annotation, None)
+            else:
+                # 停止未被确认：仍按「可能在运行」保留，绝不假装已关闭。
+                self._algorithm_running[annotation] = current
+
+        # 阶段 3/4：启动新增来源。
+        for annotation, wanted in desired.items():
+            current = list(self._algorithm_running.get(annotation, ()))
+            to_start = [item for item in wanted if item not in current]
+            if not to_start:
+                continue
+            stage = self._stage(annotation)
+            stage["start_requested"] = list(to_start)
+            try:
+                receipt = self._algorithm_gateway.start(
+                    self.binding, annotation, to_start,
+                    request_id=f"start:{annotation}:{reason or 'sync'}")
+            except Exception:
+                receipt = AlgorithmLifecycleReceipt(
+                    stage=AlgorithmStage.START_REQUESTED, annotation_id=annotation,
+                    algorithms=tuple(to_start),
+                    execution_mode=getattr(self._algorithm_gateway, "execution_mode", "unavailable"),
+                    confirmed=False, error_code=ALGORITHM_LIFECYCLE_UNAVAILABLE,
+                    message="算法启动请求失败。")
+            stage["execution_mode"] = receipt.execution_mode
+            stage["error_code"] = receipt.error_code
+            if receipt.confirmed:
+                stage["started"] = list(dict.fromkeys(current + to_start))
+                self._algorithm_running[annotation] = list(dict.fromkeys(current + to_start))
+
+        running: list[str] = [item for item in s.global_algorithms if item in configured]
+        for items in self._algorithm_running.values():
+            for item in items:
+                if item in configured and item not in running:
+                    running.append(item)
+        s.active_algorithms = [item for item in running if item not in suppressed]
+
+    def algorithm_lifecycle(self) -> dict[str, Any]:
+        """只读生命周期审计：六阶段分开记录，不把配置或请求当成运行中。"""
+        return {
+            "contract_version": "lingxi-ai-lifecycle/v1",
+            "execution_mode": getattr(self._algorithm_gateway, "execution_mode", "unavailable"),
+            "configured_algorithms": list(self.state.configured_algorithms),
+            "global_algorithms": list(self.state.global_algorithms),
+            "suppressed_algorithms": sorted(self._algorithm_suppressed),
+            "active_annotations": list(self.state.active_annotations),
+            "active_algorithms": list(self.state.active_algorithms),
+            "annotations": {key: {stage: list(value) if isinstance(value, list) else value
+                                  for stage, value in record.items()}
+                            for key, record in sorted(self._algorithm_stages.items())},
+        }
+
+    def select_algorithms(self, requested, *, mode=None):
+        """自然语言 AI 选择：冲突必须追问，多算法整批生效，未知算法整批拒绝。"""
+        plan = plan_selection(requested, configured=self.state.configured_algorithms,
+                              global_algorithms=self.state.global_algorithms,
+                              active_annotations=self.state.active_annotations,
+                              annotation_algorithms=self.state.annotation_algorithms,
+                              mode=mode)
+        if plan.requires_clarification:
+            return plan
+        globals_now, suppressed = apply_plan(plan, self.state)
+        self._algorithm_suppressed = set(suppressed)
+        self.state.revision += 1
+        self._refresh_algorithms(reason="selection")
+        return plan
+
+    def mapping_interruption_audit(self) -> dict[str, Any]:
+        snapshot = getattr(self._mapping_gateway, "snapshot", None)
+        return snapshot() if callable(snapshot) else {
+            "execution_mode": getattr(self._mapping_gateway, "execution_mode", "unavailable")}
+
+    def resolve_temporary_outcome(self, choice=None):
+        """临时任务完成后由用户显式选择；不提供默认分支。
+
+        ``resume_main`` 只恢复仍有效的巡检主线断点，``end_all`` 清空断点；
+        两者都必须由用户明说，系统不猜。
+        """
+        if choice is None:
+            return post_temporary_decision(self.state)
+        selected = validate_post_temporary_choice(self.state, choice)
+        if selected == "end_all":
+            self.apply_task_event("all_tasks_ended", task_batch_id=self.binding.task_batch_id)
+            return {"required": False, "choice": selected,
+                    "route_status": self.state.route_status, "resumable": False}
+        self.state.route_status = "running"
+        self.state.task_status = "route_executing"
+        self.state.revision += 1
+        self._route_revision += 1
+        return {"required": False, "choice": selected,
+                "route_status": self.state.route_status, "resumable": True}
 
     def confirm(self, confirmation_id: str, *, command_id: str, idempotency_key: str,
                 confirmation_binding: str, context_version: int) -> FlightControlReceipt:
@@ -813,7 +1011,10 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             check_flight_policy(action.value, self.state.to_dict())
             if pending.policy_context != self._policy_context(action):
                 raise PolicyError("POLICY_STATE_CHANGED", "设备参数或任务状态已变化，请重新生成确认卡。")
-            warning = check_path(self._path_checker, self.binding, action.value, request.parameters, self.state.to_dict())
+            # 同 preview：模拟器允许协作式 provider，回执 execution_mode=simulator。
+            warning = check_path(self._path_checker, self.binding, action.value,
+                                 request.parameters, self.state.to_dict(),
+                                 allow_cooperative=True)
         except PolicyError as policy_error:
             self._pending.pop(confirmation_id, None)
             return _status_receipt(FlightControlStatus.REJECTED, request, self.binding, self.state,
@@ -823,12 +1024,30 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             self._pending.pop(confirmation_id, None)
             return _status_receipt(FlightControlStatus.REJECTED, request, self.binding, self.state,
                                    error_code=error[0], message=error[1])
+        # V1.4 4.1.2：测绘中断必须在同一个原子操作里完成，失败即不下发飞控动作。
+        interruption = None
+        if interruption_required(action.value, self.state):
+            interruption = self._mapping_gateway.interrupt(MappingInterruptionRequest(
+                command_id=request.command_id, action=action.value,
+                task_batch_id=self.binding.task_batch_id, confirmed=True,
+                route_id=self.state.route_id, task_type=self.state.task_type,
+                idempotency_key=request.idempotency_key))
+            # 只有「原子完成 + 平台明确确认」才算测绘已作废；模拟器不落平台副作用。
+            if not interruption.effective:
+                self._pending.pop(confirmation_id, None)
+                return _status_receipt(
+                    FlightControlStatus.REJECTED, request, self.binding, self.state,
+                    confirmation_id=confirmation_id,
+                    confirmation_binding=pending.confirmation_binding,
+                    error_code=interruption.error_code or MAPPING_INTERRUPTION_UNAVAILABLE,
+                    message=interruption.message or MAPPING_MESSAGE)
         result = self._apply(request)
         result = _status_receipt(FlightControlStatus.ACCEPTED, request, self.binding, self.state,
                                  confirmation_id=confirmation_id, confirmation_binding=pending.confirmation_binding,
                                  message="模拟动作已执行")
         result = replace(result, adjustments=pending.adjustments,
-                         warnings=list(dict.fromkeys(pending.warnings + ([warning] if warning else []))))
+                         warnings=list(dict.fromkeys(pending.warnings + ([warning] if warning else []))),
+                         mapping_interruption=(interruption.to_dict() if interruption else None))
         pending.status = FlightControlStatus.ACCEPTED
         self._pending.pop(confirmation_id, None)
         self._by_key[idempotency_key] = result
@@ -865,11 +1084,10 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         p = request.parameters
         s = self.state
         if mapping_interruption(action.value, s.to_dict()):
-            s.mapping_invalidated = True
-            s.auto_stitching = False
-            s.breakpoint_index = None
-            if action.value in MICRO_ACTIONS:
-                s.route_status = "interrupted"
+            # 兜底：正常情况下原子网关已在 confirm 之前完成这六步；这里保证
+            # 自定义网关没有落地时状态仍然一致，且顺序与契约相同。
+            from .mapping_interruption import apply_atomic_steps
+            apply_atomic_steps(s, action=action.value, audit_id="sim-fallback")
         if action.value in TEMPORARY_ACTIONS:
             if not s.mapping_invalidated and s.route_id and s.breakpoint_index is None:
                 s.breakpoint_index = 0
@@ -950,8 +1168,10 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             s.longitude, s.latitude, s.altitude_m = float(p["longitude"]), float(p["latitude"]), float(p["altitude_m"])
             s.route_status = "point_flight"
         elif action == FlightControlAction.POINT_ORBIT:
+            # 落在半径圆的正北点，和围栏折线的 0 度起点一致。绝不能落到环绕中心。
+            s.longitude, s.latitude = offset_target(
+                float(p["longitude"]), float(p["latitude"]), 0.0, float(p["radius_m"]))
             s.route_status = "point_orbit"
-            s.longitude, s.latitude = float(p["longitude"]), float(p["latitude"])
         elif action == FlightControlAction.UPLOAD_ROUTE:
             s.route_id = str(p["route_id"])
             s.route_status = "uploaded"
@@ -1007,7 +1227,9 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             else:
                 selected.discard(p['algorithm'])
             s.global_algorithms = sorted(selected)
-            self._refresh_algorithms()
+            # 用户显式打开为全局后，本会话的「仅替换」抑制不再成立。
+            self._algorithm_suppressed -= selected
+            self._refresh_algorithms(reason="global_toggle")
         elif action == FlightControlAction.TASK_END_CURRENT:
             if s.temporary_task_id:
                 s.temporary_task_id = None

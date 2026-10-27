@@ -1,0 +1,123 @@
+{
+  "schema": "lingxi-v14-fence-bounded-evidence/v2",
+  "date": "2026-10-22",
+  "repo": "lingxi-flight-control-agent",
+  "branch": "test",
+  "head": "d6d284d04b38946e92ca5a10df244a2db487b3b0",
+  "issue": "V1.4 acceptance P1 follow-up: deadline_sec on a plain sync callable is only a cooperative promise; it must not be presented as a hard timeout",
+  "denominator": 1085,
+  "denominator_note": "single denominator for all V1.4 docs and evidence; includes test_offline_guard, which re-runs 1084 tests internally",
+  "tests_run": 1085,
+  "tests_result": "OK",
+  "duration_sec": 14.041,
+  "command": "bash tools/ci/offline_tests.sh",
+  "diff_check": "git diff --check -> no output, exit 0",
+  "compileall": "python3 -m compileall -q src tests -> no output, exit 0",
+  "targeted": {
+    "command": "PYTHONPATH=src:tests python3 -m unittest -v test_path_fence test_mapping_interruption",
+    "tests_run": 119,
+    "result": "OK",
+    "duration_sec": 3.264,
+    "test_path_fence": 73,
+    "test_mapping_interruption": 46
+  },
+  "offline": true,
+  "network": "none",
+  "provider_contract": {
+    "hard_bounded": {
+      "accepted": [
+        "check_path(binding, action, parameters, state, *, timeout_sec=...) or deadline=...",
+        "callable marked hard_bounded = True that declares deadline_sec and forwards it to a hard-timeout transport (KtdPathChecker)"
+      ],
+      "guarantee": "the underlying transport (socket timeout) really stops waiting",
+      "allowed_callers": [
+        "platform executor",
+        "simulator"
+      ]
+    },
+    "cooperative": {
+      "accepted": [
+        "plain 4-argument callable declaring deadline_sec (finite, 0.1-10 seconds)"
+      ],
+      "guarantee": "provider promise only; this repository cannot stop a violating call",
+      "allowed_callers": [
+        "simulator and offline tests only (allow_cooperative=True)"
+      ],
+      "platform_default": "not called; degrades to unavailable/PATH_CHECKER_UNAVAILABLE",
+      "platform_assembly": "rejected with ValueError containing PATH_CHECKER_UNAVAILABLE"
+    },
+    "unbounded": {
+      "examples": [
+        "None",
+        "signature mismatch",
+        "missing or invalid deadline_sec",
+        "provider explicitly declaring hard_bounded = False"
+      ],
+      "platform_default": "not called; degrades to unavailable",
+      "platform_assembly": "allowed, but preview/confirm never call it"
+    },
+    "late_conclusion_rule": "clear and blocked beyond the declared budget become timeout/PATH_CHECK_DEADLINE_EXCEEDED; this means the response is not trustworthy, NOT that the call was stopped; local geometry 'invalid' is never reclassified",
+    "background_work": "none (no threads, no processes, no extra listening sockets, no asyncio cancellation)"
+  },
+  "timeout_really_stops_waiting": {
+    "platform_path": "yes, via socket timeout min(transport timeout, deadline_sec) passed down to opener.open",
+    "cooperative_provider": "no; the process does not interrupt a provider that violates its declared budget",
+    "simulator_fake": "no; a cooperative fake only exercises the state machine",
+    "dns": "not covered by socket timeout (known residual risk)"
+  },
+  "platform_assembly": {
+    "KtdPlatformExecutor": "rejects cooperative-only provider at construction; None/unbounded degrade at preview/confirm",
+    "ZhuoyiPlatformExecutor": "same rule",
+    "simulator": "accepts cooperative fake; every receipt keeps execution_mode=simulator"
+  },
+  "modified_modules": {
+    "src/lingxi_flight_control/flight_policy.py": "1fc5eef993394ee68ce701e2095987e53a0ebe646c6579b9598a02c20b95f8b7",
+    "src/lingxi_flight_control/ktd_path.py": "8fd6cd7c77e0c8c322d5f3b80b339bb8c9ce608ea276972547372b93072d709d",
+    "src/lingxi_flight_control/ktd_platform.py": "f2d365cb450911daec0d0841eaf162d15ef0e51b3f0c9dd68b6bf2a54387e297",
+    "src/lingxi_flight_control/zhuoyi_platform.py": "5ec32ded0c349ef161db27bad14be7b8a0ebcdee391339f749695b0bdb703f0e",
+    "src/lingxi_flight_control/full_control.py": "a66a8bbd2303fd8c23b07a98ced9f2dc809d5a4022759b019cf83466c546a251"
+  },
+  "new_files": {
+    "tests/fence_support.py": "e152be7acaf6509da75faed45a93267e17a5265c4c2b68343a95b4a9dc4b482d",
+    "docs/ACCEPTANCE_FLIGHT-V14-FENCE-BOUNDED.md": null
+  },
+  "modified_tests": {
+    "tests/test_path_fence.py": "b9bcf03f5ddae578fa19632070c8f5545116fa8999f3930845dff2853b03a493",
+    "tests/test_product_v13.py": "f4c13699f0099a9b0744efed1a8dba6c375f01f66d976d26c6d8f37d835ad695 (platform executors now use HardBoundedFenceProvider)",
+    "tests/test_ktd_path.py": "unchanged; direct KtdPathChecker contract tests",
+    "tests/test_product_v13_actions.py": "simulator-only cooperative fake (allow_cooperative=True)",
+    "tests/test_mapping_interruption.py": "simulator-only cooperative fake (allow_cooperative=True)",
+    "tests/test_ai_lifecycle.py": "simulator-only cooperative fake (allow_cooperative=True)"
+  },
+  "callsites_checked": [
+    "full_control.py:722 MemoryFlightControlSimulator.preview (allow_cooperative=True)",
+    "full_control.py:1012 MemoryFlightControlSimulator.confirm (allow_cooperative=True)",
+    "ktd_platform.py:1869 KtdPlatformExecutor.preview (default False)",
+    "ktd_platform.py:1955 KtdPlatformExecutor.confirm (default False)",
+    "zhuoyi_platform.py:228 ZhuoyiPlatformExecutor._policy (default False)",
+    "platform_runtime.py:161 runtime assembly (KtdPathChecker + KtdHttpTransport, hard_bounded=True)",
+    "tools/ci/cross_repo_isolation.py:339 loopback fence check"
+  ],
+  "verification_layers": {
+    "unit": ["flight_policy contract classification", "KtdPathChecker budget forwarding", "path geometry", "ResourceHygieneTests"],
+    "simulator": ["cooperative fake allowed with execution_mode=simulator"],
+    "fake_transport": ["KtdPlatformExecutor / ZhuoyiPlatformExecutor with injected opener"],
+    "loopback_isolation": ["tools/ci/cross_repo_isolation.py S9 fence check over 127.0.0.1"],
+    "real_platform": "not verified",
+    "real_device": "not verified"
+  },
+  "remaining_limits": [
+    "real GIS / electronic-fence service never contacted; clear/blocked only come from fake providers",
+    "real-network socket timeout not exercised (budget forwarding and exception mapping only)",
+    "DNS resolution is not covered by socket timeout",
+    "a contract-violating provider is not forcibly interrupted (no threads/processes/asyncio by design)",
+    "clear never means the real path is safe and never means the device avoided an obstacle"
+  ],
+  "not_verified": [
+    "no real GIS or electronic-fence service was contacted",
+    "no real platform write or device execution",
+    "no real-device obstacle avoidance or path safety verification",
+    "no real-network socket timeout was exercised; budget forwarding and exception mapping were verified with an injected opener",
+    "no forced interruption of a contract-violating provider (deliberately not implemented)"
+  ]
+}

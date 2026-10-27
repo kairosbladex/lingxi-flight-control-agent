@@ -8,6 +8,7 @@
 import tempfile
 import unittest
 
+from lingxi_flight_control.geometry import offset_target
 from lingxi_flight_control.full_control import (
     ACTION_SPECS, FlightControlAction, FlightControlActionRequest, FlightControlStatus,
     MemoryFlightControlSimulator, RuntimeBinding,
@@ -114,6 +115,11 @@ class PlatformHoverTests(unittest.TestCase):
             enabled=True, clock=lambda: self.now,
         )
 
+    def place_on_orbit(self, longitude, latitude, radius_m, bearing_deg=0.0):
+        aircraft_longitude, aircraft_latitude = offset_target(longitude, latitude, bearing_deg, radius_m)
+        self.state = {**self.state, "longitude": aircraft_longitude, "latitude": aircraft_latitude}
+        self.snapshot = self.build_snapshot()
+
     def dispatch(self, action, parameters, executor=None):
         executor = executor or self.executor()
         self.calls = getattr(self, "calls", 0) + 1
@@ -152,6 +158,7 @@ class PlatformHoverTests(unittest.TestCase):
         self.assertEqual(command.body["type"], 120)
 
     def test_hover_after_orbit_exits_poi_mode(self):
+        self.place_on_orbit(113.0, 23.0, 30)
         executor, _, _ = self.dispatch(
             "point_orbit", {"longitude": 113.0, "latitude": 23.0, "radius_m": 30})
         _, receipt, _ = self.dispatch("hover", {}, executor)
@@ -181,15 +188,57 @@ class PlatformHoverTests(unittest.TestCase):
         self.assertEqual(self.transport.calls, [])
 
     def test_point_flight_uses_fly_control_with_fixed_speed(self):
+        # 当前绝对高 100。同高指点的单点终点和已检查水平直线一致，可以下发。
         _, receipt, _ = self.dispatch(
-            "point_flight", {"longitude": 113.1, "latitude": 23.1, "altitude_m": 120})
+            "point_flight", {"longitude": 113.1, "latitude": 23.1, "altitude_m": 100})
         self.assertEqual(receipt.status, "submitted")
         command = self.transport.calls[-1]
         self.assertEqual(command.path, "/screen/uav/fly/control")
         self.assertEqual(command.body["type"], 119)
-        self.assertEqual(command.body["height"], 120.0)
+        self.assertEqual(command.body["height"], 100.0)
         self.assertEqual(command.body["speed"], 5)
         self.assertEqual(command.body["longitude"], 113.1)
+
+    def test_point_flight_refuses_a_diagonal_the_replay_cannot_prove(self):
+        # 目标绝对高 120、当前 100，同时改了水平位置。不能把围栏直线当成实际轨迹。
+        card = self.executor().preview(FlightControlActionRequest(
+            "cmd-1", "key-1", "point_flight",
+            {"longitude": 113.1, "latitude": 23.1, "altitude_m": 120}, 1))
+        self.assertEqual(card.error_code, "FLYTO_TRAJECTORY_UNVERIFIED")
+        self.assertIn("未下发", card.message)
+        self.assertEqual(self.transport.calls, [])
+
+    def test_vertical_point_flight_keeps_the_single_altitude_change(self):
+        _, receipt, _ = self.dispatch(
+            "point_flight", {"longitude": 113.0, "latitude": 23.0, "altitude_m": 120})
+        self.assertEqual(receipt.status, "submitted")
+        self.assertEqual(self.transport.calls[-1].body["height"], 120.0)
+        self.assertEqual(self.transport.calls[-1].body["longitude"], 113.0)
+
+    def test_point_flight_refuses_the_unchecked_climb_below_20_metres(self):
+        self.snapshot = self.build_snapshot(state={**self.state, "height_m": 15})
+        card = self.executor().preview(FlightControlActionRequest(
+            "cmd-1", "key-1", "point_flight",
+            {"longitude": 113.1, "latitude": 23.1, "altitude_m": 120}, 1))
+        self.assertEqual(card.error_code, "DJI_FLYTO_IMPLICIT_CLIMB")
+        self.assertIn("未下发", card.message)
+        self.assertEqual(self.transport.calls, [])
+
+    def test_point_flight_requires_relative_height_before_fly_to(self):
+        state = {key: value for key, value in self.state.items() if key != "height_m"}
+        self.snapshot = self.build_snapshot(state=state)
+        card = self.executor().preview(FlightControlActionRequest(
+            "cmd-1", "key-1", "point_flight",
+            {"longitude": 113.1, "latitude": 23.1, "altitude_m": 120}, 1))
+        self.assertEqual(card.error_code, "RELATIVE_HEIGHT_UNAVAILABLE")
+        self.assertEqual(self.transport.calls, [])
+
+    def test_point_flight_refuses_a_target_below_the_unverified_relative_floor(self):
+        card = self.executor().preview(FlightControlActionRequest(
+            "cmd-1", "key-1", "point_flight",
+            {"longitude": 113.1, "latitude": 23.1, "altitude_m": 60}, 1))
+        self.assertEqual(card.error_code, "DJI_LOW_TARGET_UNVERIFIED")
+        self.assertEqual(self.transport.calls, [])
 
     def test_point_flight_rejects_altitude_outside_platform_range(self):
         card = self.executor().preview(FlightControlActionRequest(
@@ -197,7 +246,8 @@ class PlatformHoverTests(unittest.TestCase):
             {"longitude": 113.1, "latitude": 23.1, "altitude_m": 1}, 1))
         self.assertEqual(card.error_code, "TARGET_ALTITUDE_OUT_OF_RANGE")
 
-    def test_point_orbit_enters_poi_at_current_altitude_and_warns_about_radius(self):
+    def test_point_orbit_enters_poi_only_when_already_at_the_radius(self):
+        self.place_on_orbit(113.0, 23.0, 30)
         _, receipt, card = self.dispatch(
             "point_orbit", {"longitude": 113.0, "latitude": 23.0, "radius_m": 30})
         self.assertEqual(receipt.status, "submitted")
@@ -206,8 +256,16 @@ class PlatformHoverTests(unittest.TestCase):
         self.assertEqual(command.body["type"], 121)
         self.assertEqual(command.body["height"], 100.0)
         self.assertEqual(command.body["speed"], -5)
-        self.assertTrue(any("radius_m" in warning for warning in card.warnings))
+        self.assertTrue(any("一致" in warning for warning in card.warnings))
         self.assertNotIn("radius", command.body)
+
+    def test_point_orbit_rejects_a_radius_the_platform_cannot_command(self):
+        card = self.executor().preview(FlightControlActionRequest(
+            "cmd-1", "key-1", "point_orbit",
+            {"longitude": 113.0, "latitude": 23.0, "radius_m": 30}, 1))
+        self.assertEqual(card.error_code, "ORBIT_RADIUS_NOT_COMMANDED")
+        self.assertIn("未下发", card.message)
+        self.assertEqual(self.transport.calls, [])
 
 
 if __name__ == "__main__":

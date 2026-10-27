@@ -29,14 +29,17 @@ from .full_control import (
     _CONTROL_FREE_ACTIONS,
 )
 from .models import ExecutionContext
-from .flight_policy import (CONTROL_MESSAGE, MAPPING_MESSAGE, PolicyError,
+from .ktd_platform import DJI_FLYTO_MESSAGES, KtdPlatformError, guard_dji_flyto
+from .flight_policy import (CONTROL_MESSAGE, MAPPING_MESSAGE, PATH_ACTIONS, PolicyError,
                             check_flight_policy, check_path, mapping_interruption,
-                            normalize_parameters)
+                            normalize_parameters, platform_path_provider_rejection)
 
 STATE_SCHEMA = "lingxi-agent-flight-state/v1"
 COMMAND_SCHEMA = "lingxi-agent-flight-control/v1"
 _TERMINAL = frozenset({"failed", "unknown", "expired", "conflict", "cancelled", "rejected"})
 _SUCCESS = frozenset({"accepted", "completed"})
+#: 这些动作会改变下一条指令的起点。平台 status=accepted 只是受理，不是到位。
+_ARRIVAL_ACTIONS = PATH_ACTIONS | {"turn_left", "turn_right"}
 
 
 class _NoRedirect(HTTPRedirectHandler):
@@ -90,6 +93,10 @@ class ZhuoyiPlatformExecutor:
             raise ValueError("task_id must be null or a non-empty string")
         if timeout <= 0 or receipt_timeout <= 0 or poll_interval <= 0 or preview_ttl_sec <= 0:
             raise ValueError("timeouts must be positive")
+        # 与 KtdPlatformExecutor 一致：协作式 provider 不得装配到平台执行路径。
+        rejection = platform_path_provider_rejection(path_checker)
+        if rejection is not None:
+            raise ValueError(rejection)
         self.binding = binding
         self._base_url = base_url.rstrip("/")
         self._gateway_token = gateway_token
@@ -136,7 +143,7 @@ class ZhuoyiPlatformExecutor:
                     "error_code": error or "AUTHORITATIVE_STATE_UNAVAILABLE"}
         owner = state.get("control_owner_employee_id")
         return {
-            **{key: state[key] for key in ('route_status', 'task_type', 'mapping_invalidated',
+            **{key: state[key] for key in ('route_status', 'route_id', 'task_type', 'mapping_invalidated',
                 'auto_stitching', 'low_battery_return', 'device_limits', 'gimbal_pitch_deg',
                 'breakpoint_index', 'temporary_task_id') if key in state},
             "execution_mode": "platform",
@@ -221,6 +228,12 @@ class ZhuoyiPlatformExecutor:
         if mapping_interruption(request.action, state):
             raise PolicyError('MAPPING_INTERRUPTION_UNAVAILABLE',
                               MAPPING_MESSAGE + '平台尚未提供作废测绘任务的原子契约，本次不下发。')
+        action = request.action.value if isinstance(request.action, FlightControlAction) else str(request.action)
+        try:
+            guard_dji_flyto(action, request.parameters, state)
+        except KtdPlatformError as error:
+            code = str(error)
+            raise PolicyError(code, DJI_FLYTO_MESSAGES.get(code, "本次未下发。")) from None
         return check_path(self._path_checker, self.binding, request.action, request.parameters, state)
 
     def confirm(self, confirmation_id: str, *, command_id: str, idempotency_key: str,
@@ -281,21 +294,31 @@ class ZhuoyiPlatformExecutor:
                                  confirmation_binding=pending["confirmation_binding"],
                                  error_code=code, message="平台拒绝了本次命令")
         receipt = payload
-        if not self._terminal(receipt):
-            receipt = self._poll(request.command_id, receipt)
+        action_name = (request.action.value if isinstance(request.action, FlightControlAction)
+                       else str(request.action))
+        if not self._settled(receipt, action_name):
+            receipt = self._poll(request.command_id, receipt, action_name)
         java_status = str(receipt.get("status"))
-        mapped = self._map_status(java_status)
-        if mapped is FlightControlStatus.REJECTED and java_status == "submitted":
-            return self._receipt(FlightControlStatus.REJECTED, request, self.read_state(),
+        mapped = self._map_status(java_status, action_name)
+        if mapped is FlightControlStatus.UNKNOWN and java_status in {"submitted", "accepted", "in_progress"}:
+            # 平台接口受理不等于设备完成；没有终态就不能给出 accepted。
+            return self._receipt(FlightControlStatus.UNKNOWN, request, self.read_state(),
                                  confirmation_id=confirmation_id,
                                  confirmation_binding=pending["confirmation_binding"],
                                  error_code="RECEIPT_PENDING",
                                  message="平台已受理但未取得终态，禁止重复确认")
+        if mapped is FlightControlStatus.UNKNOWN:
+            return self._receipt(FlightControlStatus.UNKNOWN, request, self.read_state(),
+                                 confirmation_id=confirmation_id,
+                                 confirmation_binding=pending["confirmation_binding"],
+                                 error_code="PLATFORM_OUTCOME_UNKNOWN",
+                                 message="平台结果未知，禁止自动重试；需人工核对回执")
         result = self._receipt(mapped, request, self.read_state(),
                              confirmation_id=confirmation_id,
                              confirmation_binding=pending["confirmation_binding"],
                              error_code=receipt.get("error_code") or (None if mapped in {FlightControlStatus.ACCEPTED, FlightControlStatus.DUPLICATE} else java_status),
-                             message=f"平台回执：{java_status}；设备效果未验证")
+                             message=f"平台回执：{java_status}；设备效果未验证",
+                             arrival_verified=False)
         return replace(result, parameters=dict(request.parameters), adjustments=pending['adjustments'],
                        warnings=list(dict.fromkeys(pending['warnings'] + ([warning] if warning else []))))
 
@@ -328,10 +351,10 @@ class ZhuoyiPlatformExecutor:
         self._last_state = payload
         return payload, None
 
-    def _poll(self, command_id: str, receipt: Mapping[str, Any]) -> Mapping[str, Any]:
+    def _poll(self, command_id: str, receipt: Mapping[str, Any], action: str) -> Mapping[str, Any]:
         deadline = self._clock() + self._receipt_timeout
         while self._clock() < deadline:
-            if receipt.get("continuation_allowed") or str(receipt.get("status")) in _TERMINAL:
+            if self._settled(receipt, action):
                 return receipt
             time.sleep(self._poll_interval)
             status, payload = self._call(
@@ -342,23 +365,36 @@ class ZhuoyiPlatformExecutor:
         return receipt
 
     @staticmethod
-    def _terminal(receipt: Mapping[str, Any]) -> bool:
-        return bool(receipt.get("continuation_allowed")) or str(receipt.get("status")) in _TERMINAL
+    def _settled(receipt: Mapping[str, Any], action: str) -> bool:
+        """位移类必须等到 completed。continuation_allowed 只说明平台允许查下一条，不是飞机已到。"""
+        status = str(receipt.get("status"))
+        if status in _TERMINAL:
+            return True
+        if action in _ARRIVAL_ACTIONS:
+            return status == "completed"
+        return bool(receipt.get("continuation_allowed")) or status in _SUCCESS
 
     @staticmethod
-    def _map_status(status: str) -> FlightControlStatus:
-        if status in _SUCCESS:
+    def _map_status(status: str, action: str) -> FlightControlStatus:
+        """平台线格式 → Agent 状态；unknown/expired 不映射成 rejected。"""
+        if action in _ARRIVAL_ACTIONS:
+            if status == "completed":
+                return FlightControlStatus.ACCEPTED
+        elif status in _SUCCESS:
             return FlightControlStatus.ACCEPTED
         if status == "cancelled":
             return FlightControlStatus.CANCELLED
         if status == "expired":
             return FlightControlStatus.EXPIRED
+        if status in {"unknown", "conflict", "submitted", "accepted", "in_progress", "dispatching"}:
+            return FlightControlStatus.UNKNOWN
         return FlightControlStatus.REJECTED
 
     def _receipt(self, status: FlightControlStatus, request: FlightControlActionRequest,
                  state: Mapping[str, Any], *, confirmation_id: str | None = None,
                  confirmation_binding: str | None = None, error_code: str | None = None,
-                 message: str = "", expires_at: str | None = None) -> FlightControlReceipt:
+                 message: str = "", expires_at: str | None = None,
+                 arrival_verified: bool = False) -> FlightControlReceipt:
         action = request.action.value if isinstance(request.action, FlightControlAction) else str(request.action)
         return FlightControlReceipt(
             status=status,
@@ -374,6 +410,7 @@ class ZhuoyiPlatformExecutor:
             message=message,
             expires_at=expires_at,
             parameters=dict(request.parameters),
+            arrival_verified=arrival_verified,
         )
 
     def _binding_hash(self, request: FlightControlActionRequest, snapshot_version: str) -> str:
