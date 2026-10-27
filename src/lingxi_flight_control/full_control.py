@@ -966,7 +966,8 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         ``resume_main`` 只恢复仍有效的巡检主线断点，``end_all`` 清空断点；
         两者都必须由用户明说，系统不猜。
 
-        V1.4 4.1.3：这里是**生产计时入口**。时钟来自构造时注入的确定性 ``clock``，
+        V1.4 4.1.3：这是**模拟器/测试入口**的计时兜底（HTTP / agent 生产路径尚未
+        接线，不得据此声称生产已可达）。时钟来自构造时注入的确定性 ``clock``，
         不读真实时间；deadline 已过时先按 4.2 低电量规则处理（保留主线断点 +
         返航），事后再来的选择一律拒绝（``TEMPORARY_DECISION_TIMED_OUT``）。
         """

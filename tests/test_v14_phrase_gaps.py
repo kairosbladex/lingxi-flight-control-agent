@@ -8,6 +8,11 @@
 
 规范未定义处（"距离较远"阈值、超时时长、已挂载能力清单字段）都在被断言处显式
 标注为**假设**，不得被读成规范数值。
+
+**入口边界（不要误读成生产可达）**：4.1.3 超时用例经由
+``MemoryFlightControlSimulator.resolve_temporary_outcome`` 触发，它是**模拟器/测试
+入口**；HTTP / agent 生产路径尚未接线，因此这些用例只证明状态机与模拟器入口行为，
+不代表真实平台链路已经会自动超时返航。
 """
 from __future__ import annotations
 
@@ -501,7 +506,11 @@ class CockpitPhraseTriggerTests(unittest.TestCase):
 
 
 class TemporaryDecisionTimeoutTests(unittest.TestCase):
-    """4.1.3 超时兜底：60 秒是显式假设；超时后按 4.2 低电量规则处理。"""
+    """4.1.3 超时兜底：60 秒是显式假设；超时后按 4.2 低电量规则处理。
+
+    入口边界：本节经 ``MemoryFlightControlSimulator.resolve_temporary_outcome``
+    （模拟器/测试入口）触发；HTTP / agent 生产路径尚未接线，用例不代表生产已可达。
+    """
 
     def setUp(self):
         self.clock = [1000.0]
@@ -690,6 +699,68 @@ class InFlightUnsupportedBoundaryTests(unittest.TestCase):
     def test_table6_mixed_sample_is_still_rejected_verbatim(self):
         self.assertEqual(_in_flight_unsupported('去A塔，再沿着B河道巡视'),
                          ('MIXED_TARGET_UNSUPPORTED', DOC_TABLE6_MIXED))
+
+    def test_geometry_route_is_rejected_with_same_spec_phrase(self):
+        # 规范 1.1/3.2.1 注记：网格航线与**几何体航线**都直接拒绝。
+        for text in ('用几何体航线飞', '几何体航测', '走几何体航线'):
+            self.assertEqual(_in_flight_unsupported(text),
+                             ('UNSUPPORTED_IN_FLIGHT_TASK', DOC_TABLE6_COMPLEX), text)
+
+    def test_plain_geometry_word_is_not_rejected(self):
+        # 裸词「几何体」不是航线请求（例如检查建筑几何体是否变形），不得误拒。
+        self.assertIsNone(_in_flight_unsupported('检查建筑几何体是否变形'))
+        self.assertIsNone(_in_flight_unsupported('这个几何体标得很准'))
+
+    def test_negated_geometry_route_is_not_rejected(self):
+        self.assertIsNone(_in_flight_unsupported('不要用几何体航线'))
+
+    def test_cockpit_rejects_geometry_route_with_spec_phrase(self):
+        clock = [1000.0]
+        binding = RuntimeBinding('actor-9', 'project-1', 'hangar-1', 'drone-1', 'batch-1', 1)
+        simulator = MemoryFlightControlSimulator(binding, clock=lambda: clock[0])
+        simulator.state.control_owner = 'actor-9'
+        service = CockpitService(binding, simulator, lambda: None, clock=lambda: clock[0])
+        response = service.handle(
+            'POST', '/api/flight-control/agent/messages',
+            json.dumps({'text': '用几何体航线飞', 'request_id': 'geometry-route-1',
+                        'context_version': 1}),
+            {'X-Agent-Session': 'geometry-tab'})
+        result = response.payload
+        self.assertEqual(result['status'], 'rejected', result)
+        self.assertEqual(result['error_code'], 'UNSUPPORTED_IN_FLIGHT_TASK')
+        self.assertEqual(result['message'], DOC_TABLE6_COMPLEX)
+        self.assertNotIn('card', result)
+
+    def test_cockpit_does_not_reject_plain_geometry_word(self):
+        clock = [1000.0]
+        binding = RuntimeBinding('actor-9', 'project-1', 'hangar-1', 'drone-1', 'batch-1', 1)
+        simulator = MemoryFlightControlSimulator(binding, clock=lambda: clock[0])
+        simulator.state.control_owner = 'actor-9'
+        service = CockpitService(binding, simulator, lambda: None, clock=lambda: clock[0])
+        response = service.handle(
+            'POST', '/api/flight-control/agent/messages',
+            json.dumps({'text': '检查建筑几何体是否变形', 'request_id': 'geometry-word-1',
+                        'context_version': 1}),
+            {'X-Agent-Session': 'geometry-tab'})
+        result = response.payload
+        self.assertNotEqual(result.get('error_code'), 'UNSUPPORTED_IN_FLIGHT_TASK')
+        self.assertNotEqual(result.get('message'), DOC_TABLE6_COMPLEX)
+        self.assertNotIn('card', result)
+
+    def test_cockpit_does_not_treat_negated_geometry_route_as_request(self):
+        clock = [1000.0]
+        binding = RuntimeBinding('actor-9', 'project-1', 'hangar-1', 'drone-1', 'batch-1', 1)
+        simulator = MemoryFlightControlSimulator(binding, clock=lambda: clock[0])
+        simulator.state.control_owner = 'actor-9'
+        service = CockpitService(binding, simulator, lambda: None, clock=lambda: clock[0])
+        response = service.handle(
+            'POST', '/api/flight-control/agent/messages',
+            json.dumps({'text': '不要用几何体航线', 'request_id': 'geometry-neg-1',
+                        'context_version': 1}),
+            {'X-Agent-Session': 'geometry-tab'})
+        result = response.payload
+        self.assertEqual(result['status'], 'clarification', result)
+        self.assertNotEqual(result.get('message'), DOC_TABLE6_COMPLEX)
 
     def test_cockpit_does_not_reject_point_with_payload_action_as_mixed(self):
         clock = [1000.0]
