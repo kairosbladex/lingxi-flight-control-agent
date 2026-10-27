@@ -64,6 +64,26 @@ P5 再用 SQLite 持久化 reservation 消除了「跨进程并发时网关可�
 | 4.3.4 复合指令 | 顺序：逐步确认、任一步失败即停；并发：显式两项卡、预检全过才提交、部分失败不重试不伪造回滚 | `test_parallel_motion_and_speech_are_explicit_and_replayed_once`、`test_parallel_partial_failure_retains_success_and_does_not_retry` | 同上 | 模拟器 | 真实并发调度未接入 | 未验证 | 任意自然语言组合未全量覆盖 |
 | 5 异常话术库（13 场景） | 无控制权/航线中强插/超限/遇障/测绘干预/不支持/混合/体目标/体标注 AI 均有固定话术 | 分散于上述用例；话术常量在 `flight_policy`/`ai_lifecycle` | 本文第三节 | 单元 + 模拟器 | 话术未在真实前端验收 | 未验证 | 前端仅类型检查与展示模型单测 |
 
+> **2026-10-27 纠正（3.2.1 / 3.2.2 归属与接线口径）**：本轮并行交付新增
+> `src/lingxi_flight_control/route_mapping.py`（配套 `tests/test_v14_route_mapping.py`），
+> 作为 V1.4 3.2.1 表1 / 3.2.2 表2 的**纯规则库 / 参考实现**。需要把口径写实，避免与上表既有结论混淆：
+>
+> - 该模块当前**未接线**到 cockpit / service / agent 等任何生产路径（合入仓内没有生产代码 import 它，
+>   只有单元测试与后续显式集成方调用）；因此**不改变**上表「3.2.1 本仓不实施、由规划 Agent 承担」
+>   与「3.2.2 由 `target_resolver` + `handoff_contract` 承担」的既有验收结论。
+> - V1.4 3.2.1 / 3.2.2 在本仓与规划 Agent（`lingxi-agent`）之间的职责归属**尚未裁决**
+>   （设计规范要求地面规划阶段由规划 Agent 执行）；裁决前 `route_mapping` 不得作为运行时唯一真源，
+>   也不得与 `target_resolver` / `handoff_contract` 对同一输入并行做强制校验（避免双真源与两套拒绝话术）。
+> - 若未来决定接线，分层建议：本仓目标/标注解析层（`target_resolver.TargetGeometry` +
+>   `handoff_contract._parse_targets`）继续负责几何合法性、体/混合/多目标/顺序与交接契约；
+>   `route_mapping` 只负责「触发词→航线类型 / 标注几何→允许航线或规范话术」的纯判定，
+>   不解析自然语言、不做几何求解、不生成航点、不调平台。
+> - 拒绝话术单一真源仍是 `flight_policy`：`route_mapping.MESSAGE_REJECT_GRID/MIXED/VOLUME/VOLUME_TABLE_2`
+>   分别是 `COMPLEX_ROUTE_MANUAL_MESSAGE` / `MIXED_TARGET_MESSAGE` / `BODY_TARGET_MESSAGE` /
+>   `BODY_TARGET_STANDARD_MESSAGE` 的别名（`assertIs` 用例固定，改一处即全局生效）。
+>
+> 本段只补充说明与分层建议，不改本文既有通过/未验证结论、分母与证据链。
+
 ## 三、安全错误专项检查（13 项）
 
 | # | 检查项 | 结论 | 证据 |
