@@ -1830,8 +1830,6 @@ class KtdPlatformExecutor:
         if action == "control_acquire":
             parameters = parameters or {}
             mode = parameters.get("mode", "obtain")
-            if mode == "force":
-                raise KtdPlatformError("CONTROL_FORCE_UNSUPPORTED")
             if mode == "apply":
                 call = getattr(self._transport, "apply_control", None)
                 if not callable(call):
@@ -1855,7 +1853,8 @@ class KtdPlatformExecutor:
             call = getattr(self._transport, "acquire_control", None)
             if not callable(call):
                 raise KtdPlatformError("CONTROL_TRANSPORT_UNAVAILABLE")
-            response = call(self.binding, site_id=self.site_id, session_id=trace_id)
+            response = call(self.binding, site_id=self.site_id, session_id=trace_id,
+                            force=mode == "force")
             payload = response.payload if isinstance(response, KtdHttpResponse) and isinstance(response.payload, Mapping) else {}
             data = payload.get("data")
             if (not isinstance(response, KtdHttpResponse) or response.status_code != 200
@@ -2394,7 +2393,7 @@ class KtdPlatformExecutor:
                 except KtdPlatformError as error:
                     deterministic = {
                         "CONTROL_ACQUIRE_FAILED", "CONTROL_ACQUIRE_NOT_CONFIRMED",
-                        "CONTROL_APPLY_FAILED", "CONTROL_FORCE_UNSUPPORTED",
+                        "CONTROL_APPLY_FAILED",
                         "CONTROL_REQUEST_PENDING",
                         "CONTROL_RELEASE_FAILED", "CONTROL_RELEASE_NOT_CONFIRMED",
                         "CONTROL_TRANSPORT_UNAVAILABLE",

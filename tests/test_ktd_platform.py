@@ -257,11 +257,12 @@ class PlatformExecutorTests(unittest.TestCase):
     def test_control_force_is_rejected_without_http_side_effect(self):
         self.snapshot = replace(self.snapshot, permissions=frozenset({"control_acquire", "read_state"}),
                                 capabilities={"control_acquire": True}, control_owner="other")
-        self.transport.acquire_control = lambda *args, **kwargs: self.fail("force must not call obtain")
+        self.transport.acquire_control = lambda *args, **kwargs: KtdHttpResponse(
+            200, {"code": 200, "data": "0"})
         executor = self.executor()
         result = self.confirm(executor, executor.preview(self.request(
             "control_acquire", {"mode": "force"}, "control-force")))
-        self.assertEqual(result.error_code, "CONTROL_FORCE_UNSUPPORTED")
+        self.assertEqual(result.error_code, "CONTROL_ACQUIRE_FAILED")
         self.assertEqual(result.status, FlightControlStatus.REJECTED)
         self.assertEqual(self.transport.calls, [])
 
@@ -531,6 +532,9 @@ class HttpTransportTests(unittest.TestCase):
         self.assertEqual(headers["Projectid"], "project-1")
         self.response_payload = {"code": 200, "data": "0"}
         self.assertEqual(self.transport().acquire_control(binding, site_id="site-1", session_id="trace-2").payload["data"], "0")
+        self.assertIn("isForce=false", self.requests[-1][0])
+        self.transport().acquire_control(binding, site_id="site-1", session_id="trace-3", force=True)
+        self.assertIn("isForce=true", self.requests[-1][0])
 
     def test_control_apply_uses_fixed_post_endpoint_and_reason(self):
         binding = RuntimeBinding("actor-1", "project-1", "hangar-1", "drone-1", "batch-1", 1)
