@@ -416,6 +416,9 @@ class HttpTaskEventBridge:
             for raw in data:
                 if not isinstance(raw, Mapping):
                     raise TaskEventError(INVALID_TASK_EVENT)
+                wire_contract = raw.get("contract_version", raw.get("contractVersion"))
+                if wire_contract is not None and wire_contract != CONTRACT_VERSION:
+                    raise TaskEventError(INVALID_TASK_EVENT)
                 event = TaskEvent(
                     event_id=raw.get("event_id", raw.get("eventId")),
                     kind=coerce_kind(raw.get("kind", raw.get("event"))),

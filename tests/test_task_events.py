@@ -68,6 +68,19 @@ class EventContractTests(unittest.TestCase):
     def test_platform_bridge_is_the_public_typed_event_adapter(self):
         self.assertTrue(issubclass(PlatformTaskEventBridge, HttpTaskEventBridge))
 
+    def test_platform_bridge_rejects_unknown_wire_contract_version(self):
+        class Transport:
+            def read_task_events(self, binding, **kwargs):
+                return SimpleNamespace(status_code=200, payload={'code': 200, 'data': [{
+                    'eventId': 'event-1', 'kind': 'low_battery_return',
+                    'projectId': 'project-1', 'hangarId': 'hangar-1',
+                    'droneId': 'drone-1', 'taskBatchId': 'batch-1',
+                    'sequence': 0, 'occurredAt': 1001.0,
+                    'contract_version': 'lingxi-task-events/unknown'}]})
+        with self.assertRaises(TaskEventError) as caught:
+            PlatformTaskEventBridge(Transport(), site_id='site').read_events(binding())
+        self.assertEqual(caught.exception.code, 'INVALID_TASK_EVENT')
+
     def test_http_bridge_does_not_turn_upstream_failure_into_empty_events(self):
         class Transport:
             def read_task_events(self, binding, **kwargs):
