@@ -1,9 +1,12 @@
 """V1.3/V1.4 deterministic business rules; inputs come from the bound executor."""
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 import inspect
 import math
 import time
 from typing import Mapping
+
+from .geometry import horizontal_distance_m
 
 POLICY_VERSION = "flight-control-v1.3"
 CONTROL_MESSAGE = "您尚未获取无人机控制权，请先申请后再下发指令。"
@@ -17,6 +20,80 @@ INTERRUPTING_ACTIONS = MICRO_ACTIONS | TEMPORARY_ACTIONS | {"route_pause", "hove
 INTERRUPTING_ACTIONS = INTERRUPTING_ACTIONS | {'task_end_current', 'task_end_all'}
 RESUME_ACTIONS = frozenset({"route_resume", "continue_from_breakpoint"})
 MAPPING_TASKS = frozenset({"mapping", "orthophoto", "oblique", "high_precision_modeling"})
+
+# ---------------------------------------------------------------------------
+# V1.4 4.4 表6 / 4.3.2 / 4.2 / 4.3.4：用户可见话术（按规范原文逐字落库）
+#
+# 这些常量由确定性层直接返回，模型不得改写、不得用近似说法替换。
+# 规范内部存在措辞不一致时，取舍记录在对应常量注释里，不隐藏分歧：
+# - 参数超限（变焦）：2.2.5 示例为「…已为您按最大变焦设置执行。」；
+#   4.3.2 表为「当前设备最大变焦为30倍…」；4.4 表6 为「指令已拦截，…设置。」
+#   提示语采用 2.2.5（规范性规则章节）的表述，表6 变体保留常量供对账。
+# - 体目标：4.4 表6 为「立体目标规划」；3.2.2 表为「立体目标」。用户可见话术
+#   按 4.4 表6，3.2.2 变体保留常量供对账。
+# - 航线中强插微操：2.2.3 带「再操作」，4.4 表6 省略；保留既有 2.2.3 表述。
+# ---------------------------------------------------------------------------
+
+# 2.2.1 场景1 与 2.2.3 场景2 的话术已由文件顶部的 CONTROL_MESSAGE / ROUTE_MESSAGE
+# 提供（措辞与规范一致；4.4 表6 少「再操作」的差异只记录在测试里，不改写既有话术）。
+
+#: 2.2.5 示例 + 4.3.2 表：变焦超限自动取极值（30 倍是规范示例值）。
+CAMERA_ZOOM_MAX_TEMPLATE = "当前设备最大变焦倍数为{maximum:g}倍，已为您按最大变焦设置执行。"
+CAMERA_ZOOM_MAX_MESSAGE = CAMERA_ZOOM_MAX_TEMPLATE.format(maximum=30)  # 规范原文：“…为30倍…”
+#: 4.4 表6 场景3 的变体表述（带「指令已拦截，」且句尾无「执行」）；仅用于对账。
+CAMERA_ZOOM_MAX_INTERCEPT_MESSAGE = "指令已拦截，当前设备最大变焦倍数为30倍，已为您按最大变焦设置。"
+
+#: 4.3.2 表：镜头未挂载 / 探照灯未挂载。
+LENS_NOT_MOUNTED_MESSAGE = "当前设备未挂载该镜头。"
+SEARCHLIGHT_NOT_MOUNTED_MESSAGE = "当前设备未挂载探照灯。"
+
+#: 4.3.2 表 + 4.4 表6：音量、亮度超限自动取极值（100% 是规范示例值）。
+SPEAKER_VOLUME_MAX_TEMPLATE = "音量最大支持{maximum:g}%，已为您按最大音量设置。"
+SPEAKER_VOLUME_MAX_MESSAGE = SPEAKER_VOLUME_MAX_TEMPLATE.format(maximum=100)
+SEARCHLIGHT_BRIGHTNESS_MAX_TEMPLATE = "亮度最大支持{maximum:g}%，已按最大值设置。"
+SEARCHLIGHT_BRIGHTNESS_MAX_MESSAGE = SEARCHLIGHT_BRIGHTNESS_MAX_TEMPLATE.format(maximum=100)
+
+#: 4.3.2 表 / 4.4 表6 场景：项目未配置该 AI 算法。
+AI_ALGORITHM_NOT_CONFIGURED_MESSAGE = "当前项目未配置该AI算法。"
+
+#: 4.4 表6 场景「系统不支持」：复杂路径 / 网格航线只能手动接管。
+COMPLEX_ROUTE_MANUAL_MESSAGE = "当前版本暂不支持自动规划复杂路径或网格航线，请手动接管。"
+
+#: 3.2.2 表 / 4.4 表6 场景「混合目标拦截」：点+线/面混发必须拆分。
+MIXED_TARGET_MESSAGE = "单次任务暂不支持混合目标巡检，请分次下发。"
+
+#: 4.4 表6 场景「体目标拦截」：立体目标改为点或面后再下发。
+BODY_TARGET_MESSAGE = "当前版本不支持立体目标规划，请将其标注为点或面。"
+#: 3.2.2 表的变体表述；仅用于对账，不做用户可见话术。
+BODY_TARGET_STANDARD_MESSAGE = "当前版本不支持立体目标，请标注为点或面。"
+
+#: 2.1.1 / 3.3 / 4.4 表6：体标注不参与 AI 配置（表6 引号内原文无句号）。
+BODY_ANNOTATION_AI_PHRASE = "体标注不支持AI配置"
+BODY_ANNOTATION_AI_MESSAGE = BODY_ANNOTATION_AI_PHRASE + "。"
+
+#: 4.3.4：顺序复合指令涉及多个不同目标点且距离较远时的歧义追问（A/B 为占位符，
+#: 规范原文即 `A和B…`；调用方可传入真实目标名替换，缺省保持 A、B）。
+COMPOUND_FAR_TARGET_QUESTION_TEMPLATE = (
+    "{first}和{second}距离较远，单次任务电量可能不足，"
+    "您是先去{first}再评估电量，还是放弃{second}点？")
+COMPOUND_FAR_TARGET_QUESTION = COMPOUND_FAR_TARGET_QUESTION_TEMPLATE.format(first="A", second="B")
+#: **假设**：规范只说「距离较远」，没有给阈值。这里取 2000 米作为显式默认常量，
+#: 调用方可用 ``limit_m`` 覆盖；它不是规范数值，不得当作规范已定义。
+COMPOUND_FAR_TARGET_DISTANCE_ASSUMPTION_M = 2000.0
+COMPOUND_DISTANCE_CLARIFICATION_REQUIRED = "COMPOUND_DISTANCE_CLARIFICATION_REQUIRED"
+
+#: 设备已挂载能力清单的**附加契约**（见 ``payload_mount_message``）。
+MOUNTED_LENSES_KEY = "mounted_lenses"
+MOUNTED_PAYLOADS_KEY = "mounted_payloads"
+_LENS_ACTIONS = {"camera_infrared": "infrared", "camera_wide": "wide"}
+_SEARCHLIGHT_ACTIONS = frozenset({"payload_searchlight", "searchlight_brightness"})
+#: 上界取极值时使用的规范话术模板；只有请求值真实越过设备上限才返回。
+_MAX_CLAMP_TEMPLATES = {
+    "camera_zoom": CAMERA_ZOOM_MAX_TEMPLATE,
+    "gimbal_digital_zoom": CAMERA_ZOOM_MAX_TEMPLATE,
+    "speaker_volume": SPEAKER_VOLUME_MAX_TEMPLATE,
+    "searchlight_brightness": SEARCHLIGHT_BRIGHTNESS_MAX_TEMPLATE,
+}
 
 # These are protocol envelopes, not claims about any connected device.
 ADJUSTABLE = {
@@ -88,10 +165,83 @@ def normalize_parameters(action, parameters, state):
     effective = min(high, max(low, value))
     if effective != value:
         result[key] = effective
-        adjustments.append({"parameter": key, "requested": value, "effective": effective,
-                            "minimum": low, "maximum": high,
-                            "message": f"当前设备允许范围为{low:g}至{high:g}，已将{value:g}调整为{effective:g}；确认后执行。"})
+        adjustment = {"parameter": key, "requested": value, "effective": effective,
+                      "minimum": low, "maximum": high,
+                      "message": f"当前设备允许范围为{low:g}至{high:g}，已将{value:g}调整为{effective:g}；确认后执行。"}
+        # 4.4 表6 / 4.3.2：越过设备上限时，额外给出规范原文话术；到下限时规范未定义话术。
+        template = _MAX_CLAMP_TEMPLATES.get(action)
+        if template is not None and effective == high and value > high:
+            adjustment["policy_message"] = template.format(maximum=high)
+        adjustments.append(adjustment)
     return result, adjustments
+
+
+def payload_mount_message(action, state):
+    """按设备已挂载清单判定镜头/探照灯是否存在，返回 4.3.2 原文话术。
+
+    清单字段是**附加只读契约**（``mounted_lenses`` / ``mounted_payloads``）：
+    字段缺失表示「本次未核验」，此时不据此宣称未挂载，把结论留给执行器与平台；
+    字段存在（含空列表）时，缺失的镜头/探照灯按 4.3.2 原文拒绝。
+    """
+    if not isinstance(state, Mapping):
+        return None
+
+    def mounted(key):
+        value = state.get(key)
+        if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+            return tuple(str(item) for item in value)
+        return None
+
+    lenses = mounted(MOUNTED_LENSES_KEY)
+    if lenses is not None:
+        lens = _LENS_ACTIONS.get(action)
+        if lens is not None and lens not in lenses:
+            return LENS_NOT_MOUNTED_MESSAGE
+    payloads = mounted(MOUNTED_PAYLOADS_KEY)
+    if payloads is not None and action in _SEARCHLIGHT_ACTIONS and "searchlight" not in payloads:
+        return SEARCHLIGHT_NOT_MOUNTED_MESSAGE
+    return None
+
+
+def _target_coordinate(target, key):
+    value = target.get(key) if isinstance(target, Mapping) else None
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise ValueError(f"target {key} missing")
+    return float(value)
+
+
+def _target_label(target, default):
+    name = target.get("name") if isinstance(target, Mapping) else None
+    return name.strip() if isinstance(name, str) and name.strip() else default
+
+
+def compound_distance_question(targets, *, limit_m=None):
+    """4.3.4：顺序复合指令的两个不同目标点距离超过阈值时返回规范追问原文。
+
+    条件必须是**可测**的：只有两个目标、坐标可核验、且两点水平距离严格大于阈值
+    才追问；坐标缺失/非法、只有一个目标、或三个及以上目标都不套用规范里那句
+    两目标句式（交回模型澄清），绝不凭空断言「较远」。
+
+    ``limit_m`` 缺省取 :data:`COMPOUND_FAR_TARGET_DISTANCE_ASSUMPTION_M`（2000 米），
+    这是本仓对规范未定义阈值时的显式假设，可由调用方覆盖。
+    """
+    limit = COMPOUND_FAR_TARGET_DISTANCE_ASSUMPTION_M if limit_m is None else limit_m
+    if isinstance(limit, bool) or not isinstance(limit, (int, float)) or not math.isfinite(limit) or limit < 0:
+        raise ValueError("distance limit must be a non-negative finite number")
+    points = list(targets or ())
+    if len(points) != 2:
+        return None
+    first, second = points
+    try:
+        distance = horizontal_distance_m(
+            _target_coordinate(first, "longitude"), _target_coordinate(first, "latitude"),
+            _target_coordinate(second, "longitude"), _target_coordinate(second, "latitude"))
+    except (TypeError, ValueError):
+        return None
+    if distance <= limit:
+        return None
+    return COMPOUND_FAR_TARGET_QUESTION_TEMPLATE.format(
+        first=_target_label(first, "A"), second=_target_label(second, "B"))
 
 
 def mapping_interruption(action, state):
