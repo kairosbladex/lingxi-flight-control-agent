@@ -4,13 +4,14 @@
 
 - `KtdHttpTransport` 固定了三个 Agent 边界：算法粒度启停、测绘中断事务、任务事件增量读取；请求带项目范围、typed schema 和幂等键。
 - `HttpMappingInterruptionGateway` 只接受完整原子回执；网络异常、非 typed 回执和字段不完整都返回未知/不可用，保留“不得下发后续飞控动作”语义。
-- `HttpTaskEventBridge` 将平台 snake/camel 字段解码为 `TaskEvent`，事件源失败不会伪造成空事件。
+- `PlatformTaskEventBridge` 将平台 snake/camel 字段解码为 `TaskEvent`，事件源失败不会伪造成空事件。
 - `route_mapping.decide_route` 已接入驾驶舱飞行中入口；网格、立体/几何航线在入口统一拒绝，并覆盖“用网格飞”触发词。
+- 复合目标追问支持平台声明的 `battery_percent + endurance_mileage`，按 20% 安全余量估算，缺少续航事实时保留显式距离假设。
 - `fixtures/v14-platform-adapter-v1.json` 固化三类请求/回执的离线回放形状。
 
 ## 实际验证
 
-- `bash tools/ci/offline_tests.sh && git diff --check`：1331 项通过，0 失败、0 跳过。
+- `bash tools/ci/offline_tests.sh && git diff --check`：1335 项通过，0 失败、0 跳过。
 - `test_mapping_interruption.py`、`test_task_events.py`、`test_v14_phrase_gaps.py` 定向回归通过。
 
 ## 未验证 / 不宣称
