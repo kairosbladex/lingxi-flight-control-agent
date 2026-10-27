@@ -9,7 +9,7 @@
 
 ## 实际验证
 
-- `bash tools/ci/offline_tests.sh && git diff --check`：1337 项通过，0 失败、0 跳过。
+- `bash tools/ci/offline_tests.sh && git diff --check`：1338 项通过，0 失败、0 跳过。
 - 相关提交：`88d8838`（续航追问）、`418477e`（航线规则边界）、`7234443`（平台事件增量读取）。
 
 ## 未验证 / 不宣称
