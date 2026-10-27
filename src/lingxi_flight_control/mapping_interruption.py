@@ -266,22 +266,30 @@ class HttpMappingInterruptionGateway:
                 error_code=MAPPING_INTERRUPTION_UNAVAILABLE,
                 message="平台尚未提供可核验的测绘中断原子回执，未下发后续飞控动作。")
         completed = data.get("completed_steps", data.get("completedSteps", ()))
+        atomic = data.get("atomic")
+        confirmed = data.get("confirmed")
+        task_resumable = data.get("task_resumable", data.get("taskResumable", False))
+        audit_id = data.get("audit_id", data.get("auditId", ""))
         if (type(data.get("atomic")) is not bool or type(data.get("confirmed")) is not bool
                 or not isinstance(completed, list)
-                or any(item not in INTERRUPTION_STEPS for item in completed)):
+                or any(item not in INTERRUPTION_STEPS for item in completed)
+                or completed != list(INTERRUPTION_STEPS[:len(completed)])
+                or (atomic is True and completed != list(INTERRUPTION_STEPS))
+                or type(task_resumable) is not bool
+                or (audit_id != "" and not _identifier(audit_id))):
             return MappingInterruptionReceipt(
                 atomic=False, execution_mode=self.execution_mode,
                 error_code=MAPPING_INTERRUPTION_UNKNOWN,
                 message="平台测绘中断回执字段无法核验，未下发后续飞控动作。")
         return MappingInterruptionReceipt(
-            atomic=data["atomic"], execution_mode=self.execution_mode,
+            atomic=atomic, execution_mode=self.execution_mode,
             completed_steps=tuple(completed),
             failed_step=data.get("failed_step", data.get("failedStep")),
-            audit_id=data.get("audit_id", data.get("auditId", "")),
+            audit_id=audit_id,
             error_code=data.get("error_code", data.get("errorCode")),
             message=data.get("message", ""),
-            task_resumable=data.get("task_resumable", data.get("taskResumable", False)),
-            confirmed=data["confirmed"],
+            task_resumable=task_resumable,
+            confirmed=confirmed,
         )
 
 
