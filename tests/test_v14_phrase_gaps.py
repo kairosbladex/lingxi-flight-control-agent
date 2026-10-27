@@ -432,7 +432,7 @@ class CockpitPhraseTriggerTests(unittest.TestCase):
     # ---- 4.4 表6 系统不支持 / 混合目标 / 体目标 ----
 
     def test_grid_route_is_rejected_with_spec_phrase(self):
-        for text in ('绕楼螺旋飞', '用网格航线飞'):
+        for text in ('绕楼螺旋飞', '用网格航线飞', '用网格飞'):
             result = self.message(self.service(), text)
             self.assertEqual(result['status'], 'rejected', result)
             self.assertEqual(result['error_code'], 'UNSUPPORTED_IN_FLIGHT_TASK')

@@ -225,6 +225,66 @@ class UnavailableMappingInterruptionGateway:
                      "本次不下发任何飞控动作。"))
 
 
+class HttpMappingInterruptionGateway:
+    """固定平台边界的测绘中断原子事务适配器。
+
+    网络异常一律按结果未知处理，reservation 会阻止自动重试和后续飞控下发。
+    """
+
+    execution_mode = "platform"
+    supports_idempotency_key = True
+
+    def __init__(self, transport: Any, binding: Any, *, site_id: str, task_id: str | None = None):
+        if not callable(getattr(transport, "interrupt_mapping", None)):
+            raise ValueError("mapping transport must provide interrupt_mapping")
+        if (not _identifier(site_id) or (task_id is not None and not _identifier(task_id))
+                or not callable(getattr(binding, "validate", None))):
+            raise ValueError("invalid mapping gateway scope")
+        binding.validate()
+        self._transport = transport
+        self._binding = binding
+        self._site_id = site_id
+        self._task_id = task_id
+
+    def interrupt(self, request: MappingInterruptionRequest) -> MappingInterruptionReceipt:
+        request.validate()
+        try:
+            response = self._transport.interrupt_mapping(
+                self._binding, request, site_id=self._site_id, task_id=self._task_id)
+        except Exception:
+            return MappingInterruptionReceipt(
+                atomic=False, execution_mode=self.execution_mode,
+                error_code=MAPPING_INTERRUPTION_UNKNOWN,
+                message="测绘中断平台事务结果未知，未下发后续飞控动作。")
+        payload = getattr(response, "payload", None)
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if (getattr(response, "status_code", None) != 200
+                or not isinstance(payload, dict) or payload.get("code") != 200
+                or not isinstance(data, dict)):
+            return MappingInterruptionReceipt(
+                atomic=False, execution_mode=self.execution_mode,
+                error_code=MAPPING_INTERRUPTION_UNAVAILABLE,
+                message="平台尚未提供可核验的测绘中断原子回执，未下发后续飞控动作。")
+        completed = data.get("completed_steps", data.get("completedSteps", ()))
+        if (type(data.get("atomic")) is not bool or type(data.get("confirmed")) is not bool
+                or not isinstance(completed, list)
+                or any(item not in INTERRUPTION_STEPS for item in completed)):
+            return MappingInterruptionReceipt(
+                atomic=False, execution_mode=self.execution_mode,
+                error_code=MAPPING_INTERRUPTION_UNKNOWN,
+                message="平台测绘中断回执字段无法核验，未下发后续飞控动作。")
+        return MappingInterruptionReceipt(
+            atomic=data["atomic"], execution_mode=self.execution_mode,
+            completed_steps=tuple(completed),
+            failed_step=data.get("failed_step", data.get("failedStep")),
+            audit_id=data.get("audit_id", data.get("auditId", "")),
+            error_code=data.get("error_code", data.get("errorCode")),
+            message=data.get("message", ""),
+            task_resumable=data.get("task_resumable", data.get("taskResumable", False)),
+            confirmed=data["confirmed"],
+        )
+
+
 def apply_atomic_steps(state: Any, *, action: str, audit_id: str) -> MappingInterruptionReceipt:
     """在状态对象上按固定顺序执行六步；任一步异常即整体失败并报告断点。"""
     completed: list[str] = []

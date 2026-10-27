@@ -39,6 +39,9 @@ from .flight_policy import (BODY_TARGET_MESSAGE, COMPLEX_ROUTE_MANUAL_MESSAGE,
                             COMPOUND_DISTANCE_CLARIFICATION_REQUIRED, MIXED_TARGET_MESSAGE,
                             compound_distance_question, payload_mount_message)
 from .task_events import temporary_task_return_notice
+from .route_mapping import (
+    REJECTION_GEOMETRY_ROUTE, REJECTION_GRID_ROUTE, decide_route,
+)
 from .ai_lifecycle import (
     ALGORITHM_REPLACE_UNSUPPORTED, CONFLICT_ANSWERS, REPLACE_UNSUPPORTED_MESSAGE,
     conflict_clarification,
@@ -246,6 +249,9 @@ def _in_flight_unsupported(text):
     """
     if _NEGATED_OR_HYPOTHETICAL.search(text):
         return None
+    route_decision = decide_route(text)
+    if route_decision.rejection_code in {REJECTION_GRID_ROUTE, REJECTION_GEOMETRY_ROUTE}:
+        return 'UNSUPPORTED_IN_FLIGHT_TASK', route_decision.message
     if _BODY_TARGET_MENTION.search(text):
         return 'UNSUPPORTED_TARGET_GEOMETRY', BODY_TARGET_MESSAGE
     if _COMPLEX_ROUTE_MENTION.search(text):

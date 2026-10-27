@@ -33,10 +33,12 @@ from .mapping_interruption import (
     MAPPING_INTERRUPTION_PARTIAL, MAPPING_INTERRUPTION_UNAVAILABLE,
     MAPPING_INTERRUPTION_UNKNOWN, RESERVATION_FAILED, RESERVATION_PENDING,
     RESERVATION_SCHEMA, RESERVATION_SUCCEEDED, RESERVATION_UNKNOWN,
+    HttpMappingInterruptionGateway,
     MappingInterruptionReceipt, MappingInterruptionRequest,
     UnavailableMappingInterruptionGateway,
 )
 from .ai_lifecycle import HttpAlgorithmLifecycleGateway, HttpAnnotationAlgorithmGateway
+from .task_events import HttpTaskEventBridge
 
 
 #: 进程内锁只在同一执行器实例内串行化确认卡字典，**不**承担跨进程去重。
@@ -644,6 +646,59 @@ class KtdHttpTransport:
         except Exception:
             raise KtdPlatformError('ALGORITHM_LIFECYCLE_TRANSPORT_ERROR') from None
 
+    def interrupt_mapping(self, binding: RuntimeBinding, interruption: MappingInterruptionRequest, *,
+                          site_id: str, task_id: str | None) -> KtdHttpResponse:
+        """调用后端测绘中断原子事务；请求体和资源范围固定。"""
+        interruption.validate()
+        if (not isinstance(binding, RuntimeBinding) or binding.actor_id != self.actor_id
+                or not all(_identifier(value) for value in
+                    (binding.project_id, site_id, interruption.task_batch_id))
+                or (task_id is not None and not _identifier(task_id))):
+            raise KtdPlatformError('INVALID_REQUEST_CONTEXT')
+        body = {
+            'schema_version': 'lingxi-mapping-interruption/v1',
+            'site_id': site_id, 'task_id': task_id,
+            'command_id': interruption.command_id, 'action': interruption.action,
+            'task_batch_id': interruption.task_batch_id, 'confirmed': interruption.confirmed,
+            'route_id': interruption.route_id, 'task_type': interruption.task_type,
+            'idempotency_key': interruption.idempotency_key,
+            'trace_id': interruption.trace_id, 'context_version': interruption.context_version,
+            'snapshot_version': interruption.snapshot_version,
+            'fingerprint': interruption.fingerprint,
+        }
+        request = Request(self._base_url + '/lingxi/agent/mapping/interruption',
+                          data=_json(body).encode(), method='POST',
+                          headers={'Authorization': 'Bearer ' + self._token,
+                                   'Content-Type': 'application/json',
+                                   'projectId': binding.project_id,
+                                   'X-Idempotency-Key': interruption.idempotency_key or interruption.command_id})
+        try:
+            return self._read_response(request, strict_json=True)
+        except Exception:
+            raise KtdPlatformError('MAPPING_INTERRUPTION_TRANSPORT_UNKNOWN') from None
+
+    def read_task_events(self, binding: RuntimeBinding, *, site_id: str,
+                         task_id: str | None, after_sequence: int) -> KtdHttpResponse:
+        """读取固定绑定下的任务事件增量；不把异常折叠成空事件列表。"""
+        if (not isinstance(binding, RuntimeBinding) or binding.actor_id != self.actor_id
+                or not all(_identifier(value) for value in
+                           (binding.project_id, binding.hangar_id, binding.drone_id, site_id))
+                or (task_id is not None and not _identifier(task_id))
+                or type(after_sequence) is not int or after_sequence < -1):
+            raise KtdPlatformError('INVALID_REQUEST_CONTEXT')
+        query = {'projectId': binding.project_id, 'siteId': site_id,
+                 'hangarId': binding.hangar_id, 'droneId': binding.drone_id,
+                 'afterSequence': str(after_sequence)}
+        if task_id is not None:
+            query['taskId'] = task_id
+        request = Request(self._base_url + '/lingxi/agent/platform/events?' + urlencode(query),
+                          method='GET', headers={'Authorization': 'Bearer ' + self._token,
+                                                 'projectId': binding.project_id})
+        try:
+            return self._read_response(request, strict_json=True)
+        except Exception:
+            raise KtdPlatformError('TASK_EVENT_TRANSPORT_ERROR') from None
+
     def read_receipt(self, binding: RuntimeBinding, *, site_id: str,
                      task_id: str | None, command_id: str) -> KtdHttpResponse:
         if not isinstance(binding, RuntimeBinding) or binding.actor_id != self.actor_id:
@@ -816,7 +871,7 @@ class KtdPlatformExecutor:
                  turn_max_pulses: int = 80, turn_gain: float = 1.5,
                  stick_max_sec: float = 5.0, path_checker=None,
                  mapping_gateway=None, mapping_reservation_lease_sec: float = 30.0,
-                 annotation_gateway=None, algorithm_gateway=None):
+                 annotation_gateway=None, algorithm_gateway=None, task_event_bridge=None):
         binding.validate()
         if (not all(_identifier(value) for key, value in binding.to_dict().items() if key != "context_version")
                 or not _identifier(site_id) or (task_id is not None and not _identifier(task_id))
@@ -874,7 +929,16 @@ class KtdPlatformExecutor:
         self._path_checker = path_checker
         #: V1.4 4.1.2：测绘中断原子操作的平台边界。默认显式不可用——
         #: 没有可核验的 Java 原子接口时不伪造成功，也不下发后续飞控动作。
-        self._mapping_gateway = mapping_gateway or UnavailableMappingInterruptionGateway()
+        self._mapping_gateway = mapping_gateway
+        if self._mapping_gateway is None and callable(getattr(transport, 'interrupt_mapping', None)):
+            self._mapping_gateway = HttpMappingInterruptionGateway(
+                transport, binding, site_id=site_id, task_id=task_id)
+        if self._mapping_gateway is None:
+            self._mapping_gateway = UnavailableMappingInterruptionGateway()
+        self._task_event_bridge = task_event_bridge
+        if self._task_event_bridge is None and callable(getattr(transport, 'read_task_events', None)):
+            self._task_event_bridge = HttpTaskEventBridge(
+                transport, site_id=site_id, task_id=task_id)
         #: 平台是否真的按幂等键收敛；只有网关自己声明才算，缺省一律按「不支持」。
         self._mapping_gateway_idempotent = (
             getattr(self._mapping_gateway, 'supports_idempotency_key', False) is True)
@@ -905,6 +969,11 @@ class KtdPlatformExecutor:
     def algorithm_gateway(self):
         """算法粒度生命周期适配器；平台未声明接口时为 ``None``。"""
         return self._algorithm_gateway
+
+    @property
+    def task_event_bridge(self):
+        """真实任务事件桥；平台未声明事件接口时为 ``None``。"""
+        return self._task_event_bridge
 
     def runtime_context(self) -> ExecutionContext:
         return ExecutionContext(f"{self.binding.project_id}:{self.binding.hangar_id}:{self.binding.task_batch_id}",

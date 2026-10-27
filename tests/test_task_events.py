@@ -5,10 +5,12 @@
 import json
 from pathlib import Path
 import unittest
+from types import SimpleNamespace
 
 from lingxi_flight_control.full_control import ACTION_SPECS, MemoryFlightControlSimulator, RuntimeBinding
 from lingxi_flight_control.task_events import (
     TaskEvent, TaskEventError, TaskEventKind, TaskEventLedger, UnavailableTaskEventBridge,
+    HttpTaskEventBridge,
     apply_task_event, coerce_kind,
 )
 
@@ -49,6 +51,28 @@ def typed_event(item, *, event_batch=None):
 
 
 class EventContractTests(unittest.TestCase):
+    def test_http_bridge_decodes_typed_event_batch(self):
+        class Transport:
+            def read_task_events(self, binding, **kwargs):
+                return SimpleNamespace(status_code=200, payload={'code': 200, 'data': [{
+                    'eventId': 'event-1', 'kind': 'low_battery_return',
+                    'projectId': 'project-1', 'hangarId': 'hangar-1',
+                    'droneId': 'drone-1', 'taskBatchId': 'batch-1',
+                    'sequence': 2, 'occurredAt': 1001.0}]})
+        events = HttpTaskEventBridge(Transport(), site_id='site').read_events(
+            binding(), after_sequence=1)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].kind, TaskEventKind.LOW_BATTERY_RETURN)
+        self.assertEqual(events[0].sequence, 2)
+
+    def test_http_bridge_does_not_turn_upstream_failure_into_empty_events(self):
+        class Transport:
+            def read_task_events(self, binding, **kwargs):
+                raise TimeoutError('bounded timeout')
+        with self.assertRaises(TaskEventError) as caught:
+            HttpTaskEventBridge(Transport(), site_id='site').read_events(binding())
+        self.assertEqual(caught.exception.code, 'TASK_EVENT_SOURCE_UNAVAILABLE')
+
     def test_event_requires_identity_sequence_and_binding(self):
         for change, code in (
             ({'event_id': ''}, 'INVALID_TASK_EVENT'),

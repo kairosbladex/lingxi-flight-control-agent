@@ -381,6 +381,63 @@ class UnavailableTaskEventBridge:
         raise TaskEventError(self.code)
 
 
+class HttpTaskEventBridge:
+    """读取平台 typed 任务事件流；网络/契约异常不降级为空事件。"""
+
+    execution_mode = "platform"
+
+    def __init__(self, transport: Any, *, site_id: str, task_id: str | None = None):
+        if not callable(getattr(transport, "read_task_events", None)):
+            raise ValueError("event transport must provide read_task_events")
+        if not _identifier(site_id) or (task_id is not None and not _identifier(task_id)):
+            raise ValueError("invalid event bridge scope")
+        self._transport = transport
+        self._site_id = site_id
+        self._task_id = task_id
+
+    def read_events(self, binding: Any, *, after_sequence: int = -1) -> Sequence[TaskEvent]:
+        if type(after_sequence) is not int or after_sequence < -1:
+            raise TaskEventError(INVALID_TASK_EVENT)
+        try:
+            response = self._transport.read_task_events(
+                binding, site_id=self._site_id, task_id=self._task_id,
+                after_sequence=after_sequence)
+        except Exception:
+            raise TaskEventError(TASK_EVENT_SOURCE_UNAVAILABLE) from None
+        payload = getattr(response, "payload", None)
+        data = payload.get("data") if isinstance(payload, Mapping) else None
+        if (getattr(response, "status_code", None) != 200
+                or not isinstance(payload, Mapping) or payload.get("code") != 200
+                or not isinstance(data, list)):
+            raise TaskEventError(TASK_EVENT_SOURCE_UNAVAILABLE)
+        events: list[TaskEvent] = []
+        try:
+            for raw in data:
+                if not isinstance(raw, Mapping):
+                    raise TaskEventError(INVALID_TASK_EVENT)
+                event = TaskEvent(
+                    event_id=raw.get("event_id", raw.get("eventId")),
+                    kind=coerce_kind(raw.get("kind", raw.get("event"))),
+                    project_id=raw.get("project_id", raw.get("projectId")),
+                    hangar_id=raw.get("hangar_id", raw.get("hangarId")),
+                    drone_id=raw.get("drone_id", raw.get("droneId")),
+                    task_batch_id=raw.get("task_batch_id", raw.get("taskBatchId")),
+                    sequence=raw.get("sequence"),
+                    occurred_at=raw.get("occurred_at", raw.get("occurredAt")),
+                    temporary_task_id=raw.get("temporary_task_id", raw.get("temporaryTaskId")),
+                    annotation_id=raw.get("annotation_id", raw.get("annotationId")),
+                    state_version=raw.get("state_version", raw.get("stateVersion")),
+                    annotation_version=raw.get("annotation_version", raw.get("annotationVersion")),
+                )
+                event.validate()
+                events.append(event)
+        except TaskEventError:
+            raise
+        except (TypeError, ValueError):
+            raise TaskEventError(INVALID_TASK_EVENT) from None
+        return tuple(events)
+
+
 def event_from_legacy(kind: str, *, event_id: str, sequence: int, binding: Any,
                       occurred_at: float, temporary_task_id: str | None = None,
                       annotation_id: str | None = None,

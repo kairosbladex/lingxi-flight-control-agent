@@ -16,6 +16,7 @@ import tempfile
 import time
 import unittest
 from dataclasses import replace
+from types import SimpleNamespace
 
 from lingxi_flight_control import FlightControlActionRequest, FlightControlStatus, MemoryFlightControlSimulator, RuntimeBinding
 from lingxi_flight_control.flight_policy import MAPPING_MESSAGE, PathCheck
@@ -30,6 +31,7 @@ from lingxi_flight_control.mapping_interruption import (
     NON_INTERRUPTING_PAYLOAD_ACTIONS, MappingInterruptionReceipt, MappingInterruptionRequest,
     RESERVATION_FAILED, RESERVATION_PENDING, RESERVATION_SUCCEEDED, RESERVATION_UNKNOWN,
     SimulatorMappingInterruptionGateway, UnavailableMappingInterruptionGateway,
+    HttpMappingInterruptionGateway,
     audit_summary, interruption_required,
 )
 from lingxi_flight_control.task_events import (
@@ -73,6 +75,34 @@ class Harness(unittest.TestCase):
                                 idempotency_key=card.idempotency_key,
                                 confirmation_binding=card.confirmation_binding,
                                 context_version=1)
+
+
+class HttpMappingGatewayTests(unittest.TestCase):
+    def test_platform_receipt_requires_atomic_and_confirmed_flags(self):
+        class Transport:
+            def interrupt_mapping(self, binding, request, **kwargs):
+                return SimpleNamespace(status_code=200, payload={'code': 200, 'data': {
+                    'atomic': True, 'confirmed': True,
+                    'completed_steps': list(INTERRUPTION_STEPS),
+                    'audit_id': 'audit-1', 'task_resumable': False,
+                    'message': 'ok'}})
+        request = MappingInterruptionRequest('cmd-1', 'move_forward', 'batch',
+                                             confirmed=True, idempotency_key='key-1')
+        receipt = HttpMappingInterruptionGateway(
+            Transport(), binding(), site_id='site').interrupt(request)
+        self.assertTrue(receipt.effective)
+        self.assertEqual(receipt.audit_id, 'audit-1')
+
+    def test_platform_transport_failure_is_unknown_and_blocks_followup(self):
+        class Transport:
+            def interrupt_mapping(self, binding, request, **kwargs):
+                raise TimeoutError('bounded transport timeout')
+        receipt = HttpMappingInterruptionGateway(
+            Transport(), binding(), site_id='site').interrupt(
+                MappingInterruptionRequest('cmd-1', 'move_forward', 'batch',
+                                           confirmed=True, idempotency_key='key-1'))
+        self.assertFalse(receipt.effective)
+        self.assertEqual(receipt.error_code, MAPPING_INTERRUPTION_UNKNOWN)
 
 
 class PreviewWarningTests(Harness):
