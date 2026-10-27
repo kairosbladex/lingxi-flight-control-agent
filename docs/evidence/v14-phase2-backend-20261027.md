@@ -11,7 +11,7 @@
 
 ## 实际验证
 
-- 后端提交：`2ce49f4d22 feat: 增加测绘中断原子事务契约`。
+- 后端提交：`c2253dbd96 feat: 增加测绘中断原子事务契约`。
 - `mvn -pl biz-inspection -am -DskipTests compile`：BUILD SUCCESS。
 - `mvn -pl biz-inspection -am -Dtest=MappingInterruptionContractTest -Dsurefire.failIfNoSpecifiedTests=false test`：3 项通过。
 - SQL migration：`doc/sql/2026/20261027-lingxi-mapping-interruption.sql`。
@@ -23,4 +23,4 @@
 
 ## 回滚
 
-- 回滚后端提交 `2ce49f4d22` 及对应 migration；已执行 migration 的数据库需按 DBA 方案回滚或保留新增列/表，禁止直接删除未知数据。
+- 回滚后端提交 `c2253dbd96` 及对应 migration；已执行 migration 的数据库需按 DBA 方案回滚或保留新增列/表，禁止直接删除未知数据。
