@@ -9,20 +9,26 @@
 * 受控动作在「无控制权」时 ``preview`` 与 ``confirm`` 两个阶段都必须拒绝，
   错误码固定为 ``CONTROL_NOT_OWNED``，话术原文固定为
   ``您尚未获取无人机控制权，请先申请后再下发指令。``；
+* **跨操作员**：除「无人持权（``control_owner=None``）」外，另构造
+  「另一操作员持权（``control_owner='actor-2'``，当前 actor 为 ``actor-1``）」，
+  preview 与 confirm 各跑一组，钉住 ``!= self.binding.actor_id`` 不能退化成
+  ``is None``（V1.4 表6 R1 的真实场景就是「用户B 在用户A 持权时下发」）；
 * 豁免动作单独成表，每一项都给出 **代码依据**；不允许「用例失败就归为豁免」；
 * 受控动作数量 = 66 - 豁免数量，漏一项或新增动作未分类都会让本模块直接失败
   （fail-closed）。
 
-代码依据（``src/lingxi_flight_control/full_control.py``，行号以本分支基准确认）：
+代码依据（``src/lingxi_flight_control/full_control.py``，行号已按 HEAD ``b3f1d6a`` 核准）：
 
 - 153-159：``_CONTROL_FREE_ACTIONS`` 只含 4 个控制权管理动作
   （control_acquire / remote_request / remote_approve / remote_reject）；
 - 711-715：``read_state`` 在控制权校验**之前**以只读回执早返回（ACCEPTED），
   这是第 5 个代码级豁免；它不在 ``_CONTROL_FREE_ACTIONS`` 里，由独立分支实现；
 - 716-718：``preview`` 的无控制权拒绝分支（``CONTROL_NOT_OWNED`` + 话术原文）；
-- 992-996：``confirm`` 执行前的控制权复核，拒绝时连同确认卡一起撤销；
-- 1044 / 1082-1230：``_apply`` 是唯一改变飞行状态的入口，只由 ``confirm`` 调用，
-  所以「preview 与 confirm 两阶段都拦截」等价于「指令不可能产生状态副作用」。
+- 993-997：``confirm`` 执行前的控制权复核，拒绝时连同确认卡一起撤销；
+- 1044 / 1082-1249：``_apply`` 是 66 项控制指令在 ``confirm`` 内的唯一动作执行入口
+  （``confirm`` 是 66 项动作的唯一执行路径）；模型侧另有 ``apply_task_event`` /
+  ``resolve_temporary_outcome`` / ``select_algorithms`` 等写入口不属本矩阵。
+  因此本矩阵的「两阶段拦截」只保证 66 项控制指令不会产生状态副作用。
 
 证据文档：``docs/evidence/v14-action-authority-matrix-20261027.md``。
 """
@@ -46,6 +52,9 @@ CONTROL_MESSAGE = "您尚未获取无人机控制权，请先申请后再下发�
 
 EXPECTED_ACTION_COUNT = 66
 ACTOR_ID = "actor-1"
+#: V1.4 表6 R1 的真实场景是「用户B 在用户A 持权时下发」；另造一个持权的操作员，
+#: 用来钉住控制权判定是 ``!= self.binding.actor_id`` 而不是 ``is None``。
+OTHER_ACTOR_ID = "actor-2"
 BINDING = RuntimeBinding(ACTOR_ID, "project-1", "hangar-1", "drone-1", "batch-1", 1)
 CLOCK_VALUE = 100.0
 
@@ -138,7 +147,7 @@ ACTION_PARAMETERS: dict[FlightControlAction, dict] = {
 
 #: 让航线类动作的 preview 合法成立所需的前置状态，取自
 #: ``_ROUTE_REQUIRED_STATES`` / ``_route_precondition_error``（full_control.py:406-410、
-#: 642-669）。矩阵验证的是控制权而不是航线状态，所以先按代码要求准备好状态，
+#: 648-669）。矩阵验证的是控制权而不是航线状态，所以先按代码要求准备好状态，
 #: 否则会在控制权检查通过后才因航线状态被拒，测不出 confirm 阶段的控制权复核。
 ROUTE_PRECONDITION_STATE: dict[FlightControlAction, dict] = {
     FlightControlAction.ROUTE_PAUSE: {"route_id": "route-1", "route_status": "running"},
@@ -150,7 +159,7 @@ ROUTE_PRECONDITION_STATE: dict[FlightControlAction, dict] = {
 
 #: 代码级豁免 1：控制权管理动作。依据 full_control.py:153-159 的
 #: ``_CONTROL_FREE_ACTIONS``，以及 ``_apply`` 里只改写控制权/请求字段、不产生飞行指令
-#: 的处理分支（full_control.py:1103-1111）。
+#: 的处理分支（full_control.py:1095-1104）。
 EXEMPT_OWNERSHIP_ACTIONS = frozenset({
     FlightControlAction.CONTROL_ACQUIRE,
     FlightControlAction.REMOTE_REQUEST,
@@ -168,13 +177,19 @@ CONTROLLED_ACTIONS = frozenset(FlightControlAction) - EXEMPT_ACTIONS
 #: 证据文档里「对应用例名」列引用的用例 id；subTest 维度用 ``action=`` 标出。
 PREVIEW_CASE = "test_preview_blocks_controlled_action_without_authority"
 CONFIRM_CASE = "test_confirm_blocks_controlled_action_after_authority_lost"
+#: 跨操作员（另一操作员持权）两组用例；见证据文档 3.4。
+CROSS_PREVIEW_CASE = "test_preview_blocks_controlled_action_when_other_operator_holds_control"
+CROSS_CONFIRM_CASE = "test_confirm_blocks_controlled_action_when_other_operator_holds_control"
 EXEMPT_CASE = "test_exempt_ownership_actions_keep_documented_bypass_in_both_phases"
 READ_ONLY_CASE = "test_read_state_is_read_only_exempt_before_control_check"
 
 
-def build_simulator(action: FlightControlAction) -> MemoryFlightControlSimulator:
-    """构造「动作前置条件已满足、但无人持权」的模拟器。"""
+def build_simulator(action: FlightControlAction, *,
+                    owner: str | None = None) -> MemoryFlightControlSimulator:
+    """构造「动作前置条件已满足、且持权人可指定（默认无人持权）」的模拟器。"""
     simulator = MemoryFlightControlSimulator(BINDING, clock=lambda: CLOCK_VALUE)
+    if owner is not None:
+        simulator.state.control_owner = owner
     # 飞行中的位姿/算法配置是动作的合法前置条件，与控制权无关。
     simulator.state.altitude_m = 100.0
     simulator.state.configured_algorithms = ["smoke"]
@@ -316,6 +331,69 @@ class ControlAuthorityMatrixTests(unittest.TestCase):
                 self.assertEqual(replay.status, FlightControlStatus.REJECTED, replay.to_dict())
                 self.assertEqual(replay.error_code, "CONFIRMATION_NOT_FOUND", replay.to_dict())
 
+    # ------------------------------------------- 跨操作员持权（preview 阶段）
+    def test_preview_blocks_controlled_action_when_other_operator_holds_control(self):
+        """另一操作员（actor-2）持权时，当前 actor（actor-1）的 preview 必须被拦截。
+
+        校验表达式是 ``control_owner != binding.actor_id``（full_control.py:716），
+        本用例钉住它不能退化成 ``control_owner is None``。
+        """
+        self.assertNotEqual(OTHER_ACTOR_ID, ACTOR_ID)
+        for action in sorted(CONTROLLED_ACTIONS, key=lambda item: item.value):
+            with self.subTest(action=action.value, control_owner=OTHER_ACTOR_ID):
+                simulator = build_simulator(action, owner=OTHER_ACTOR_ID)
+                self.assertEqual(simulator.state.control_owner, OTHER_ACTOR_ID)
+                before = simulator.state.to_dict()
+                receipt = preview_action(simulator, action, "cross-preview")
+                self.assertEqual(receipt.status, FlightControlStatus.REJECTED, receipt.to_dict())
+                self.assertEqual(receipt.error_code, "CONTROL_NOT_OWNED", receipt.to_dict())
+                self.assertEqual(receipt.message, CONTROL_MESSAGE, receipt.to_dict())
+                self.assertIsNone(receipt.confirmation_id, "被拦截的指令不得生成确认卡")
+                # 拦截必须发生在任何状态副作用之前。
+                self.assertEqual(simulator.state.to_dict(), before)
+
+    # ------------------------------------------- 跨操作员持权（confirm 阶段）
+    def test_confirm_blocks_controlled_action_when_other_operator_holds_control(self):
+        """actor-1 预览后由另一操作员（actor-2）接管控制权，confirm 必须被拦截。
+
+        校验表达式是 ``control_owner != binding.actor_id``（full_control.py:993），
+        本用例钉住它不能退化成 ``control_owner is None``。
+        """
+        self.assertNotEqual(OTHER_ACTOR_ID, ACTOR_ID)
+        for action in sorted(CONTROLLED_ACTIONS, key=lambda item: item.value):
+            with self.subTest(action=action.value, control_owner=OTHER_ACTOR_ID):
+                simulator = build_simulator(action)
+
+                acquired = acquire_control(simulator)
+                self.assertEqual(acquired.status, FlightControlStatus.PREVIEW_REQUIRED, acquired.to_dict())
+                acquired = confirm_action(simulator, FlightControlAction.CONTROL_ACQUIRE,
+                                          "matrix-acquire", acquired)
+                self.assertEqual(acquired.status, FlightControlStatus.ACCEPTED, acquired.to_dict())
+                self.assertEqual(simulator.state.control_owner, ACTOR_ID)
+
+                # 持权时 preview 必须能生成确认卡；否则用例应直接失败而不是跳过。
+                card = preview_action(simulator, action, "cross-pending")
+                self.assertEqual(card.status, FlightControlStatus.PREVIEW_REQUIRED, card.to_dict())
+                self.assertIsNotNone(card.confirmation_id)
+
+                # 预览之后另一操作员接管控制权。单 binding 模拟器无法经 API 让
+                # 第二个 actor 持权（CONTROL_ACQUIRE 只会把 owner 设成当前 actor），
+                # 因此直接构造「他人持权」状态，与真实平台里用户B 顶掉用户A 的情形对应。
+                simulator.state.control_owner = OTHER_ACTOR_ID
+                self.assertEqual(simulator.state.control_owner, OTHER_ACTOR_ID)
+
+                before = simulator.state.to_dict()
+                blocked = confirm_action(simulator, action, "cross-pending", card)
+                self.assertEqual(blocked.status, FlightControlStatus.REJECTED, blocked.to_dict())
+                self.assertEqual(blocked.error_code, "CONTROL_NOT_OWNED", blocked.to_dict())
+                self.assertEqual(blocked.message, CONTROL_MESSAGE, blocked.to_dict())
+                self.assertEqual(simulator.state.to_dict(), before, "被拦截的确认不得产生状态副作用")
+
+                # 跨操作员被拦截后确认卡同样必须撤销。
+                replay = confirm_action(simulator, action, "cross-pending", card)
+                self.assertEqual(replay.status, FlightControlStatus.REJECTED, replay.to_dict())
+                self.assertEqual(replay.error_code, "CONFIRMATION_NOT_FOUND", replay.to_dict())
+
     # ------------------------------------------------------- 控制权检查先于业务前置
     def test_control_check_runs_before_route_preconditions(self):
         """未上传航线时也必须先报无控制权，不能先泄露/依赖航线状态。"""
@@ -356,6 +434,11 @@ class ControlAuthorityMatrixTests(unittest.TestCase):
                 self.assertEqual(result.status, FlightControlStatus.ACCEPTED, result.to_dict())
                 self.assertIsNone(result.error_code)
                 self.assertEqual(getattr(simulator.state, field_name), expected_value)
+                if action is FlightControlAction.CONTROL_ACQUIRE:
+                    self.assertEqual(simulator.state.control_owner, ACTOR_ID)
+                else:
+                    # 远程申请/审批/拒绝只改写 control_request，不得顺带夺取控制权。
+                    self.assertIsNone(simulator.state.control_owner)
 
     # ------------------------------------------------------------------ 豁免 2：只读状态
     def test_read_state_is_read_only_exempt_before_control_check(self):

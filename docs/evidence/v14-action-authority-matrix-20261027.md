@@ -14,34 +14,48 @@
 | 动作总数 | 66 | `len(FlightControlAction) == 66`，枚举常量值互不重复 |
 | 豁免 N | 5 | 控制权管理 4 项 + 只读状态 1 项，均有代码依据（见 3.3） |
 | 受控 M | 61 | preview 与 confirm 两阶段均强制控制权校验，话术逐字一致 |
+| 跨操作员覆盖 | 61 × 2 | `control_owner='actor-2'`（当前 actor=`actor-1`）时 preview 与 confirm 均拒绝，见 3.4 |
 | 本次发现缺陷 K | 0 | 未发现「应拦截却放行」「话术不一致」「豁免无依据」 |
 | 漏放动作 | 0 | 61 项逐项断言，无一漏过控制权校验（fail-closed） |
 
-**结论**：按当前模型侧实现，66 项动作中 61 项受控动作在无控制权时 preview 与 confirm 两阶段都被拦截，
+**结论**：按当前模型侧实现，66 项动作中 61 项受控动作在「无人持权」时 preview 与 confirm 两阶段都被拦截，
 错误码 `CONTROL_NOT_OWNED`、话术原文 `您尚未获取无人机控制权，请先申请后再下发指令。` 完全一致；
+另对同一 61 项补做「另一操作员持权」的 preview / confirm 两组子用例（见 3.4），
+钉住控制权判定是 `!= binding.actor_id` 而不是 `is None`；
 5 项豁免均有可指认的代码依据，不依赖「测试失败后追认」。
 
 ## 二、验证方法（两阶段如何构造成立）
 
-受控动作的控制权校验在 `full_control.py` 的两个位置：`preview` 的 716-718 行与 `confirm` 的 992-996 行；
-`_apply` 是唯一改变飞行状态的入口，只由 `confirm`（1044 行）调用。因此验证方式为：
+受控动作的控制权校验在 `full_control.py` 的两个位置：`preview` 的 716-718 行与 `confirm` 的 993-997 行；
+`_apply`（1082-1249 行）是 66 项控制指令在 `confirm` 内的唯一动作执行入口，`confirm`（1044 行调用 `_apply`）
+是 66 项动作的唯一执行路径。因此验证方式为：
 
 1. **preview 阶段**：新建模拟器（`control_owner=None`），用**合法参数 + 合法前置状态**直接 `preview`，
    断言 `status=rejected`、`error_code=CONTROL_NOT_OWNED`、`message` 逐字等于话术、`confirmation_id is None`、
    `state.to_dict()` 前后不变。参数合法性依据 `_validate_parameters`（448-544 行）与 `normalize_parameters`；
-   航线类动作的前置状态依据 `_ROUTE_REQUIRED_STATES` / `_route_precondition_error`（406-410、642-669 行）。
+   航线类动作的前置状态依据 `_ROUTE_REQUIRED_STATES` / `_route_precondition_error`（406-410、648-669 行）。
 2. **confirm 阶段**：先走 `control_acquire` 的完整 preview/confirm 合法取得控制权 → `preview` 目标动作拿到确认卡
    （此处断言必须为 `preview_required`，若拿不到卡用例直接失败而**不是跳过**，避免测不到 confirm 分支）→
    走 `control_release` 的完整 preview/confirm 收回控制权 → `confirm` 旧确认卡，断言拒绝、
    `error_code=CONTROL_NOT_OWNED`、话术逐字一致、状态无副作用，且再次 confirm 返回 `CONFIRMATION_NOT_FOUND`
    （证明确认卡被撤销，不能等重新持权后补执行）。
 3. **豁免动作**不参与上述断言，单独用用例固化其放行行为与代码依据，并断言 `_CONTROL_FREE_ACTIONS`
-   与证据中的豁免表完全一致——代码改了豁免面而证据没改，测试先失败。
+   与证据中的豁免表完全一致——代码改了豁免面而证据没改，测试先失败。该用例同时断言
+   `remote_request` / `remote_approve` / `remote_reject` 只改写 `control_request`、**不改变 `control_owner`**
+   （避免「远程审批顺带夺取控制权」的回归）。
 4. **矩阵完整性**：分类互斥且覆盖全集；任何新增动作若未进参数表/豁免表，用例直接失败（fail-closed）。
+5. **跨操作员**：除 `control_owner=None` 外，再用 `control_owner='actor-2'`（当前 `actor_id='actor-1'`）
+   对 61 项受控动作各跑一组 preview 与 confirm 子用例。校验表达式是 `!= self.binding.actor_id`
+   （716 / 993 行），「另一操作员持权」必须与「无人持权」同样被拦截，不能退化成 `is None`
+   （V1.4 表6 R1 的真实场景就是「用户B 在用户A 持权时下发」）。
 
 ## 三、66 行矩阵
 
 ### 3.1 逐动作矩阵
+
+> 受控动作另有「另一操作员持权」的两组跨操作员子用例，对同一动作各记
+> `(subTest: action=…, control_owner=actor-2)`，完整用例名见 3.4；本表「对应用例名」列只列
+> 无人持权的 preview / confirm 两个主用例。
 
 | # | 动作 | 枚举常量 | 是否豁免 | preview（无控制权） | confirm（预览后失去控制权） | 对应用例名 |
 | ---: | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -110,7 +124,7 @@
 | 63 | task_end_current | `TASK_END_CURRENT` | 否 | 拦截：REJECTED / CONTROL_NOT_OWNED | 拦截：REJECTED / CONTROL_NOT_OWNED（确认卡同时撤销） | `test_preview_blocks_controlled_action_without_authority (subTest: action=task_end_current)<br>test_confirm_blocks_controlled_action_after_authority_lost (subTest: action=task_end_current)` |
 | 64 | task_end_all | `TASK_END_ALL` | 否 | 拦截：REJECTED / CONTROL_NOT_OWNED | 拦截：REJECTED / CONTROL_NOT_OWNED（确认卡同时撤销） | `test_preview_blocks_controlled_action_without_authority (subTest: action=task_end_all)<br>test_confirm_blocks_controlled_action_after_authority_lost (subTest: action=task_end_all)` |
 | 65 | ai_algorithm_set | `AI_ALGORITHM_SET` | 否 | 拦截：REJECTED / CONTROL_NOT_OWNED | 拦截：REJECTED / CONTROL_NOT_OWNED（确认卡同时撤销） | `test_preview_blocks_controlled_action_without_authority (subTest: action=ai_algorithm_set)<br>test_confirm_blocks_controlled_action_after_authority_lost (subTest: action=ai_algorithm_set)` |
-| 66 | read_state | `READ_STATE` | 是（只读） | 放行：ACCEPTED，不生成确认卡 | 不适用（无确认卡，不产生执行） | `test_read_state_is_read_only_exempt_before_control_check (subTest: action=read_state)` |
+| 66 | read_state | `READ_STATE` | 是（只读） | 放行：ACCEPTED，不生成确认卡 | 不适用（无确认卡，不产生执行） | `test_read_state_is_read_only_exempt_before_control_check`（单用例，无 subTest） |
 
 ### 3.2 分类与统计
 
@@ -126,20 +140,38 @@
 
 | 动作 | 豁免类别 | 代码依据 | 豁免理由（不豁免会怎样） |
 | :--- | :--- | :--- | :--- |
-| `control_acquire` | 控制权管理 | `full_control.py:153-159`（`_CONTROL_FREE_ACTIONS`）；效果见 `_apply` 1103-1104 行 | 获取控制权本身尚无控制权，若要求先持权则死锁，永远无法取得控制权 |
-| `remote_request` | 控制权管理 | 同上；效果见 `_apply` 1105-1106 行 | 远程控制申请是「请求接管」的第一步，申请人此时不持权；要求持权则无法发起申请 |
-| `remote_approve` | 控制权管理 | 同上；效果见 `_apply` 1107-1108 行 | 审批远程控制请求属于控制权管理，只改写 `control_request` 状态，不产生飞行指令 |
-| `remote_reject` | 控制权管理 | 同上；效果见 `_apply` 1109-1110 行 | 同上；拒绝请求不产生飞行指令，也不改变 `control_owner` |
+| `control_acquire` | 控制权管理 | `full_control.py:153-159`（`_CONTROL_FREE_ACTIONS`）；效果见 `_apply` 1095-1096 行 | 获取控制权本身尚无控制权，若要求先持权则死锁，永远无法取得控制权 |
+| `remote_request` | 控制权管理 | 同上；效果见 `_apply` 1099-1100 行 | 远程控制申请是「请求接管」的第一步，申请人此时不持权；要求持权则无法发起申请 |
+| `remote_approve` | 控制权管理 | 同上；效果见 `_apply` 1101-1102 行 | 审批远程控制请求属于控制权管理，只改写 `control_request` 状态，不产生飞行指令 |
+| `remote_reject` | 控制权管理 | 同上；效果见 `_apply` 1103-1104 行 | 同上；拒绝请求不产生飞行指令，也不改变 `control_owner` |
 | `read_state` | 只读状态 | `full_control.py:711-715` 早返回（`ACCEPTED`，话术「读取模拟状态」） | 状态查询不是控制指令：不生成确认卡、不调用 `_apply`、不改变飞行状态；要求持权会让监视/交接方无法读取状态 |
 
 > 说明：`read_state` **不在** `_CONTROL_FREE_ACTIONS` 中，而是由 711-715 行更早的只读分支豁免。
 > 证据把它单列为第 5 项豁免，并在测试中同时断言 `READ_STATE not in _CONTROL_FREE_ACTIONS`，避免把两处豁免混为一谈。
 
+### 3.4 跨操作员持权覆盖（第二方评审回修）
+
+初版矩阵只构造 `control_owner=None`（无人持权），无法钉住 716 / 993 行的
+`control_owner != self.binding.actor_id` 退化成 `control_owner is None`；按第二方评审（line-b）意见补齐两组子用例：
+
+| 阶段 | 用例名 | 覆盖 |
+| :--- | :--- | :--- |
+| preview | `test_preview_blocks_controlled_action_when_other_operator_holds_control` | 61 项受控动作 × `(subTest: action=…, control_owner=actor-2)`：actor-2 持权时 actor-1 的 preview 必须拒绝 |
+| confirm | `test_confirm_blocks_controlled_action_when_other_operator_holds_control` | 61 项受控动作：actor-1 先取得控制权并预览出确认卡，随后 actor-2 接管，`confirm` 必须拒绝且撤销确认卡 |
+
+- 断言口径与「无人持权」两组一致：`REJECTED / CONTROL_NOT_OWNED`、话术逐字相等、状态无副作用；
+  cross-confirm 另断言再次 confirm 返回 `CONFIRMATION_NOT_FOUND`。
+- 变异验证：把两处校验临时改成 `control_owner is None` 后，旧 6 个用例仍全绿（复现评审意见），
+  新增 2 个跨操作员用例出现 122 个 subTest 失败（61 preview + 61 confirm），证明回修真实有效。
+- 单 binding 模拟器无法经 API 让第二个 actor 持权（`CONTROL_ACQUIRE` 只会把 owner 设为当前 actor），
+  因此「他人持权」通过直接构造 `control_owner='actor-2'` 状态模拟，对应真实平台里用户B 顶掉用户A 的情形。
+
 ## 四、缺陷清单
 
 **本次 66 项动作矩阵未发现缺陷（K = 0）**：
 
-- 无「应拦截却放行」：61 项受控动作的 preview / confirm 两阶段逐项拦截；
+- 无「应拦截却放行」：61 项受控动作的 preview / confirm 两阶段逐项拦截，
+  并对同一 61 项补做「另一操作员持权」的 preview / confirm 两组跨操作员子用例（见 3.4）；
 - 无「话术不一致」：所有拦截话术逐字等于 `您尚未获取无人机控制权，请先申请后再下发指令。`，
   （常量唯一定义在 `src/lingxi_flight_control/flight_policy.py:9`）；
 - 无「豁免无依据」：5 项豁免均可指认到具体代码行与业务理由，见 3.3。
@@ -150,7 +182,7 @@
    「only ownership management is exempt」，但 `read_state` 实际由 711-715 行早返回豁免。
    读接口不产生控制副作用，不构成放行缺陷；建议后续把只读豁免写进注释或显式集合。
 2. **远程审批未校验审批者身份（契约风险，未验证）**：`remote_approve` / `remote_reject` 被归为控制权管理豁免
-   （153-159 行），`_apply` 只改写 `control_request`（1107-1110 行），不校验审批者是否为当前持权方。
+   （153-159 行），`_apply` 只改写 `control_request`（1099-1104 行），不校验审批者是否为当前持权方。
    模拟器单 binding 无法区分审批者，真实平台侧审批鉴权不在本次离线验证范围，未验证，不据此判缺陷。
 3. **跨适配器豁免面不一致（范围外，未验证）**：`zhuoyi_platform.py:188` 用同一份 `_CONTROL_FREE_ACTIONS` 做控制权校验，
    因此 `read_state` 在该执行器上仍要求持权，与模拟器的只读豁免行为不一致；
@@ -174,6 +206,8 @@ bash tools/ci/offline_tests.sh
 
 - 仅模型侧内存模拟器；KTD / 卓翼平台执行器的控制权校验、租约过期、设备能力未覆盖。
 - 只验证「控制权」维度，不覆盖路径围栏、设备参数极值、测绘中断、幂等/上下文版本等其它拒绝条件。
+- 跨操作员用例通过直接构造 `control_owner='actor-2'` 状态模拟他人持权（单 binding 模拟器无法经 API 让第二个
+  actor 持权）；不覆盖多 binding / 多会话的真实并发竞争，真实平台侧控制权仲裁未验证。
 - 单元测试通过只代表内存模拟器的预览/确认行为，不代表真实平台或设备已执行。
 - 豁免判定以本分支当前代码为依据；若后续规范把远程审批纳入持权范围，需重新评估 153-159 行与本节。
 
@@ -181,19 +215,22 @@ bash tools/ci/offline_tests.sh
 
 ## 附：本次运行结果
 
-### 1. 矩阵用例（6 个 unittest 用例 / 192 个 subTest 断言）
+### 1. 矩阵用例（8 个 unittest 用例 / 314 个 subTest 断言）
 
 ```text
-Ran 6 tests in 0.060s
+Ran 8 tests in 0.110s
 OK
 ```
+
+subTest 构成：66（参数合法性）+ 61（preview 无人持权）+ 61（confirm 失去持权）+ 61（preview 跨操作员）
++ 61（confirm 跨操作员）+ 4（控制权管理豁免）= 314；另有 3 个无 subTest 的整例断言（检查顺序、只读豁免、矩阵完整性）。
 
 ### 2. 全量离线套件 `bash tools/ci/offline_tests.sh`（CI 唯一真源）
 
 ```text
 + PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_*.py'
-Ran 1169 tests in 13.840s
+Ran 1171 tests in 15.288s
 OK
 ```
 
-（矩阵文件新增 6 个用例；全量 discover 由改动前的 1163 项变为 1169 项，其余用例全部通过。）
+（矩阵文件新增 8 个用例；全量 discover 由改动前的 1163 项变为 1171 项，其余用例全部通过。）
