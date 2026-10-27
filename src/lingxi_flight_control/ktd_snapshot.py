@@ -242,7 +242,9 @@ class KtdSnapshotProvider:
                 available.add(action)
         if set(permissions) != available:
             _reject('SNAPSHOT_AUTHORIZATION_CONFLICT')
-        if available - {'read_state'}:
+        # 申请控制权是 owner 为空时仍可用的唯一写意图；其它写动作必须
+        # 已由权威快照证明当前操作者持有有效租约。
+        if available - {'read_state', 'control_acquire'}:
             if (owner != self.binding.actor_id or lease is None or lease <= now
                     or profile is None or state.get('online') is not True
                     or frame_complete is False):

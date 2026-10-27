@@ -135,6 +135,29 @@ class FakeJavaOpener:
         return response
 
 
+class ControlJavaOpener(FakeJavaOpener):
+    """Offline Java boundary for the NL control-request pending path."""
+    def __init__(self):
+        super().__init__()
+        self.data['control_owner_employee_id'] = 'other-employee'
+        self.data['control_owner_version'] = 'd' * 64
+        self.data['permissions'] = ['control_acquire', 'read_state']
+        self.data['capabilities'] = {'control_acquire': True, 'read_state': True}
+        self.data['action_availability'] = {
+            'control_acquire': {'available': True, 'reasons': []},
+            'read_state': {'available': True, 'reasons': []},
+        }
+
+    def open(self, request, timeout):
+        path = urlsplit(request.full_url).path
+        if path == '/api/uavControlPower/apply':
+            self.calls.append((request.get_method(), path, json.loads(request.data)))
+            response = BytesIO(b'{"code":200,"data":"0"}')
+            response.code = 200
+            return response
+        return super().open(request, timeout)
+
+
 class PlatformRuntimeFlowTests(unittest.TestCase):
     def setUp(self):
         PlatformRuntimeConfigTests.setUp(self)
@@ -211,6 +234,27 @@ class PlatformRuntimeFlowTests(unittest.TestCase):
         self.assertEqual(service.handle('POST', '/api/flight-control/agent/confirm', body,
                                        self.headers).payload, confirmed.payload)
         self.assertEqual(len([call for call in self.opener.calls if call[0] == 'POST' and call[1] != '/api/electronicFence/path-route/with-clean']), 1)
+
+    def test_natural_language_control_request_is_pending_until_owner_changes(self):
+        opener = ControlJavaOpener()
+        def model_transport(url, payload, timeout):
+            return {'done_reason': 'stop', 'message': {'tool_calls': [
+                {'function': {'name': 'control_acquire', 'arguments': {}}}]}}
+        factory = lambda: OllamaDecider(model='fixture-control', base_url='http://model.invalid',
+                                        transport=model_transport, max_attempts=1)
+        service = build_platform_cockpit(self.config, factory, opener=opener,
+                                         clock=lambda: 1000, enable_control=True)
+        response = service.handle('POST', '/api/flight-control/agent/messages', json.dumps({
+            'text': '申请无人机控制权', 'request_id': 'control-1', 'context_version': 1}), self.headers)
+        self.assertEqual(response.payload['status'], 'preview_required', response.payload)
+        self.assertEqual(response.payload['card']['parameters']['mode'], 'apply')
+        body = json.dumps({key: response.payload['card'][key] for key in (
+            'confirmation_id', 'confirmation_binding', 'command_id', 'idempotency_key', 'context_version')})
+        confirmed = service.handle('POST', '/api/flight-control/agent/confirm', body, self.headers)
+        self.assertEqual(confirmed.payload['status'], 'pending', confirmed.payload)
+        self.assertEqual(confirmed.payload['error_code'], 'CONTROL_REQUEST_PENDING')
+        self.assertEqual([path for method, path, _ in opener.calls if method == 'POST'],
+                         ['/api/uavControlPower/apply'])
 
     def test_write_flag_and_private_journal_are_validated_before_creating_runtime(self):
         with self.assertRaises(ValueError):
