@@ -25,13 +25,11 @@ from lingxi_flight_control.ktd_platform import KtdHttpTransport
 from lingxi_flight_control.ktd_snapshot import KtdSnapshotProvider
 
 SCHEMA_VERSION = 'lingxi-platform-snapshot/v1'
-TELEMETRY_FRAME_SCHEMA = 'lingxi-telemetry-frame/v1'
 #: 明确的“字段不存在”哨兵；与 JSON null（平台声明“不知道”）分开。
 ABSENT = object()
 HEX64 = 'a' * 64
 CONTROL_VERSION = 'b' * 64
 TELEMETRY_VERSION = 'c' * 64
-FRAME_SHA256 = 'd' * 64
 SITE_ID = 'site-1'
 JAVA_TASK_ID = 'java-task-1'
 
@@ -70,12 +68,10 @@ def build_snapshot_payload(binding, *, now: float, route_status: Any = 'idle',
                            capabilities: Mapping[str, bool] | None = None,
                            profile: str = 'DJI_HANGAR', snapshot_version: Any = HEX64,
                            state_overrides: Mapping[str, Any] | None = None,
-                           telemetry_source: str = 'java-udp-cache',
                            sampled_offset: float = -1.0,
                            received_offset: float = -0.5,
                            generated_offset: float = 0.0,
-                           expires_offset: float | None = None,
-                           extra_data: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                           expires_offset: float | None = None) -> dict[str, Any]:
     """构造一份 v1 快照信封；参数即“平台可能返回的差异点”。
 
     ``control`` 可以是 :class:`tools.integration.control_authority_mock.ControlAuthorityMock`
@@ -133,7 +129,7 @@ def build_snapshot_payload(binding, *, now: float, route_status: Any = 'idle',
         **control_fields,
         'profile': profile,
         'telemetry': {
-            'sampled_at': sampled, 'received_at': received, 'source': telemetry_source,
+            'sampled_at': sampled, 'received_at': received, 'source': 'java-udp-cache',
             'sequence': None, 'version': TELEMETRY_VERSION,
         },
         'state': state,
@@ -141,13 +137,6 @@ def build_snapshot_payload(binding, *, now: float, route_status: Any = 'idle',
         'permissions': sorted(permitted_set),
         'action_availability': availability,
     }
-    if telemetry_source == 'java-raw-frame':
-        data['telemetry']['frame'] = {
-            'schema_version': TELEMETRY_FRAME_SCHEMA, 'profile': profile,
-            'payload_sha256': FRAME_SHA256, 'complete': True,
-        }
-    if extra_data:
-        data.update(dict(extra_data))
     return {'code': 200, 'success': True, 'data': data}
 
 
