@@ -234,3 +234,26 @@ OK
 ```
 
 （矩阵文件新增 8 个用例；全量 discover 由改动前的 1163 项变为 1171 项，其余用例全部通过。）
+
+---
+
+## 合流后口径更正（2026-10-27，Lead 追加）
+
+本文件正文的行号与全量用例数基于线 C 单线基线 `feat/v14-line-c@f2efdd9`（其父为 `test@c8f45d5`）。三条并行线合流后 `full_control.py` 因新增状态字段、`to_dict` 投影、超时入口与注释发生整体位移，正文行号不再可直接复核。**定位请以符号名为准**，合流后实测行号：
+
+| 正文引用 | 合流后实测 |
+| :--- | :--- |
+| `_CONTROL_FREE_ACTIONS` | `full_control.py:156` |
+| preview 控制权校验 | `full_control.py:733` |
+| confirm 控制权校验 | `full_control.py:1037` |
+| `READ_STATE` 只读早返回 | `full_control.py:728` |
+| `_validate_parameters` | `full_control.py:465` |
+| `_route_precondition_error` | `full_control.py:665` |
+| `_apply` 起始 | `full_control.py:1126` |
+
+另两处更正：
+
+1. 正文附录「另有 3 个无 subTest 的整例断言」不准确：实测**只有 2 个**（`test_control_check_runs_before_route_preconditions`、`test_read_state_is_read_only_exempt_before_control_check`）；`test_enum_has_66_actions_and_matrix_classification_is_complete` 恰有 66 个 subTest。314 总数正确。
+2. 正文「Ran 1171 tests」是**单线**数字；三线合流后全量套件实测 **Ran 1322 tests, OK**（见 `docs/evidence/v14-parallel-delivery-20261027.md`）。
+
+矩阵结论本身不因此改变：8 个用例 / 314 个 subTest、66 项逐项覆盖、豁免 5 / 受控 61 / 缺陷 0 均在合流后复跑通过。
