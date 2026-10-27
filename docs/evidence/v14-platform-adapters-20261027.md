@@ -11,7 +11,7 @@
 
 ## 实际验证
 
-- `bash tools/ci/offline_tests.sh && git diff --check`：1338 项通过，0 失败、0 跳过。
+- `bash tools/ci/offline_tests.sh && git diff --check`：1339 项通过，0 失败、0 跳过。
 - `test_mapping_interruption.py`、`test_task_events.py`、`test_v14_phrase_gaps.py` 定向回归通过。
 
 ## 未验证 / 不宣称

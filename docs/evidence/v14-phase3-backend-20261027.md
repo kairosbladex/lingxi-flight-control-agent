@@ -12,7 +12,7 @@
 - 后端提交：`de5fa6b708 feat: 增加平台任务事件账本读取契约`、`4fdb4efe53 fix: 严格限制任务事件序号`。
 - `mvn -pl biz-inspection -am -DskipTests compile`：BUILD SUCCESS。
 - `mvn -pl biz-inspection -am -Dtest=LingxiTaskEventContractTest -Dsurefire.failIfNoSpecifiedTests=false test`：2 项通过。
-- 飞控 Agent 离线门禁：1338 项通过，0 失败、0 跳过。
+- 飞控 Agent 离线门禁：1339 项通过，0 失败、0 跳过。
 
 ## 未验证 / 不宣称
 
