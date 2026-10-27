@@ -268,6 +268,7 @@ class HttpMappingInterruptionGateway:
         completed = data.get("completed_steps", data.get("completedSteps", ()))
         atomic = data.get("atomic")
         confirmed = data.get("confirmed")
+        contract_version = data.get("contract_version", data.get("contractVersion"))
         task_resumable = data.get("task_resumable", data.get("taskResumable", False))
         audit_id = data.get("audit_id", data.get("auditId", ""))
         if (type(data.get("atomic")) is not bool or type(data.get("confirmed")) is not bool
@@ -275,6 +276,7 @@ class HttpMappingInterruptionGateway:
                 or any(item not in INTERRUPTION_STEPS for item in completed)
                 or completed != list(INTERRUPTION_STEPS[:len(completed)])
                 or (atomic is True and completed != list(INTERRUPTION_STEPS))
+                or (contract_version is not None and contract_version != CONTRACT_VERSION)
                 or type(task_resumable) is not bool
                 or (audit_id != "" and not _identifier(audit_id))):
             return MappingInterruptionReceipt(

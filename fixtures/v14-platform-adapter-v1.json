@@ -36,6 +36,7 @@
     "response": {
       "code": 200,
       "data": {
+        "contract_version": "lingxi-mapping-interruption/v1",
         "atomic": true,
         "confirmed": true,
         "completed_steps": [

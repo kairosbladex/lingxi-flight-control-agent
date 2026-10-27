@@ -117,6 +117,20 @@ class HttpMappingGatewayTests(unittest.TestCase):
         self.assertFalse(receipt.effective)
         self.assertEqual(receipt.error_code, MAPPING_INTERRUPTION_UNKNOWN)
 
+    def test_platform_receipt_rejects_unknown_contract_version(self):
+        class Transport:
+            def interrupt_mapping(self, binding, request, **kwargs):
+                return SimpleNamespace(status_code=200, payload={'code': 200, 'data': {
+                    'contract_version': 'lingxi-mapping-interruption/unknown',
+                    'atomic': True, 'confirmed': True,
+                    'completed_steps': list(INTERRUPTION_STEPS)}})
+        receipt = HttpMappingInterruptionGateway(
+            Transport(), binding(), site_id='site').interrupt(
+                MappingInterruptionRequest('cmd-1', 'move_forward', 'batch',
+                                           confirmed=True, idempotency_key='key-1'))
+        self.assertFalse(receipt.effective)
+        self.assertEqual(receipt.error_code, MAPPING_INTERRUPTION_UNKNOWN)
+
 
 class PreviewWarningTests(Harness):
     def test_first_preview_warns_and_changes_nothing(self):
