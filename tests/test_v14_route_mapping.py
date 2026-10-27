@@ -159,10 +159,10 @@ class SpecWordingTests(unittest.TestCase):
         self.assertIs(mapping.MESSAGE_REJECT_VOLUME, policy.BODY_TARGET_MESSAGE)
         self.assertIs(mapping.MESSAGE_REJECT_VOLUME_TABLE_2, policy.BODY_TARGET_STANDARD_MESSAGE)
 
-    def test_module_docstring_declares_reference_only_and_unwired(self):
-        # M1/L1 集成评审：归属/接线口径必须写实，不能被后续当成生产真源。
+    def test_module_docstring_declares_reference_only_and_scoped_integration(self):
+        # 集成评审：归属/接线口径必须写实，不能把预检当成地面规划真源。
         doc = mapping.__doc__ or ""
-        for fragment in ("纯规则库", "参考实现", "未接线", "尚未裁决",
+        for fragment in ("纯规则库", "参考实现", "接入 cockpit", "不替代地面规划", "尚未裁决",
                          "target_resolver", "handoff_contract"):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, doc)

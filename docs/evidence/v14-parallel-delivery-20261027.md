@@ -28,9 +28,9 @@
 - 门禁：`python3 tools/ci/adversarial_jury_evaluator.py`（完整签署模式，要求第二方评审文件与当前树一致）
 - 成绩单：`docs/evidence/jury_scorecard_v14.json`
 
-## 四、合流后仍未接线 / 待裁决（不得当成已交付）
+## 四、已接线范围与仍待裁决
 
-1. **3.2.1/3.2.2 归属未裁决**：`route_mapping.py` 是纯规则库/参考实现，**未接线**到 cockpit/service/agent；本仓与规划 Agent（`lingxi-agent`）谁负责地面规划章节待架构裁决，裁决前不得与 `target_resolver`/`handoff_contract` 并行强制校验（已写入模块 docstring 与 `ACCEPTANCE_FLIGHT-V14.md` 纠正段）。
+1. **3.2.1/3.2.2 仍需归属裁决**：`route_mapping.py` 已接入 cockpit 的飞行中不支持航线预检，仅处理网格/几何体/螺旋等明确拒绝词；地面规划仍由规划 Agent（`lingxi-agent`）承担，目标几何仍由 `target_resolver`/`handoff_contract` 负责。
 2. **4.1.3 超时入口**：`resolve_temporary_outcome` 是模拟器/测试入口，HTTP/agent 生产路径尚未接线（docstring 已写实）。
 3. **真实平台/真机**：电子围栏真实接口、权威快照、挂载能力事件源、控制权中台、真实 MQTT 均未联调；本批全部证据仅覆盖内存模拟器与本地 Mock。
 4. **规范内部冲突（待产品裁决）**：表6 与 2.2.3/2.2.5 的话术差异、变焦三种写法、测绘可中断性、体目标两版话术，已列在 `flight_policy.py` docstring「规范内部冲突清单」；实现未单方选边。
