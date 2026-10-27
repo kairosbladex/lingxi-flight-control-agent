@@ -243,6 +243,7 @@ class FlightControlState:
     ground_speed_mps: float = 0.0
     vertical_speed_mps: float = 0.0
     battery_percent: float = 100.0
+    endurance_mileage: float | None = None
     cycle_count: int = 0
     return_distance_m: float = 0.0
     roll_deg: float = 0.0
@@ -320,6 +321,7 @@ class FlightControlState:
             "ground_speed_mps": self.ground_speed_mps,
             "vertical_speed_mps": self.vertical_speed_mps,
             "battery_percent": self.battery_percent,
+            "endurance_mileage": self.endurance_mileage,
             "cycle_count": self.cycle_count,
             "return_distance_m": self.return_distance_m,
             "roll_deg": self.roll_deg,

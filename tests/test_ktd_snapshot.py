@@ -114,6 +114,13 @@ class KtdSnapshotTests(unittest.TestCase):
         self.assertEqual(timeout, 5.0)
         self.assertEqual(len(self.opener.requests), 1)
 
+    def test_optional_endurance_fact_is_preserved_for_battery_estimation(self):
+        payload = snapshot_payload()
+        payload['data']['state']['endurance_mileage'] = 12_000.0
+        self.opener.payload = payload
+        snapshot = self.provider()()
+        self.assertEqual(snapshot.state['endurance_mileage'], 12_000.0)
+
     def test_raw_frame_profiles_preserve_times_state_and_write_denials(self):
         for profile in ('DJI_HANGAR', 'PZ_HANGAR'):
             with self.subTest(profile=profile):

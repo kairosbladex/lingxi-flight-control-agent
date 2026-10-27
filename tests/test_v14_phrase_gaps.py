@@ -333,6 +333,18 @@ class CompoundAmbiguityTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             policy.compound_distance_question([self.shanghai, target(114.0, 23.0)], limit_m=-1)
 
+    def test_battery_estimate_uses_remaining_charge_and_declared_endurance(self):
+        far = [self.shanghai, target(114.0, 23.0)]
+        self.assertIsNone(policy.compound_distance_question(
+            far, battery_percent=100, endurance_mileage=500_000))
+        self.assertEqual(policy.compound_distance_question(
+            far, battery_percent=20, endurance_mileage=500_000), DOC_4_3_4_QUESTION)
+
+    def test_battery_estimate_rejects_incomplete_facts(self):
+        with self.assertRaises(ValueError):
+            policy.compound_distance_question(
+                [self.shanghai, target(114.0, 23.0)], battery_percent=20)
+
 
 class CockpitPhraseTriggerTests(unittest.TestCase):
     """第 3 层：规范话术经驾驶舱真实入口可见（模拟器，不联网）。"""

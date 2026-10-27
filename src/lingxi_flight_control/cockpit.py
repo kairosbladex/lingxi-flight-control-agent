@@ -1346,7 +1346,11 @@ class CockpitService:
             return self._base(status='rejected', error_code='CONTROL_NOT_OWNED',
                               message=control_error, request_id=request_id, state=self._state()), None
         # V1.4 4.3.4：顺序计划包含两个不同目标点且距离较远时，先追问电量风险再出确认卡。
-        question = compound_distance_question(self._plan_target_points(steps))
+        question = compound_distance_question(
+            self._plan_target_points(steps),
+            battery_percent=(raw_state.get('battery_percent')
+                             if raw_state.get('endurance_mileage') is not None else None),
+            endurance_mileage=raw_state.get('endurance_mileage'))
         if question is not None:
             return self._base(status='clarification',
                               error_code=COMPOUND_DISTANCE_CLARIFICATION_REQUIRED,

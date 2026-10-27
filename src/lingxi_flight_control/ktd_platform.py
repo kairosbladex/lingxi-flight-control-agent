@@ -1108,7 +1108,7 @@ class KtdPlatformExecutor:
             result.update({key: copy.deepcopy(snapshot.state[key]) for key in (
                 'task_type', 'mapping_invalidated', 'auto_stitching', 'low_battery_return',
                 'device_limits', 'gimbal_pitch_deg', 'breakpoint_index', 'temporary_task_id',
-                'route_id') if key in snapshot.state})
+                'route_id', 'endurance_mileage') if key in snapshot.state})
             # legacy 快照的租约是合成值，不向界面/回执伪装成权威租约。
             lease = (snapshot.control_lease_expires_at
                      if snapshot.authorization_quality == "authoritative" else None)

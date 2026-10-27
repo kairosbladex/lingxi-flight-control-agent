@@ -132,6 +132,8 @@ COMPOUND_FAR_TARGET_QUESTION = COMPOUND_FAR_TARGET_QUESTION_TEMPLATE.format(firs
 #: **假设**：规范只说「距离较远」，没有给阈值。这里取 2000 米作为显式默认常量，
 #: 调用方可用 ``limit_m`` 覆盖；它不是规范数值，不得当作规范已定义。
 COMPOUND_FAR_TARGET_DISTANCE_ASSUMPTION_M = 2000.0
+# 有平台续航事实时，预留 20% 电量作为返航/风况安全余量；不是设备额定值。
+COMPOUND_BATTERY_SAFETY_FACTOR = 0.8
 COMPOUND_DISTANCE_CLARIFICATION_REQUIRED = "COMPOUND_DISTANCE_CLARIFICATION_REQUIRED"
 
 #: 设备已挂载能力清单的**附加契约**（见 ``payload_mount_message``）。
@@ -272,7 +274,8 @@ def _target_label(target, default):
     return name.strip() if isinstance(name, str) and name.strip() else default
 
 
-def compound_distance_question(targets, *, limit_m=None):
+def compound_distance_question(targets, *, limit_m=None, battery_percent=None,
+                               endurance_mileage=None):
     """4.3.4：顺序复合指令的两个不同目标点距离超过阈值时返回规范追问原文。
 
     条件必须是**可测**的：只有两个目标、坐标可核验、且两点水平距离严格大于阈值
@@ -280,7 +283,9 @@ def compound_distance_question(targets, *, limit_m=None):
     两目标句式（交回模型澄清），绝不凭空断言「较远」。
 
     ``limit_m`` 缺省取 :data:`COMPOUND_FAR_TARGET_DISTANCE_ASSUMPTION_M`（2000 米），
-    这是本仓对规范未定义阈值时的显式假设，可由调用方覆盖。
+    这是本仓对规范未定义阈值时的显式假设，可由调用方覆盖。若同时提供平台声明的
+    ``battery_percent`` 与 ``endurance_mileage``，则按剩余电量和 20% 安全余量估算，
+    不用默认距离阈值替代平台续航事实。
     """
     limit = COMPOUND_FAR_TARGET_DISTANCE_ASSUMPTION_M if limit_m is None else limit_m
     if isinstance(limit, bool) or not isinstance(limit, (int, float)) or not math.isfinite(limit) or limit < 0:
@@ -295,7 +300,17 @@ def compound_distance_question(targets, *, limit_m=None):
             _target_coordinate(second, "longitude"), _target_coordinate(second, "latitude"))
     except (TypeError, ValueError):
         return None
-    if distance <= limit:
+    if battery_percent is not None or endurance_mileage is not None:
+        if (isinstance(battery_percent, bool) or not isinstance(battery_percent, (int, float))
+                or not math.isfinite(battery_percent) or not 0 <= battery_percent <= 100
+                or isinstance(endurance_mileage, bool)
+                or not isinstance(endurance_mileage, (int, float))
+                or not math.isfinite(endurance_mileage) or endurance_mileage <= 0):
+            raise ValueError("battery estimate requires finite battery_percent and endurance_mileage")
+        risk = distance > float(endurance_mileage) * (float(battery_percent) / 100.0) * COMPOUND_BATTERY_SAFETY_FACTOR
+    else:
+        risk = distance > limit
+    if not risk:
         return None
     return COMPOUND_FAR_TARGET_QUESTION_TEMPLATE.format(
         first=_target_label(first, "A"), second=_target_label(second, "B"))
