@@ -228,6 +228,13 @@ class PlatformExecutorTests(unittest.TestCase):
         self.snapshot = replace(self.snapshot, state={**self.snapshot.state, "ground_speed_mps": 1.0})
         self.assertEqual(self.executor().preview(self.request(key="moving")).error_code, "HOVER_REQUIRED")
 
+    def test_micro_control_rejects_missing_authoritative_route_status(self):
+        self.snapshot = replace(self.snapshot, state={**self.snapshot.state,
+            "route_status": None, "flight_mode": "QHOVER",
+            "ground_speed_mps": 0.01, "vertical_speed_mps": 0.01})
+        self.assertEqual(self.executor().preview(self.request(key="route-unknown")).error_code,
+                         "AUTHORITATIVE_STATE_INCOMPLETE")
+
     def test_control_acquire_requires_success_and_fresh_owner_snapshot(self):
         self.snapshot = replace(self.snapshot, permissions=frozenset({"control_acquire", "read_state"}),
                                 capabilities={"control_acquire": True}, control_owner=None,

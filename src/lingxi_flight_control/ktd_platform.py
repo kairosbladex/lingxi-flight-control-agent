@@ -1563,9 +1563,11 @@ class KtdPlatformExecutor:
                             else str(request.action))
             if (action_value in MICRO_ACTIONS
                     and not self._legacy_read_api
-                    and not mapping_interruption(action_value, snapshot.state)
-                    and not _hover_confirmed(snapshot.state)):
-                raise PolicyError("HOVER_REQUIRED", "当前无人机尚未悬停，请先说‘悬停’后再操作。")
+                    and not mapping_interruption(action_value, snapshot.state)):
+                if snapshot.state.get("route_status") is None:
+                    raise PolicyError("ROUTE_STATE_UNAVAILABLE", "缺少权威航线状态，未下发飞行微操。")
+                if not _hover_confirmed(snapshot.state):
+                    raise PolicyError("HOVER_REQUIRED", "当前无人机尚未悬停，请先说‘悬停’后再操作。")
             if mapping_interruption(request.action, snapshot.state) and not interruption_pending:
                 # 能力探测等路径不允许触发中断，直接按不可用处理。
                 raise PolicyError('MAPPING_INTERRUPTION_UNAVAILABLE', MAPPING_MESSAGE)

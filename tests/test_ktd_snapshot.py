@@ -131,6 +131,25 @@ class KtdSnapshotTests(unittest.TestCase):
         self.assertEqual(snapshot.state['route_status_source'], 'task_state')
         self.assertIsNone(snapshot.state['route_status_reason'])
 
+    def test_paused_java_snapshot_releases_micro_control_to_operation_path(self):
+        payload = snapshot_payload(writable=True)
+        payload['data']['state'].update(
+            task_state='paused', route_status='paused', route_status_source='task_state',
+            route_status_reason=None, ground_speed_mps=0.02,
+            vertical_speed_mps=0.01, flight_mode='QHOVER', height_m=50.0)
+        self.opener.payload = payload
+        provider = self.provider()
+        snapshot = provider()
+        self.assertEqual(snapshot.state['route_status'], 'paused')
+        with tempfile.TemporaryDirectory() as directory:
+            executor = KtdPlatformExecutor(self.binding, site_id='site-1', task_id='java-task-1',
+                transport=self.transport, snapshot_provider=provider, enabled=True,
+                journal=SqliteCommandJournal(directory + '/commands.db'), clock=lambda: self.now)
+            card = executor.preview(FlightControlActionRequest(
+                'cmd-micro', 'key-micro', 'move_forward', {'distance_m': 10}, 7))
+        self.assertEqual(card.status.value, 'preview_required')
+        self.assertEqual(card.error_code, None)
+
     def test_raw_frame_profiles_preserve_times_state_and_write_denials(self):
         for profile in ('DJI_HANGAR', 'PZ_HANGAR'):
             with self.subTest(profile=profile):
