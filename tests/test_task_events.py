@@ -81,6 +81,21 @@ class EventContractTests(unittest.TestCase):
             PlatformTaskEventBridge(Transport(), site_id='site').read_events(binding())
         self.assertEqual(caught.exception.code, 'INVALID_TASK_EVENT')
 
+    def test_platform_bridge_normalizes_java_null_serialization_for_optional_fields(self):
+        class Transport:
+            def read_task_events(self, binding, **kwargs):
+                return SimpleNamespace(status_code=200, payload={'code': 200, 'data': [{
+                    'eventId': 'event-1', 'kind': 'low_battery_return',
+                    'projectId': 'project-1', 'hangarId': 'hangar-1',
+                    'droneId': 'drone-1', 'taskBatchId': 'batch-1',
+                    'sequence': 0, 'occurredAt': 1001.0,
+                    'temporaryTaskId': '', 'stateVersion': '', 'annotationVersion': 0,
+                    'contract_version': 'lingxi-task-events/v1'}]})
+        events = PlatformTaskEventBridge(Transport(), site_id='site').read_events(binding())
+        self.assertEqual(events[0].kind, TaskEventKind.LOW_BATTERY_RETURN)
+        self.assertIsNone(events[0].state_version)
+        self.assertIsNone(events[0].annotation_version)
+
     def test_http_bridge_does_not_turn_upstream_failure_into_empty_events(self):
         class Transport:
             def read_task_events(self, binding, **kwargs):

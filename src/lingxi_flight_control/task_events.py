@@ -419,19 +419,35 @@ class HttpTaskEventBridge:
                 wire_contract = raw.get("contract_version", raw.get("contractVersion"))
                 if wire_contract is not None and wire_contract != CONTRACT_VERSION:
                     raise TaskEventError(INVALID_TASK_EVENT)
+                kind = coerce_kind(raw.get("kind", raw.get("event")))
+                temporary_task_id = raw.get("temporary_task_id", raw.get("temporaryTaskId"))
+                annotation_id = raw.get("annotation_id", raw.get("annotationId"))
+                state_version = raw.get("state_version", raw.get("stateVersion"))
+                annotation_version = raw.get("annotation_version", raw.get("annotationVersion"))
+                # Java 的全局 FastJSON filter 会把可选 null 写成 ""/0；这些值
+                # 只在对应事件类型不需要该字段时归一化，绑定和协议字段仍严格校验。
+                if temporary_task_id == "":
+                    temporary_task_id = None
+                if state_version == "":
+                    state_version = None
+                if annotation_id == "":
+                    annotation_id = None
+                if kind not in {TaskEventKind.ANNOTATION_ENTERED, TaskEventKind.ANNOTATION_LEFT} \
+                        and annotation_version == 0:
+                    annotation_version = None
                 event = TaskEvent(
                     event_id=raw.get("event_id", raw.get("eventId")),
-                    kind=coerce_kind(raw.get("kind", raw.get("event"))),
+                    kind=kind,
                     project_id=raw.get("project_id", raw.get("projectId")),
                     hangar_id=raw.get("hangar_id", raw.get("hangarId")),
                     drone_id=raw.get("drone_id", raw.get("droneId")),
                     task_batch_id=raw.get("task_batch_id", raw.get("taskBatchId")),
                     sequence=raw.get("sequence"),
                     occurred_at=raw.get("occurred_at", raw.get("occurredAt")),
-                    temporary_task_id=raw.get("temporary_task_id", raw.get("temporaryTaskId")),
-                    annotation_id=raw.get("annotation_id", raw.get("annotationId")),
-                    state_version=raw.get("state_version", raw.get("stateVersion")),
-                    annotation_version=raw.get("annotation_version", raw.get("annotationVersion")),
+                    temporary_task_id=temporary_task_id,
+                    annotation_id=annotation_id,
+                    state_version=state_version,
+                    annotation_version=annotation_version,
                 )
                 event.validate()
                 events.append(event)
