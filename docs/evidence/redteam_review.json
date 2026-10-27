@@ -1,0 +1,34 @@
+{
+  "reviewer": "teammate:line-c",
+  "reviewer_kind": "external_cli",
+  "reviewed_tree": "8c90555b71da3c9e6cef8b6dcc8de28be561b07b",
+  "verdict": "pass",
+  "findings": [
+    {
+      "severity": "low",
+      "file": "docs/evidence/v14-parallel-delivery-20261027.md:29 | docs/evidence/jury_scorecard_v14.json",
+      "issue": "新证据文档「合流与门禁」把 docs/evidence/jury_scorecard_v14.json 列为「成绩单」，但该文件是历史失效产物：timestamp=2026-10-27 16:18:01、mode=deterministic、git_head=a1e96ed（远早于当前合流树）、sign_off_passed=false、deterministic_only=true；docs/evidence/convergence_gate_20261031.md 已明确声明上一轮门禁报告作废。合流文档未注明「待本次完整签署门禁重跑后重写 / 当前为历史作废产物」，容易被误读成已有合格成绩单。建议加一句限定，或等 lead 跑完整门禁后再引用该路径。",
+      "repro": "cd /Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent && python3 -c \"import json;d=json.load(open('docs/evidence/jury_scorecard_v14.json'));print({k:d.get(k) for k in ('timestamp','mode','git_head','sign_off_passed','deterministic_only')})\" && sed -n '24,30p' docs/evidence/v14-parallel-delivery-20261027.md  # 文件仍是 a1e96ed 的 deterministic 历史产物，与当前树 8c90555b 无关"
+    },
+    {
+      "severity": "low",
+      "file": "src/lingxi_flight_control/route_mapping.py:18 | src/lingxi_flight_control/route_mapping.py:182,184",
+      "issue": "M2 修复后（4 条话术已 assertIs 收敛到 flight_policy）模块 docstring 的措辞过宽：写「本模块 MESSAGE_REJECT_* 只是别名，不得再写重复字面量」，但 MESSAGE_REJECT_MULTI_LINE / MESSAGE_REJECT_MULTI_AREA 仍是本模块字面量真源（flight_policy 无对应常量，且这与 ACCEPTANCE 纠正段只列 4 个别名的准确口径不一致）。现无行为问题，但后续若读者按 docstring 认为所有 MESSAGE_REJECT_* 都已单一真源，会误判。建议：把多线/多面两条也上移到 flight_policy，或把 docstring 改为「对 flight_policy 已有的 4 条话术为别名；多线/多面本模块暂为唯一真源（待上移）」。",
+      "repro": "cd /Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent && sed -n '16,20p' src/lingxi_flight_control/route_mapping.py && sed -n '180,185p' src/lingxi_flight_control/route_mapping.py && PYTHONPATH=src python3 -c \"from lingxi_flight_control import flight_policy as fp, route_mapping as rm; print([n for n in dir(fp) if 'MULTI_LINE' in n or 'MULTI_AREA' in n])\"  # flight_policy 无对应常量"
+    },
+    {
+      "severity": "low",
+      "file": "src/lingxi_flight_control/cockpit.py:212,215-219,251 | tests/test_v14_phrase_gaps.py:703",
+      "issue": "M3 修复把「几何体航线/几何体航测/几何体测绘」并入 in-flight _COMPLEX_ROUTE_MENTION 并复用表6 R6「网格航线/复杂路径」话术拒绝；规范 1.1/3.2.1 注记只要求拒绝几何体航线、并未给独立话术，因此话术复用属规范未定义处的假设。线B 已在 route_mapping 模块假设 2 显式标注「规范未给独立话术，复用 MESSAGE_REJECT_GRID」，线A 的 cockpit 注释与用例名 rejected_with_same_spec_phrase 未标注该假设，两线披露口径不一致。建议 cockpit 注释/用例补一句「话术复用假设同 route_mapping 假设 2」。",
+      "repro": "cd /Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent && PYTHONPATH=src python3 -c \"from lingxi_flight_control.cockpit import _in_flight_unsupported as f; print(f('用几何体航线飞'))\" && sed -n '30,32p' src/lingxi_flight_control/route_mapping.py  # 返回表6 R6 网格话术；lineB 已把这类复用写成假设 2，lineA 未标"
+    },
+    {
+      "severity": "low",
+      "file": "src/lingxi_flight_control/route_mapping.py:203-207,431-452,239-241 | docs/evidence/v14-parallel-delivery-20261027.md:46",
+      "issue": "上一轮集成评审记录的残余 low 仍在（不阻塞本轮签署，且新证据文档第四节已如实列入）：(a) 否定启发式仍是 5 字窗口 + 单字标记，跨子句/「特别」「千万不要使用那个」等边界会误抑制或漏抑制；(b) conflict=True 的上游追问话术与 session.clarification 接线仍未做；(c) IN_FLIGHT_ROUTE_TYPES 仍不参与运行时判定（仅测试断言）。这三项在 v14-parallel-delivery 第四节第 5 条已声明为「不影响本轮签署的残余」，保留备查，不据此阻塞。",
+      "repro": "cd /Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent && PYTHONPATH=src python3 -c \"from lingxi_flight_control.route_mapping import map_trigger_to_route as m, decide_route as d; print(m('不要拍照，沿河巡查').route_type, d('不要绕一圈','点').route_type)\" && grep -rn 'IN_FLIGHT_ROUTE_TYPES' src/ tests/ | grep -v __pycache__"
+    }
+  ],
+  "no_findings": false,
+  "reviewed_at": "2026-10-27T17:07:51+08:00"
+}
