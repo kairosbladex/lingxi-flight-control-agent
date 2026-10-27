@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from lingxi_flight_control.full_control import ACTION_SPECS, MemoryFlightControlSimulator, RuntimeBinding
 from lingxi_flight_control.task_events import (
     TaskEvent, TaskEventError, TaskEventKind, TaskEventLedger, UnavailableTaskEventBridge,
-    HttpTaskEventBridge,
+    HttpTaskEventBridge, PlatformTaskEventBridge,
     apply_task_event, coerce_kind,
 )
 
@@ -64,6 +64,9 @@ class EventContractTests(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].kind, TaskEventKind.LOW_BATTERY_RETURN)
         self.assertEqual(events[0].sequence, 2)
+
+    def test_platform_bridge_is_the_public_typed_event_adapter(self):
+        self.assertTrue(issubclass(PlatformTaskEventBridge, HttpTaskEventBridge))
 
     def test_http_bridge_does_not_turn_upstream_failure_into_empty_events(self):
         class Transport:

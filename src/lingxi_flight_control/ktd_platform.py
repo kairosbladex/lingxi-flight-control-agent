@@ -38,7 +38,7 @@ from .mapping_interruption import (
     UnavailableMappingInterruptionGateway,
 )
 from .ai_lifecycle import HttpAlgorithmLifecycleGateway, HttpAnnotationAlgorithmGateway
-from .task_events import HttpTaskEventBridge
+from .task_events import PlatformTaskEventBridge
 
 
 #: 进程内锁只在同一执行器实例内串行化确认卡字典，**不**承担跨进程去重。
@@ -937,7 +937,7 @@ class KtdPlatformExecutor:
             self._mapping_gateway = UnavailableMappingInterruptionGateway()
         self._task_event_bridge = task_event_bridge
         if self._task_event_bridge is None and callable(getattr(transport, 'read_task_events', None)):
-            self._task_event_bridge = HttpTaskEventBridge(
+            self._task_event_bridge = PlatformTaskEventBridge(
                 transport, site_id=site_id, task_id=task_id)
         #: 平台是否真的按幂等键收敛；只有网关自己声明才算，缺省一律按「不支持」。
         self._mapping_gateway_idempotent = (

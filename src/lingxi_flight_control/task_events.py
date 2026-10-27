@@ -9,8 +9,9 @@
 - ``all_tasks_ended`` 清空主线断点，``mapping_invalidated`` 之后永不恢复航线。
 
 事件入口**不注册为模型工具**：模型只能提议飞行动作，不能直接制造平台事件。
-真实平台事件源尚未取得可核验契约，因此 ``UnavailableTaskEventBridge`` 是默认
-实现，读取时返回 typed ``TASK_EVENT_SOURCE_UNAVAILABLE``，而不是空列表
+真实平台事件源缺失时仍使用 ``UnavailableTaskEventBridge``；具备固定 transport
+契约的执行器自动装配 ``PlatformTaskEventBridge``。所有传输失败都返回 typed
+``TASK_EVENT_SOURCE_UNAVAILABLE``，而不是空列表
 （空列表会被误读成“没有事件，所以状态没变”）。
 """
 from __future__ import annotations
@@ -436,6 +437,10 @@ class HttpTaskEventBridge:
         except (TypeError, ValueError):
             raise TaskEventError(INVALID_TASK_EVENT) from None
         return tuple(events)
+
+
+class PlatformTaskEventBridge(HttpTaskEventBridge):
+    """V1.4 事件桥公开名称；HTTP 是当前固定 transport 的实现方式。"""
 
 
 def event_from_legacy(kind: str, *, event_id: str, sequence: int, binding: Any,
