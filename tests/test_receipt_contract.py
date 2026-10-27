@@ -165,7 +165,7 @@ class QueryReceiptTests(unittest.TestCase):
             capabilities={'move_forward': True, 'UAV_MOVE_DISTANCE': True},
             state={'online': True, 'airborne': True, 'longitude': 113.0, 'latitude': 23.0,
                    'altitude_m': 100.0, 'height_m': 50.0, 'yaw_deg': 90.0,
-                   'flight_status': 'FLYING', 'route_status': 'idle'},
+                   'flight_status': 'FLYING', 'route_status': 'hover'},
         )
 
     def executor(self, *, binding=None):

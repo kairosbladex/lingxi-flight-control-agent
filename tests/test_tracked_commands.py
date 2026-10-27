@@ -59,7 +59,7 @@ class TrackedCommandTests(unittest.TestCase):
             'java-task-1', 7, 'a' * 64, 1000, 'actor-1', 'DJI_HANGAR',
             frozenset({'move_forward', 'read_state'}), {'move_forward': True, 'UAV_MOVE_DISTANCE': True},
             {'online': True, 'airborne': True, 'longitude': 113, 'latitude': 23,
-             'altitude_m': 60, 'height_m': 50, 'yaw_deg': 90}, 1060)
+             'altitude_m': 60, 'height_m': 50, 'yaw_deg': 90, 'route_status': 'hover'}, 1060)
         self.request = FlightControlActionRequest('command-1', 'key-1', 'move_forward', {'distance_m': 10}, 7)
 
     def executor(self, **changes):

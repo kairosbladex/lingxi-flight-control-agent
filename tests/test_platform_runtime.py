@@ -106,7 +106,7 @@ class FakeJavaOpener:
                       # route_status 同理：null 无法证明“不在自动航线”，
                       # 微操会被 AUTHORITATIVE_STATE_INCOMPLETE 拒绝。'idle'
                       # 是本仓合成夹具取值，不是对平台取值的声明。
-                      'battery_percent': None, 'flight_status': 'FLYING', 'route_status': 'idle'},
+                      'battery_percent': None, 'flight_status': 'FLYING', 'route_status': 'hover'},
             'permissions': ['read_state', 'move_forward'],
             'capabilities': {'read_state': True, 'move_forward': True, 'UAV_MOVE_DISTANCE': True},
             'action_availability': {'read_state': {'available': True, 'reasons': []},

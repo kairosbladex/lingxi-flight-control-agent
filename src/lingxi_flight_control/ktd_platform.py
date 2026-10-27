@@ -24,7 +24,8 @@ from .full_control import ACTION_SPECS, FlightControlAction, FlightControlAction
 from .models import ExecutionContext
 from .authority_contract import AuthorityContractError, audit_snapshot, require_authority
 from .java_tools import TOOLS as JAVA_TOOLS, JavaActionRequest, encode as encode_java_tool
-from .flight_policy import (ADJUSTABLE, CONTROL_MESSAGE, MAPPING_MESSAGE, POLICY_VERSION,
+from .flight_policy import (ADJUSTABLE, CONTROL_MESSAGE, MAPPING_MESSAGE, MICRO_ACTIONS,
+                            POLICY_VERSION,
                             PolicyError, check_flight_policy, check_path,
                             mapping_interruption, normalize_parameters,
                             platform_path_provider_rejection)
@@ -91,12 +92,24 @@ _PAYLOAD_TYPES = {'speaker_speak': ('/screen/speaker/control', 201),
                   'searchlight_brightness': ('/screen/lighting/control', 103)}
 SUPPORTED_ACTIONS = (frozenset(_MOVE_TYPES) | frozenset(_TURN_TYPES)
                      | frozenset(_GIMBAL_TYPES) | frozenset(_ROUTE_TYPES)
-                     | frozenset(_CAMERA_TYPES) | _EXTRA_CAMERA | frozenset(JAVA_TOOLS) | frozenset(_PAYLOAD_TYPES) | frozenset(_FLY_TYPES) | {"read_state", 'task_end_current', 'task_end_all', 'hover'})
+                     | frozenset(_CAMERA_TYPES) | _EXTRA_CAMERA | frozenset(JAVA_TOOLS) | frozenset(_PAYLOAD_TYPES) | frozenset(_FLY_TYPES) | {"read_state", 'task_end_current', 'task_end_all', 'hover', 'control_acquire', 'control_release'})
 _PATHS = frozenset({"/screen/uav/operation/control", "/screen/uav/route/control",
                     "/screen/uav/camera/control", "/screen/uav/gimbal/control", "/screen/uav/fly/control",
                     '/screen/speaker/control', '/screen/lighting/control'})
 _STATE_FIELDS = frozenset({"online", "airborne", "longitude", "latitude", "altitude_m",
                           "height_m", "yaw_deg", "battery_percent", "flight_status", "route_status"})
+
+
+def _hover_confirmed(state: Mapping[str, Any]) -> bool:
+    """Require an explicit stable hover fact before platform micro-control."""
+    if not isinstance(state, Mapping):
+        return False
+    route_status = state.get("route_status")
+    if isinstance(route_status, str) and route_status.lower() in {"hover", "paused"}:
+        return True
+    flight_status = state.get("flight_status")
+    return isinstance(flight_status, str) and flight_status.lower() in {
+        "hover", "hovering", "paused", "qhover", "qstabilize"}
 
 
 def _json(value: Any) -> str:
@@ -528,6 +541,32 @@ class KtdHttpTransport:
         emit('flight_java', phase='response', http_status=response.status_code,
              java_code=code if type(code) is int else None, device_effect='not_verified', **fields)
         return response
+
+    def _control_request(self, path: str, binding: RuntimeBinding, *, site_id: str,
+                         query: Mapping[str, str]) -> KtdHttpResponse:
+        if (not isinstance(binding, RuntimeBinding) or binding.actor_id != self.actor_id
+                or not all(_identifier(value) for value in
+                           (binding.project_id, binding.hangar_id, binding.drone_id, site_id))
+                or not all(_identifier(value) for value in query.values())):
+            raise KtdPlatformError("INVALID_REQUEST_CONTEXT")
+        params = {"uavId": binding.drone_id, **dict(query)}
+        request = Request(self._base_url + path + "?" + urlencode(params), method="GET",
+                          headers={"Authorization": "Bearer " + self._token,
+                                   "projectId": binding.project_id})
+        try:
+            return self._read_response(request, strict_json=True)
+        except Exception:
+            raise KtdPlatformError("CONTROL_TRANSPORT_UNKNOWN") from None
+
+    def acquire_control(self, binding: RuntimeBinding, *, site_id: str,
+                        session_id: str, force: bool = False) -> KtdHttpResponse:
+        if not _identifier(session_id) or type(force) is not bool:
+            raise KtdPlatformError("INVALID_REQUEST_CONTEXT")
+        return self._control_request("/uavControlPower/obtain", binding, site_id=site_id,
+                                     query={"sessionId": session_id, "isForce": str(force).lower()})
+
+    def release_control(self, binding: RuntimeBinding, *, site_id: str) -> KtdHttpResponse:
+        return self._control_request("/uavControlPower/release", binding, site_id=site_id, query={})
 
     def task_end_check(self, binding: RuntimeBinding, task_id: str) -> KtdHttpResponse:
         if binding.actor_id != self.actor_id or not re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', task_id):
@@ -1015,7 +1054,8 @@ class KtdPlatformExecutor:
                 or self._clock() - snapshot.observed_at > self._max_age):
             raise KtdPlatformError("AUTHORITATIVE_STATE_STALE")
         if (not isinstance(snapshot.permissions, frozenset) or not isinstance(snapshot.capabilities, Mapping)
-                or not isinstance(snapshot.state, Mapping) or action not in snapshot.permissions):
+                or not isinstance(snapshot.state, Mapping)
+                or (action not in snapshot.permissions and action != "control_acquire")):
             raise KtdPlatformError("ACTION_NOT_PERMITTED")
         # V1.4：平台显式声明“这个能力我没有”时，先返回该能力自己的错误码，
         # 而不是让调用方从 null 字段猜原因。
@@ -1028,11 +1068,16 @@ class KtdPlatformExecutor:
             require_authority(snapshot, action)
         except AuthorityContractError as error:
             raise KtdPlatformError(error.code) from None
-        if snapshot.action_availability is not None:
+        if snapshot.action_availability is not None and action != "control_acquire":
             entry = snapshot.action_availability.get(action) if isinstance(snapshot.action_availability, Mapping) else None
             if (not isinstance(entry, Mapping) or entry.get('available') is not True
                     or entry.get('reasons') != []):
                 raise KtdPlatformError('ACTION_UNAVAILABLE')
+        if action in {"control_acquire", "control_release"}:
+            if snapshot.state.get("online") is not True:
+                raise KtdPlatformError("DEVICE_NOT_ONLINE")
+            if action == "control_acquire":
+                return
         if action != "read_state":
             if snapshot.control_owner != self.binding.actor_id:
                 raise KtdPlatformError("CONTROL_NOT_OWNED")
@@ -1041,7 +1086,7 @@ class KtdPlatformExecutor:
                 raise KtdPlatformError("CONTROL_LEASE_UNAVAILABLE")
             if lease_expires_at <= self._clock():
                 raise KtdPlatformError("CONTROL_LEASE_EXPIRED")
-            if snapshot.capabilities.get(action) is not True:
+            if action != "control_acquire" and snapshot.capabilities.get(action) is not True:
                 raise KtdPlatformError("CAPABILITY_UNAVAILABLE")
             if snapshot.state.get("online") is not True:
                 raise KtdPlatformError("DEVICE_NOT_ONLINE")
@@ -1082,6 +1127,10 @@ class KtdPlatformExecutor:
             return frozenset()
         available = set()
         for action in SUPPORTED_ACTIONS:
+            # Control-power requests are explicit user intents, not a capability
+            # advertised by the current-flight action list.
+            if action in {"control_acquire", "control_release"}:
+                continue
             if action != "read_state" and not self._enabled:
                 continue
             try:
@@ -1202,6 +1251,9 @@ class KtdPlatformExecutor:
                    "请求未执行，请核对能力、权限和当前状态")
         if code == 'CONTROL_NOT_OWNED':
             message = CONTROL_MESSAGE
+        elif code == 'HOVER_REQUIRED':
+            from .flight_policy import HOVER_MESSAGE
+            message = HOVER_MESSAGE
         elif code == 'ROUTE_PAUSE_REQUIRED':
             from .flight_policy import ROUTE_MESSAGE
             message = ROUTE_MESSAGE
@@ -1479,6 +1531,14 @@ class KtdPlatformExecutor:
                  *, interruption_pending: bool = False) -> KtdCommand:
         try:
             check_flight_policy(request.action, snapshot.state)
+            action_value = (request.action.value
+                            if isinstance(request.action, FlightControlAction)
+                            else str(request.action))
+            if (action_value in MICRO_ACTIONS
+                    and not self._legacy_read_api
+                    and not mapping_interruption(action_value, snapshot.state)
+                    and not _hover_confirmed(snapshot.state)):
+                raise PolicyError("HOVER_REQUIRED", "当前无人机尚未悬停，请先说‘悬停’后再操作。")
             if mapping_interruption(request.action, snapshot.state) and not interruption_pending:
                 # 能力探测等路径不允许触发中断，直接按不可用处理。
                 raise PolicyError('MAPPING_INTERRUPTION_UNAVAILABLE', MAPPING_MESSAGE)
@@ -1496,6 +1556,11 @@ class KtdPlatformExecutor:
             return KtdCommand(endpoint, {'terminalId':self.binding.drone_id,'siteId':self.site_id,
                 **({'taskId':self.task_id} if self.task_id is not None else {}),**values})
         action = FlightControlAction(request.action).value
+        if action in {"control_acquire", "control_release"}:
+            if action == "control_release" and snapshot.control_owner != self.binding.actor_id:
+                raise KtdPlatformError("CONTROL_NOT_OWNED")
+            return KtdCommand("/uavControlPower/" + ("obtain" if action == "control_acquire" else "release"),
+                              {"uavId": self.binding.drone_id})
         if action in {'task_end_current', 'task_end_all'}:
             if self.task_id is None or not re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', self.task_id):
                 raise KtdPlatformError('JAVA_TASK_REQUIRED')
@@ -1740,6 +1805,38 @@ class KtdPlatformExecutor:
         elif action in {"hover", "emergency_stop", "route_pause", "point_flight_stop",
                         "point_orbit_stop", "land", "land_alternate", "return_home"}:
             self._last_motion = None
+
+    def _execute_control(self, action: str, trace_id: str) -> KtdSnapshot:
+        """Call the fixed control-power endpoint, then prove the new owner from a fresh snapshot."""
+        if action == "control_acquire":
+            call = getattr(self._transport, "acquire_control", None)
+            if not callable(call):
+                raise KtdPlatformError("CONTROL_TRANSPORT_UNAVAILABLE")
+            response = call(self.binding, site_id=self.site_id, session_id=trace_id)
+            payload = response.payload if isinstance(response, KtdHttpResponse) and isinstance(response.payload, Mapping) else {}
+            data = payload.get("data")
+            if (not isinstance(response, KtdHttpResponse) or response.status_code != 200
+                    or payload.get("code") != 200):
+                raise KtdPlatformError("CONTROL_ACQUIRE_FAILED")
+            if data != "1":
+                raise KtdPlatformError("CONTROL_ACQUIRE_FAILED")
+            verified = self._snapshot("read_state")
+            if (verified.control_owner != self.binding.actor_id
+                    or not _finite(verified.control_lease_expires_at, self._clock(), float("inf"))):
+                raise KtdPlatformError("CONTROL_ACQUIRE_NOT_CONFIRMED")
+            return verified
+        call = getattr(self._transport, "release_control", None)
+        if not callable(call):
+            raise KtdPlatformError("CONTROL_TRANSPORT_UNAVAILABLE")
+        response = call(self.binding, site_id=self.site_id)
+        payload = response.payload if isinstance(response, KtdHttpResponse) and isinstance(response.payload, Mapping) else {}
+        if (not isinstance(response, KtdHttpResponse) or response.status_code != 200
+                or payload.get("code") != 200):
+            raise KtdPlatformError("CONTROL_RELEASE_FAILED")
+        verified = self._snapshot("read_state")
+        if verified.control_owner == self.binding.actor_id:
+            raise KtdPlatformError("CONTROL_RELEASE_NOT_CONFIRMED")
+        return verified
 
     # ---- 姿态控制：旧控制接口 + 姿态回读闭环 -----------------------------
 
@@ -2240,6 +2337,42 @@ class KtdPlatformExecutor:
             except Exception:
                 return self._reject(request, "JOURNAL_OR_STATE_UNAVAILABLE")
             result = unknown
+            action_value = (request.action.value if isinstance(request.action, FlightControlAction)
+                            else str(request.action))
+            if action_value in {"control_acquire", "control_release"}:
+                try:
+                    verified = self._execute_control(action_value, pending.receipt.trace_id)
+                    fields["snapshot"] = verified
+                    result = self._receipt(
+                        request, FlightControlStatus.ACCEPTED, message=(
+                            "已获取无人机控制权，已从平台快照确认租约有效。"
+                            if action_value == "control_acquire" else "已释放无人机控制权。"), **fields)
+                except KtdPlatformError as error:
+                    deterministic = {
+                        "CONTROL_ACQUIRE_FAILED", "CONTROL_ACQUIRE_NOT_CONFIRMED",
+                        "CONTROL_RELEASE_FAILED", "CONTROL_RELEASE_NOT_CONFIRMED",
+                        "CONTROL_TRANSPORT_UNAVAILABLE",
+                    }
+                    if str(error) in deterministic:
+                        result = self._receipt(request, FlightControlStatus.REJECTED,
+                                               error_code=str(error),
+                                               message=("未能从平台快照确认控制权已生效，未继续下发。"
+                                                        if action_value == "control_acquire"
+                                                        else "未能从平台快照确认控制权已释放。"),
+                                               **fields)
+                    else:
+                        result = self._receipt(request, "unknown", error_code=str(error),
+                                               message="控制权接口结果未知，禁止自动重试；请查询平台状态。",
+                                               **fields)
+                except Exception:
+                    result = self._receipt(request, "unknown", error_code="CONTROL_TRANSPORT_UNKNOWN",
+                                           message="控制权接口结果未知，禁止自动重试；请查询平台状态。",
+                                           **fields)
+                try:
+                    self._journal.finish(scope, fingerprint, result.to_dict(), now=self._clock())
+                except Exception:
+                    return unknown
+                return result
             try:
                 context = KtdRequestContext(self.binding.actor_id, self.binding.project_id, pending.receipt.trace_id, idempotency_key)
                 if self._track_commands and not vendor:

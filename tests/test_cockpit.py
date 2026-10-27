@@ -262,7 +262,7 @@ class CockpitTests(unittest.TestCase):
                 frozenset({'read_state', 'move_forward', 'camera_photo'}),
                 {'move_forward': True, 'camera_photo': True, 'UAV_MOVE_DISTANCE': True},
                 {'online': True, 'airborne': True, 'longitude': 113, 'latitude': 23,
-                 'altitude_m': 50, 'height_m': 30, 'yaw_deg': 90}, control_lease_expires_at=self.clock[0] + 60)
+                 'altitude_m': 50, 'height_m': 30, 'yaw_deg': 90, 'route_status': 'hover'}, control_lease_expires_at=self.clock[0] + 60)
             executor = KtdPlatformExecutor(self.binding, site_id='site-1', task_id=None,
                 transport=Transport(), snapshot_provider=lambda: snapshot,
                 journal=SqliteCommandJournal(directory + '/commands.db'), enabled=True,

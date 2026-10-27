@@ -519,7 +519,7 @@ class PlatformConfirmOrderTests(unittest.TestCase):
 
     def test_non_mapping_task_never_calls_the_gateway(self):
         self.snapshot = KtdSnapshot(**{**self.snapshot.__dict__, 'state': {
-            **self.snapshot.state, 'task_type': 'inspection', 'route_status': 'idle'}})
+            **self.snapshot.state, 'task_type': 'inspection', 'route_status': 'hover'}})
         executor = self.build()
         card = executor.preview(self.request())
         self.assertEqual(card.to_dict()['status'], 'preview_required')
@@ -875,7 +875,7 @@ class MappingReservationStateMachineTests(unittest.TestCase):
         self.assertEqual(self.transport.calls, 0)
 
     def test_non_mapping_task_creates_no_reservation(self):
-        self.snapshot = _platform_snapshot(self.now[0], task_type='inspection', route_status='idle')
+        self.snapshot = _platform_snapshot(self.now[0], task_type='inspection', route_status='hover')
         executor = self.build()
         card = executor.preview(self.request())
         self.assertEqual(card.to_dict()['status'], 'preview_required')

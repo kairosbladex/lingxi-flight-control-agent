@@ -48,7 +48,8 @@ class PlatformExecutorTests(unittest.TestCase):
             permissions=frozenset({"move_forward", "read_state"}),
             capabilities={"move_forward": True, "UAV_MOVE_DISTANCE": True},
             state={"online": True, "airborne": True, "longitude": 113.0,
-                   "latitude": 23.0, "altitude_m": 100.0, "height_m": 50.0, "yaw_deg": 90.0},
+                   "latitude": 23.0, "altitude_m": 100.0, "height_m": 50.0, "yaw_deg": 90.0,
+                   "route_status": "hover"},
         )
         self.journal_path = self.directory.name + "/commands.sqlite3"
 
@@ -188,7 +189,7 @@ class PlatformExecutorTests(unittest.TestCase):
 
     def test_unimplemented_actions_are_explicitly_unsupported(self):
         for action, parameters in (("land", {}),
-                                   ("takeoff", {"altitude_m": 20}), ("control_acquire", {}),
+                                   ("takeoff", {"altitude_m": 20}),
                                    ("set_move_speed", {"value": 2})):
             with self.subTest(action=action):
                 self.assertEqual(self.executor().preview(self.request(action, parameters)).error_code, "ACTION_UNSUPPORTED")
@@ -197,6 +198,65 @@ class PlatformExecutorTests(unittest.TestCase):
             self.executor().preview(self.request("turn_left", {"angle_deg": 90})).error_code,
             "ACTION_NOT_PERMITTED")
         self.assertEqual(self.transport.calls, [])
+
+    def test_micro_control_requires_authoritative_hover_state(self):
+        self.snapshot = replace(self.snapshot, state={**self.snapshot.state, "route_status": "idle"})
+        result = self.executor().preview(self.request())
+        self.assertEqual(result.error_code, "HOVER_REQUIRED")
+        self.assertIn("请先说‘悬停’", result.message)
+        self.assertEqual(self.transport.calls, [])
+
+    def test_control_acquire_requires_success_and_fresh_owner_snapshot(self):
+        self.snapshot = replace(self.snapshot, permissions=frozenset({"control_acquire", "read_state"}),
+                                capabilities={"control_acquire": True}, control_owner=None,
+                                control_lease_expires_at=None)
+        self.transport.control_calls = []
+
+        def acquire(binding, *, site_id, session_id, force=False):
+            self.transport.control_calls.append((binding, site_id, session_id, force))
+            self.snapshot = replace(self.snapshot, control_owner=self.binding.actor_id,
+                                    control_lease_expires_at=self.now + 60)
+            return KtdHttpResponse(200, {"code": 200, "data": "1"})
+
+        self.transport.acquire_control = acquire
+        executor = self.executor()
+        request = self.request("control_acquire", {}, "control-acquire")
+        card = executor.preview(request)
+        self.assertIs(card.status, FlightControlStatus.PREVIEW_REQUIRED)
+        result = self.confirm(executor, card)
+        self.assertIs(result.status, FlightControlStatus.ACCEPTED)
+        self.assertEqual(result.state["control_owner"], self.binding.actor_id)
+        self.assertEqual(len(self.transport.control_calls), 1)
+        self.assertEqual(self.transport.calls, [])
+
+    def test_control_acquire_data_zero_is_rejected_without_claiming_authority(self):
+        self.snapshot = replace(self.snapshot, permissions=frozenset({"control_acquire", "read_state"}),
+                                capabilities={"control_acquire": True}, control_owner=None,
+                                control_lease_expires_at=None)
+        self.transport.acquire_control = lambda *args, **kwargs: KtdHttpResponse(
+            200, {"code": 200, "data": "0"})
+        executor = self.executor()
+        result = self.confirm(executor, executor.preview(
+            self.request("control_acquire", {}, "control-acquire-fail")))
+        self.assertEqual(result.error_code, "CONTROL_ACQUIRE_FAILED")
+        self.assertIs(result.status, FlightControlStatus.REJECTED)
+        self.assertIsNone(result.state["control_owner"])
+
+    def test_control_release_requires_owner_and_verifies_release_snapshot(self):
+        self.snapshot = replace(self.snapshot, permissions=frozenset({"control_release", "read_state"}),
+                                capabilities={"control_release": True})
+
+        def release(binding, *, site_id):
+            self.snapshot = replace(self.snapshot, control_owner=None,
+                                    control_lease_expires_at=None)
+            return KtdHttpResponse(200, {"code": 200})
+
+        self.transport.release_control = release
+        executor = self.executor()
+        result = self.confirm(executor, executor.preview(
+            self.request("control_release", {}, "control-release")))
+        self.assertIs(result.status, FlightControlStatus.ACCEPTED)
+        self.assertIsNone(result.state["control_owner"])
 
     def test_confirmation_binding_strictly_rejects_wrong_and_boolean_versions(self):
         executor = self.executor()
@@ -403,12 +463,14 @@ class HttpTransportTests(unittest.TestCase):
     def setUp(self):
         self.requests = []
         self.response_status = 200
+        self.response_payload = {"code": 200}
         outer = self
 
         class Opener:
             def open(self, request, *, timeout):
-                outer.requests.append((request.full_url, json.loads(request.data), dict(request.headers)))
-                response = BytesIO(b'{"code":200}')
+                outer.requests.append((request.full_url, request.get_method(),
+                                       json.loads(request.data or b'{}'), dict(request.headers)))
+                response = BytesIO(json.dumps(outer.response_payload).encode())
                 response.code = outer.response_status
                 return response
 
@@ -423,12 +485,29 @@ class HttpTransportTests(unittest.TestCase):
     def test_fixed_http_endpoint_and_authentication_context(self):
         response = self.transport().submit(self.command, self.context)
         self.assertEqual(response, KtdHttpResponse(200, {"code": 200}))
-        path, body, headers = self.requests[0]
+        path, method, body, headers = self.requests[0]
+        self.assertEqual(method, "POST")
         self.assertEqual(path, "https://platform.test/api/screen/uav/route/control")
         self.assertEqual(body, self.command.body)
         self.assertEqual(headers["Authorization"], "Bearer test-only-token")
         self.assertEqual(headers["Projectid"], "project-1")
         self.assertEqual(headers["X-trace-id"], "trace-1")
+
+    def test_control_power_uses_fixed_get_endpoint_and_strict_response_payload(self):
+        self.response_payload = {"code": 200, "data": "1"}
+        binding = RuntimeBinding("actor-1", "project-1", "hangar-1", "drone-1", "batch-1", 1)
+        response = self.transport().acquire_control(binding, site_id="site-1", session_id="trace-1")
+        self.assertEqual(response, KtdHttpResponse(200, {"code": 200, "data": "1"}))
+        path, method, body, headers = self.requests[0]
+        self.assertEqual(method, "GET")
+        self.assertEqual(body, {})
+        self.assertIn("/uavControlPower/obtain?", path)
+        self.assertIn("uavId=drone-1", path)
+        self.assertIn("sessionId=trace-1", path)
+        self.assertIn("isForce=false", path)
+        self.assertEqual(headers["Projectid"], "project-1")
+        self.response_payload = {"code": 200, "data": "0"}
+        self.assertEqual(self.transport().acquire_control(binding, site_id="site-1", session_id="trace-2").payload["data"], "0")
 
     def test_redirect_response_is_returned_without_retry(self):
         self.response_status = 302

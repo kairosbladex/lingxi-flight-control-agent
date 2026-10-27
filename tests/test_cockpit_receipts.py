@@ -121,7 +121,7 @@ class CockpitTrackedReceiptTests(unittest.TestCase):
             control_lease_expires_at=1300, permissions=frozenset({'read_state', 'move_forward', 'move_right'}),
             capabilities={'read_state': True, 'move_forward': True, 'move_right': True, 'UAV_MOVE_DISTANCE': True},
             state={'online': True, 'airborne': True, 'longitude': 113, 'latitude': 23,
-                   'altitude_m': 100, 'height_m': 50, 'yaw_deg': 90})
+                   'altitude_m': 100, 'height_m': 50, 'yaw_deg': 90, 'route_status': 'hover'})
         self.opener = ReceiptJavaOpener()
         self.brain = ReceiptBrain()
         self.journal_path = self.directory.name + '/commands.sqlite3'

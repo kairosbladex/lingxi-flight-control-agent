@@ -87,7 +87,7 @@ class PlatformHoverTests(unittest.TestCase):
         self.transport = _Transport()
         self.state = {"online": True, "airborne": True, "longitude": 113.0, "latitude": 23.0,
                       "altitude_m": 100.0, "height_m": 50.0, "yaw_deg": 90.0,
-                      "route_status": "idle"}
+                      "route_status": "hover"}
         self.capabilities = {"hover": True, "point_flight": True, "point_orbit": True,
                              "move_forward": True, "UAV_MOVE_DISTANCE": True}
         self.snapshot = self.build_snapshot()

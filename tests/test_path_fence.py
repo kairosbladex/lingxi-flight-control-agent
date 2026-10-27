@@ -233,7 +233,8 @@ class ProviderContractTests(unittest.TestCase):
             permissions=frozenset({'move_forward', 'read_state'}),
             capabilities={'move_forward': True, 'UAV_MOVE_DISTANCE': True},
             state={'online': True, 'airborne': True, 'longitude': 113.0, 'latitude': 23.0,
-                   'altitude_m': 100.0, 'height_m': 50.0, 'yaw_deg': 90.0},
+                   'altitude_m': 100.0, 'height_m': 50.0, 'yaw_deg': 90.0,
+                   'route_status': 'hover'},
         )
 
     def executor(self, provider, directory, now=1000.0):
@@ -795,7 +796,8 @@ class PlatformFenceTests(unittest.TestCase):
             capabilities={'move_forward': True, 'point_orbit': True, 'point_flight': True,
                           'UAV_MOVE_DISTANCE': True},
             state={'online': True, 'airborne': True, 'longitude': 113.0, 'latitude': 23.0,
-                   'altitude_m': 100.0, 'height_m': 50.0, 'yaw_deg': 90.0},
+                   'altitude_m': 100.0, 'height_m': 50.0, 'yaw_deg': 90.0,
+                   'route_status': 'hover'},
         )
         self.transport = _NoSubmit()
         self.executor = KtdPlatformExecutor(

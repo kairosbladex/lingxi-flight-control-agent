@@ -55,6 +55,7 @@ from .geometry import horizontal_distance_m
 POLICY_VERSION = "flight-control-v1.3"
 CONTROL_MESSAGE = "您尚未获取无人机控制权，请先申请后再下发指令。"
 ROUTE_MESSAGE = "当前正在执行自动航线，请先说‘暂停航线’或‘悬停’再操作。"
+HOVER_MESSAGE = "当前无人机尚未悬停，请先说‘悬停’后再操作。"
 MAPPING_MESSAGE = "中断将导致测绘成果失效，是否确认继续？确认后关闭自动拼图，原测绘任务不可恢复。"
 MOVES = frozenset({"move_forward", "move_backward", "move_left", "move_right", "move_up", "move_down"})
 MICRO_ACTIONS = MOVES | {"turn_left", "turn_right"}
