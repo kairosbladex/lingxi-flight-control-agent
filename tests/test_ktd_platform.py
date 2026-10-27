@@ -179,13 +179,27 @@ class PlatformExecutorTests(unittest.TestCase):
             ("gimbal_reset", "gimbal", 403),
         ):
             with self.subTest(action=action):
-                self.snapshot = replace(self.snapshot, permissions=frozenset({action}), capabilities={action: True})
+                route_status = ("running" if action == "route_pause"
+                                else "paused" if action == "route_resume"
+                                else self.snapshot.state.get("route_status"))
+                self.snapshot = replace(self.snapshot, permissions=frozenset({action}), capabilities={action: True},
+                                        state={**self.snapshot.state, "route_status": route_status})
                 executor = self.executor()
                 result = self.confirm(executor, executor.preview(self.request(action, {}, action)))
                 self.assertEqual(result.to_dict()["status"], "submitted")
                 command = self.transport.calls[-1][0]
                 self.assertEqual(command.path, f"/screen/uav/{path}/control")
                 self.assertEqual(command.body["type"], code)
+
+    def test_route_controls_require_the_authoritative_route_state(self):
+        for action, route_status in (("route_pause", "paused"), ("route_resume", "running"),
+                                     ("route_pause", None), ("route_resume", None)):
+            with self.subTest(action=action, route_status=route_status):
+                self.snapshot = replace(self.snapshot, permissions=frozenset({action}),
+                                        capabilities={action: True},
+                                        state={**self.snapshot.state, "route_status": route_status})
+                self.assertIn(self.executor().preview(self.request(action, {}, f"bad-{action}-{route_status}"))
+                              .error_code, {"ROUTE_STATE_MISMATCH", "AUTHORITATIVE_STATE_INCOMPLETE"})
 
     def test_unimplemented_actions_are_explicitly_unsupported(self):
         for action, parameters in (("land", {}),

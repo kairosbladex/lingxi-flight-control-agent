@@ -114,6 +114,7 @@ class CockpitRequestAuthorityTests(unittest.TestCase):
             ('申请无人机控制权', 'control_acquire', {}),
             ('释放当前控制权', 'control_release', {}),
             ('获取这架无人机的控制权', 'control_acquire', {}),
+            ('抢占当前无人机控制权', 'control_acquire', {'mode': 'force'}),
             ('释放我持有的控制权', 'control_release', {}),
             ('先获取控制权再返航', 'control_acquire', {}),
             ('Please acquire control of the drone.', 'control_acquire', {}),

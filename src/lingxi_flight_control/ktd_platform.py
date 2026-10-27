@@ -98,7 +98,8 @@ _PATHS = frozenset({"/screen/uav/operation/control", "/screen/uav/route/control"
                     '/screen/speaker/control', '/screen/lighting/control'})
 _STATE_FIELDS = frozenset({"online", "airborne", "longitude", "latitude", "altitude_m",
                           "height_m", "yaw_deg", "battery_percent", "flight_status", "route_status",
-                          "ground_speed_mps", "vertical_speed_mps", "flight_mode"})
+                          "ground_speed_mps", "vertical_speed_mps", "flight_mode", "task_state",
+                          "route_status_source", "route_status_reason"})
 
 
 def _hover_confirmed(state: Mapping[str, Any]) -> bool:
@@ -1698,6 +1699,12 @@ class KtdPlatformExecutor:
                 raise KtdPlatformError("JAVA_TASK_REQUIRED")
             if snapshot.state.get("airborne") is not True:
                 raise KtdPlatformError("FLIGHT_STATE_UNAVAILABLE")
+            if (action == "route_pause" and not self._legacy_read_api
+                    and snapshot.state.get("route_status") != "running"):
+                raise KtdPlatformError("ROUTE_STATE_MISMATCH")
+            if (action == "route_resume" and not self._legacy_read_api
+                    and snapshot.state.get("route_status") != "paused"):
+                raise KtdPlatformError("ROUTE_STATE_MISMATCH")
             body.update(type=_ROUTE_TYPES[action])
             if action == "return_home":
                 body["interrupt"] = False

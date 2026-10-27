@@ -90,7 +90,7 @@ _AUTHORITY_CLAIM = re.compile(
 _CONTROL_REQUEST_PREFIX = r'\s*(?:(?:请先?|先|然后|再|帮我|麻烦|我想|我要|现在|立即|马上)\s*)*'
 _CONTROL_REQUEST_TARGET = r'(?:这架|无人机|当前|我|所|持有|飞行|的|设备|\s)*控制权'
 _CONTROL_REQUESTS = {
-    'control_acquire': re.compile(_CONTROL_REQUEST_PREFIX + r'(?:申请|获取|取得|接管|夺取|获得|拿到)'
+    'control_acquire': re.compile(_CONTROL_REQUEST_PREFIX + r'(?:申请|获取|取得|接管|抢占|夺取|获得|拿到)'
         + _CONTROL_REQUEST_TARGET + r'|\s*(?:(?:please|first|now|i want to|i would like to)\s+)*'
         r'(?:acquire|request|take|obtain|grab)\s+(?:the\s+)?(?:(?:flight|drone)\s+)?control\b', re.I),
     'control_release': re.compile(_CONTROL_REQUEST_PREFIX + r'(?:释放|放弃|交还|归还)'

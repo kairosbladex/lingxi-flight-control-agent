@@ -19,7 +19,8 @@ _ACTIONS = frozenset(action.value for action in ACTION_SPECS)
 _NUMERIC_STATE = {'longitude': (-180, 180), 'latitude': (-90, 90),
     'altitude_m': (-500, 10000), 'height_m': (-500, 10000),
     'yaw_deg': (-360, 360), 'battery_percent': (0, 100)}
-_STATE_FIELDS = frozenset(_NUMERIC_STATE) | {'online', 'airborne', 'flight_status', 'route_status'}
+_REQUIRED_STATE_FIELDS = frozenset(_NUMERIC_STATE) | {'online', 'airborne', 'flight_status', 'route_status'}
+_STATE_FIELDS = _REQUIRED_STATE_FIELDS | {'task_state', 'route_status_source', 'route_status_reason'}
 #: V1.4 兼容扩展：平台真实返回时才校验，缺失保持“没有该事实”，不填默认值。
 _POLICY_FIELDS = frozenset({'task_type', 'mapping_invalidated', 'auto_stitching', 'low_battery_return',
     'device_limits', 'gimbal_pitch_deg', 'breakpoint_index', 'temporary_task_id', 'task_scope',
@@ -170,7 +171,7 @@ class KtdSnapshotProvider:
 
     @staticmethod
     def _state(value):
-        if not isinstance(value, Mapping) or not _STATE_FIELDS <= set(value):
+        if not isinstance(value, Mapping) or not _REQUIRED_STATE_FIELDS <= set(value):
             # 基础 state 键缺失：平台没有给出这些事实，不能补默认值。
             _reject('AUTHORITATIVE_STATE_INCOMPLETE')
         if set(value) - (_STATE_FIELDS | _POLICY_FIELDS):
