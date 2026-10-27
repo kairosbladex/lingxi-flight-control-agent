@@ -28,3 +28,8 @@ jobs:
       # 运行时不依赖任何第三方包（见 pyproject.toml），因此无需 pip install。
       - name: Run offline unit tests
         run: bash tools/ci/offline_tests.sh
+      # 合流门禁的确定性部分：适配器/并发/边界对抗/意图评测/E2E 冒烟/编译。
+      # 注意：CI 不跑第二方评审（需要外部 Agent），因此用 --deterministic，
+      # 该模式明确不可用于签署；签署必须由本地完整门禁 + redteam_review.json 完成。
+      - name: Run adversarial gate (deterministic, not a sign-off)
+        run: python3 tools/ci/adversarial_jury_evaluator.py --deterministic --no-offline

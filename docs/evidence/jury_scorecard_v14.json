@@ -1,19 +1,145 @@
 {
-  "timestamp": "2026-10-27 16:11:09",
+  "timestamp": "2026-10-27 16:18:01",
+  "mode": "deterministic",
+  "git_head": "a1e96ed865e76a29eaab179df4a6babfc2daa52d",
+  "staged_tree": "8d61822b0ab622d0e9016608cb1040ba0bf71fec",
   "total_score": 100.0,
   "sign_off_threshold": 95.0,
-  "sign_off_passed": true,
-  "dimension_scores": {
-    "1_architecture_and_contract": 20.0,
-    "2_concurrency_and_deadlock": 20.0,
-    "3_boundary_and_fail_closed": 20.0,
-    "4_intent_and_simulation": 20.0,
-    "5_code_cleanliness_and_regression": 20.0
+  "sign_off_passed": false,
+  "deterministic_only": true,
+  "dimensions": [
+    {
+      "dimension": "1_architecture_and_contract",
+      "score": 20.0,
+      "checks": [
+        {
+          "name": "适配器单测退出码 0",
+          "ok": true,
+          "detail": "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3 -m unittest discover -s tests -p test_adapters_*.py"
+        },
+        {
+          "name": "适配器单测全通过",
+          "ok": true,
+          "detail": "ran=12"
+        },
+        {
+          "name": "用例数已解析（≥1）",
+          "ok": true,
+          "detail": "ran=12"
+        }
+      ],
+      "failed": []
+    },
+    {
+      "dimension": "2_concurrency_and_deadlock",
+      "score": 20.0,
+      "checks": [
+        {
+          "name": "并发对抗测试全通过",
+          "ok": true,
+          "detail": "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3 -m unittest discover -s tests -p test_adversarial_mapping_race.py"
+        },
+        {
+          "name": "用例数已解析（≥1）",
+          "ok": true,
+          "detail": "ran=6"
+        }
+      ],
+      "failed": []
+    },
+    {
+      "dimension": "3_boundary_and_fail_closed",
+      "score": 20.0,
+      "checks": [
+        {
+          "name": "test_adversarial_geometry.py 全通过",
+          "ok": true,
+          "detail": "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3 -m unittest discover -s tests -p test_adversarial_geometry.py"
+        },
+        {
+          "name": "test_adversarial_inputs.py 全通过",
+          "ok": true,
+          "detail": "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3 -m unittest discover -s tests -p test_adversarial_inputs.py"
+        },
+        {
+          "name": "test_adversarial_battles.py 全通过",
+          "ok": true,
+          "detail": "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3 -m unittest discover -s tests -p test_adversarial_battles.py"
+        }
+      ],
+      "failed": []
+    },
+    {
+      "dimension": "4_intent_and_simulation",
+      "score": 20.0,
+      "checks": [
+        {
+          "name": "意图评测套件通过",
+          "ok": true,
+          "detail": "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3 -m unittest discover -s tests/evals -p test_*.py"
+        },
+        {
+          "name": "动作准确率 ≥95%",
+          "ok": true,
+          "detail": "实测 100.0%"
+        },
+        {
+          "name": "参数准确率 ≥98%",
+          "ok": true,
+          "detail": "实测 100.0%"
+        },
+        {
+          "name": "E2E 冒烟通过（本地 Mock，不代表真机）",
+          "ok": true,
+          "detail": "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3 tools/harness/e2e_smoke_runner.py"
+        }
+      ],
+      "failed": []
+    },
+    {
+      "dimension": "5_code_cleanliness_and_regression",
+      "score": 20.0,
+      "checks": [
+        {
+          "name": "compileall 无错误",
+          "ok": true,
+          "detail": "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3 -m compileall -q src tests tools"
+        },
+        {
+          "name": "git diff --check 无空白错误",
+          "ok": true,
+          "detail": "git diff --check"
+        },
+        {
+          "name": "全量离线套件通过",
+          "ok": true,
+          "detail": "bash tools/ci/offline_tests.sh"
+        },
+        {
+          "name": "用例数不低于历史基线 1115",
+          "ok": true,
+          "detail": "实测 ran=1163"
+        }
+      ],
+      "failed": []
+    }
+  ],
+  "second_party_review": [
+    {
+      "name": "第二方评审证据存在",
+      "ok": false,
+      "detail": "缺少 docs/evidence/redteam_review.json；不得由本 Agent 自签，须由外部 Agent 或人完成评审后写入"
+    }
+  ],
+  "veto_failures": [
+    "deterministic 模式：未要求第二方评审，本成绩单不可用于签署"
+  ],
+  "observed": {
+    "offline_tests_ran": 1163,
+    "baseline_guard": 1115,
+    "eval_action_accuracy_pct": 100.0,
+    "eval_param_accuracy_pct": 100.0
   },
-  "veto_failures": [],
-  "total_offline_tests": 1163,
-  "test_pass_rate": 1.0,
-  "eval_action_accuracy": 1.0,
-  "eval_param_accuracy": 1.0,
-  "elapsed_seconds": 17.83
+  "note": "数值均由命令输出解析；第二方评审文件：docs/evidence/redteam_review.json",
+  "elapsed_seconds": 18.15
 }
