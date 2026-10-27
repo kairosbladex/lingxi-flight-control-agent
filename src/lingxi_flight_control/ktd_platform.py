@@ -36,6 +36,7 @@ from .mapping_interruption import (
     MappingInterruptionReceipt, MappingInterruptionRequest,
     UnavailableMappingInterruptionGateway,
 )
+from .ai_lifecycle import HttpAlgorithmLifecycleGateway, HttpAnnotationAlgorithmGateway
 
 
 #: 进程内锁只在同一执行器实例内串行化确认卡字典，**不**承担跨进程去重。
@@ -589,6 +590,60 @@ class KtdHttpTransport:
         except Exception:
             raise KtdPlatformError('SNAPSHOT_TRANSPORT_ERROR') from None
 
+    def read_annotation_algorithms(self, binding: RuntimeBinding, *, site_id: str,
+                                   task_id: str | None, annotation_id: str) -> KtdHttpResponse:
+        """读取一个静态标注的 AI 绑定；路径和资源范围固定在平台适配器内。"""
+        if (not isinstance(binding, RuntimeBinding) or binding.actor_id != self.actor_id
+                or not all(_identifier(value) for value in
+                           (binding.project_id, binding.hangar_id, binding.drone_id,
+                            site_id, annotation_id))
+                or (task_id is not None and not _identifier(task_id))):
+            raise KtdPlatformError('INVALID_REQUEST_CONTEXT')
+        query = {'projectId': binding.project_id, 'siteId': site_id,
+                 'hangarId': binding.hangar_id, 'droneId': binding.drone_id,
+                 'annotationId': annotation_id}
+        if task_id is not None:
+            query['taskId'] = task_id
+        request = Request(self._base_url + '/lingxi/agent/annotations/ai?' + urlencode(query),
+                          method='GET', headers={'Authorization': 'Bearer ' + self._token,
+                                                 'projectId': binding.project_id})
+        try:
+            return self._read_response(request, strict_json=True)
+        except Exception:
+            raise KtdPlatformError('ANNOTATION_ALGORITHM_TRANSPORT_ERROR') from None
+
+    def set_annotation_algorithm_state(self, binding: RuntimeBinding, *, site_id: str,
+                                       task_id: str | None, annotation_id: str,
+                                       algorithms: tuple[str, ...], operation: str,
+                                       request_id: str) -> KtdHttpResponse:
+        """按算法粒度请求进入/离开标注区域的启停回执。"""
+        if (not isinstance(binding, RuntimeBinding) or binding.actor_id != self.actor_id
+                or not all(_identifier(value) for value in
+                           (binding.project_id, binding.hangar_id, binding.drone_id,
+                            site_id, annotation_id, request_id))
+                or (task_id is not None and not _identifier(task_id))
+                or operation not in {'start', 'stop'}
+                or not isinstance(algorithms, tuple) or not algorithms
+                or any(not _identifier(item) for item in algorithms)):
+            raise KtdPlatformError('INVALID_REQUEST_CONTEXT')
+        body = {'schema_version': 'lingxi-ai-lifecycle/v1', 'operation': operation,
+                'request_id': request_id, 'project_id': binding.project_id,
+                'site_id': site_id, 'hangar_id': binding.hangar_id,
+                'drone_id': binding.drone_id, 'annotation_id': annotation_id,
+                'algorithms': list(algorithms)}
+        if task_id is not None:
+            body['task_id'] = task_id
+        request = Request(self._base_url + '/lingxi/agent/annotations/ai/lifecycle',
+                          data=_json(body).encode(), method='POST',
+                          headers={'Authorization': 'Bearer ' + self._token,
+                                   'Content-Type': 'application/json',
+                                   'projectId': binding.project_id,
+                                   'X-Idempotency-Key': request_id})
+        try:
+            return self._read_response(request, strict_json=True)
+        except Exception:
+            raise KtdPlatformError('ALGORITHM_LIFECYCLE_TRANSPORT_ERROR') from None
+
     def read_receipt(self, binding: RuntimeBinding, *, site_id: str,
                      task_id: str | None, command_id: str) -> KtdHttpResponse:
         if not isinstance(binding, RuntimeBinding) or binding.actor_id != self.actor_id:
@@ -760,7 +815,8 @@ class KtdPlatformExecutor:
                  turn_tolerance_deg: float = 3.0, turn_max_sec: float = 30.0,
                  turn_max_pulses: int = 80, turn_gain: float = 1.5,
                  stick_max_sec: float = 5.0, path_checker=None,
-                 mapping_gateway=None, mapping_reservation_lease_sec: float = 30.0):
+                 mapping_gateway=None, mapping_reservation_lease_sec: float = 30.0,
+                 annotation_gateway=None, algorithm_gateway=None):
         binding.validate()
         if (not all(_identifier(value) for key, value in binding.to_dict().items() if key != "context_version")
                 or not _identifier(site_id) or (task_id is not None and not _identifier(task_id))
@@ -823,6 +879,15 @@ class KtdPlatformExecutor:
         self._mapping_gateway_idempotent = (
             getattr(self._mapping_gateway, 'supports_idempotency_key', False) is True)
         self._mapping_lease = float(mapping_reservation_lease_sec)
+        self._annotation_gateway = annotation_gateway
+        if annotation_gateway is None and callable(getattr(transport, 'read_annotation_algorithms', None)):
+            annotation_gateway = HttpAnnotationAlgorithmGateway(
+                transport, site_id=site_id, task_id=task_id)
+        self._annotation_gateway = annotation_gateway
+        self._algorithm_gateway = algorithm_gateway
+        if algorithm_gateway is None and callable(getattr(transport, 'set_annotation_algorithm_state', None)):
+            self._algorithm_gateway = HttpAlgorithmLifecycleGateway(
+                transport, site_id=site_id, task_id=task_id)
         self._last_interruption: dict[str, Any] | None = None
         self._last_reservation: dict[str, Any] | None = None
         self._lock = threading.RLock()
@@ -830,6 +895,16 @@ class KtdPlatformExecutor:
     @property
     def vendor_request_methods(self) -> tuple[str, ...]:
         return self._allowed_vendor_methods if self._enable_vendor_requests else ()
+
+    @property
+    def annotation_gateway(self):
+        """真实静态标注配置适配器；不可用时为 ``None``，调用方必须降级。"""
+        return self._annotation_gateway
+
+    @property
+    def algorithm_gateway(self):
+        """算法粒度生命周期适配器；平台未声明接口时为 ``None``。"""
+        return self._algorithm_gateway
 
     def runtime_context(self) -> ExecutionContext:
         return ExecutionContext(f"{self.binding.project_id}:{self.binding.hangar_id}:{self.binding.task_batch_id}",

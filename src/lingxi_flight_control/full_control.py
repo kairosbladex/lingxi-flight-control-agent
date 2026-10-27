@@ -37,7 +37,8 @@ from .task_events import (
 )
 from .ai_lifecycle import (
     ALGORITHM_LIFECYCLE_UNAVAILABLE, AlgorithmLifecycleReceipt, AlgorithmStage,
-    SimulatorAlgorithmLifecycleGateway, annotation_active_set, apply_plan, plan_selection,
+    SimulatorAlgorithmLifecycleGateway, UnavailableAnnotationAlgorithmGateway,
+    AlgorithmError, annotation_active_set, apply_plan, normalize_algorithms, plan_selection,
 )
 from .mapping_interruption import (
     MAPPING_INTERRUPTION_UNAVAILABLE, MappingInterruptionRequest,
@@ -596,7 +597,8 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
     """纯内存完整控制面；不会触碰旧的真实控制接口。"""
 
     def __init__(self, binding: RuntimeBinding, *, clock=None, ttl_sec: float = 120.0,
-                 path_checker=None, algorithm_gateway=None, mapping_gateway=None):
+                 path_checker=None, algorithm_gateway=None, annotation_gateway=None,
+                 mapping_gateway=None):
         binding.validate()
         # Keep the original MemoryFlightSimulator API available while adding
         # the complete action/state model around the same in-memory boundary.
@@ -614,6 +616,7 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         # V1.4 2.1.2：算法启停走可注入网关。模拟器默认提供完整 seam，
         # 但每条回执都带 execution_mode=simulator，不冒充真实平台运行状态。
         self._algorithm_gateway = algorithm_gateway or SimulatorAlgorithmLifecycleGateway()
+        self._annotation_gateway = annotation_gateway or UnavailableAnnotationAlgorithmGateway()
         self._algorithm_running: dict[str, list[str]] = {}
         self._algorithm_stages: dict[str, dict[str, Any]] = {}
         self._algorithm_suppressed: set[str] = set()
@@ -799,6 +802,15 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             # 内部调用没有平台事件 ID；生成一次性 ID，重复语义由归约阶段按
             # temporary_task_id / 状态前置条件拒绝。
             event_id = f"sim-{uuid4().hex}"
+        if (kind in {TaskEventKind.ANNOTATION_ENTERED, TaskEventKind.ANNOTATION_LEFT}
+                and annotation_id not in self.state.annotation_algorithms
+                and not isinstance(self._annotation_gateway, UnavailableAnnotationAlgorithmGateway)):
+            try:
+                config = self._annotation_gateway.expected(self.binding, annotation_id)
+                config.validate(configured=self.state.configured_algorithms)
+                self.state.annotation_algorithms[annotation_id] = list(config.algorithms)
+            except AlgorithmError as error:
+                raise TaskEventError(error.code) from None
         typed = event_from_legacy(kind.value, event_id=event_id, sequence=sequence,
                                   binding=self.binding, occurred_at=self._clock() if occurred_at is None else occurred_at,
                                   temporary_task_id=temporary_task_id, annotation_id=annotation_id,
@@ -954,6 +966,26 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         self.state.revision += 1
         self._refresh_algorithms(reason="selection")
         return plan
+
+    def replace_annotation_algorithms(self, requested):
+        """确认后把当前冲突标注的绑定整体替换为用户明确选择的算法。"""
+        selected = list(normalize_algorithms(requested,
+                                              configured=self.state.configured_algorithms,
+                                              allow_empty=False))
+        targets = [annotation for annotation in self.state.active_annotations
+                   if set(selected) & set(self.state.annotation_algorithms.get(annotation, ()))]
+        if not targets:
+            raise AlgorithmError(ALGORITHM_CONFLICT_CLARIFICATION_REQUIRED,
+                                 "当前没有可替换的活动标注AI配置。")
+        for annotation in targets:
+            self.state.annotation_algorithms[annotation] = list(selected)
+        # “仅替换”是标注级配置变更，不把算法额外提升为全局配置。
+        self.state.global_algorithms = [item for item in self.state.global_algorithms
+                                        if item not in selected]
+        self._algorithm_suppressed.difference_update(selected)
+        self.state.revision += 1
+        self._refresh_algorithms(reason="annotation_replace")
+        return tuple(targets)
 
     def mapping_interruption_audit(self) -> dict[str, Any]:
         snapshot = getattr(self._mapping_gateway, "snapshot", None)

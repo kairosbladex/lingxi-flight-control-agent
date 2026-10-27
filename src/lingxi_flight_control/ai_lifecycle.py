@@ -37,6 +37,8 @@ INVALID_ALGORITHM_SELECTION = "INVALID_ALGORITHM_SELECTION"
 BODY_ANNOTATION_AI_UNSUPPORTED = "BODY_ANNOTATION_AI_UNSUPPORTED"
 UNKNOWN_ANNOTATION = "UNKNOWN_ANNOTATION"
 ANNOTATION_BINDING_MISMATCH = "ANNOTATION_BINDING_MISMATCH"
+ANNOTATION_UPSTREAM_REJECTED = "ANNOTATION_UPSTREAM_REJECTED"
+ALGORITHM_LIFECYCLE_UPSTREAM_REJECTED = "ALGORITHM_LIFECYCLE_UPSTREAM_REJECTED"
 
 #: V1.4 3.3 冲突追问的固定话术。
 CONFLICT_QUESTION = "是同时开启还是仅替换？"
@@ -83,8 +85,10 @@ def _coerce_geometry(value: Any) -> AnnotationGeometry:
     if isinstance(value, AnnotationGeometry):
         return value
     if isinstance(value, str):
+        aliases = {"polygon": "face", "surface": "face", "volume": "body"}
+        value = aliases.get(value.strip().lower(), value.strip().lower())
         try:
-            return AnnotationGeometry(value.strip().lower())
+            return AnnotationGeometry(value)
         except ValueError:
             pass
     raise AlgorithmError(INVALID_ALGORITHM_SELECTION, "标注几何类型不合法。")
@@ -182,6 +186,127 @@ class UnavailableAnnotationAlgorithmGateway:
     def expected(self, binding: Any, annotation_id: str) -> AnnotationAlgorithmConfig:
         raise AlgorithmError(ANNOTATION_ALGORITHM_SOURCE_UNAVAILABLE,
                              "未接入静态标注算法配置服务，无法读取标注AI期望值。")
+
+
+class HttpAnnotationAlgorithmGateway:
+    """读取平台静态标注 AI 配置的 typed HTTP 适配器。
+
+    ``transport`` 只允许暴露本仓固定的 ``read_annotation_algorithms`` 方法；
+    URL、身份和项目范围由 transport 收敛，调用方不能把任意地址交给模型。
+    """
+
+    execution_mode = "platform"
+
+    def __init__(self, transport: Any, *, site_id: str, task_id: str | None = None):
+        if not callable(getattr(transport, "read_annotation_algorithms", None)):
+            raise ValueError("annotation transport must provide read_annotation_algorithms")
+        if not _identifier(site_id) or (task_id is not None and not _identifier(task_id)):
+            raise ValueError("invalid annotation gateway scope")
+        self._transport = transport
+        self._site_id = site_id
+        self._task_id = task_id
+
+    def expected(self, binding: Any, annotation_id: str) -> AnnotationAlgorithmConfig:
+        if not _identifier(annotation_id):
+            raise AlgorithmError(INVALID_ALGORITHM_SELECTION, "标注标识不合法。")
+        try:
+            response = self._transport.read_annotation_algorithms(
+                binding, site_id=self._site_id, task_id=self._task_id,
+                annotation_id=annotation_id)
+        except Exception:
+            raise AlgorithmError(ANNOTATION_ALGORITHM_SOURCE_UNAVAILABLE,
+                                 "静态标注算法配置服务不可用。") from None
+        payload = getattr(response, "payload", None)
+        status = getattr(response, "status_code", None)
+        data = payload.get("data") if isinstance(payload, Mapping) else None
+        if (status != 200 or not isinstance(payload, Mapping) or payload.get("code") != 200
+                or not isinstance(data, Mapping)):
+            raise AlgorithmError(ANNOTATION_UPSTREAM_REJECTED,
+                                 "静态标注算法配置服务未返回可核验结果。")
+        try:
+            annotation_value = data.get("annotation_id", data.get("annotationId"))
+            project_value = data.get("project_id", data.get("projectId"))
+            geometry = data.get("geometry", data.get("geometryType"))
+            algorithms_value = data.get("algorithms", data.get("algorithmIds", ()))
+            config = AnnotationAlgorithmConfig(
+                annotation_id=annotation_value,
+                geometry=_coerce_geometry(geometry),
+                algorithms=normalize_algorithms(algorithms_value, allow_empty=True),
+                version=data.get("version", data.get("configVersion", 0)),
+                project_id=project_value,
+            )
+            config.validate()
+        except (AlgorithmError, TypeError, ValueError):
+            raise AlgorithmError(ANNOTATION_UPSTREAM_REJECTED,
+                                 "静态标注算法配置字段不符合契约。") from None
+        if config.annotation_id != annotation_id:
+            raise AlgorithmError(ANNOTATION_BINDING_MISMATCH,
+                                 "静态标注算法配置与请求标注不匹配。")
+        if config.project_id is not None and config.project_id != getattr(binding, "project_id", None):
+            raise AlgorithmError(ANNOTATION_BINDING_MISMATCH,
+                                 "静态标注算法配置与当前项目不匹配。")
+        return config
+
+
+class HttpAlgorithmLifecycleGateway:
+    """按标注和算法粒度调用平台启停接口，并严格消费确认回执。"""
+
+    execution_mode = "platform"
+
+    def __init__(self, transport: Any, *, site_id: str, task_id: str | None = None):
+        if not callable(getattr(transport, "set_annotation_algorithm_state", None)):
+            raise ValueError("lifecycle transport must provide set_annotation_algorithm_state")
+        if not _identifier(site_id) or (task_id is not None and not _identifier(task_id)):
+            raise ValueError("invalid lifecycle gateway scope")
+        self._transport = transport
+        self._site_id = site_id
+        self._task_id = task_id
+
+    def _call(self, binding: Any, annotation_id: str, algorithms: Sequence[str], *,
+              operation: str, request_id: str) -> AlgorithmLifecycleReceipt:
+        if operation not in {"start", "stop"} or not _identifier(annotation_id):
+            raise AlgorithmError(INVALID_ALGORITHM_SELECTION, "算法生命周期请求不合法。")
+        ordered = normalize_algorithms(algorithms)
+        if not _identifier(request_id):
+            raise AlgorithmError(INVALID_ALGORITHM_SELECTION, "生命周期请求标识不合法。")
+        stage = AlgorithmStage.START_REQUESTED if operation == "start" else AlgorithmStage.STOP_REQUESTED
+        try:
+            response = self._transport.set_annotation_algorithm_state(
+                binding, site_id=self._site_id, task_id=self._task_id,
+                annotation_id=annotation_id, algorithms=ordered,
+                operation=operation, request_id=request_id)
+        except Exception:
+            return AlgorithmLifecycleReceipt(
+                stage=stage, annotation_id=annotation_id, algorithms=ordered,
+                execution_mode=self.execution_mode, confirmed=False,
+                request_id=request_id, error_code=ALGORITHM_LIFECYCLE_UNAVAILABLE,
+                message="平台算法生命周期接口不可用。")
+        payload = getattr(response, "payload", None)
+        data = payload.get("data") if isinstance(payload, Mapping) else None
+        expected_stage = AlgorithmStage.STARTED if operation == "start" else AlgorithmStage.STOPPED
+        if (getattr(response, "status_code", None) != 200 or not isinstance(payload, Mapping)
+                or payload.get("code") != 200 or not isinstance(data, Mapping)
+                or data.get("stage") != expected_stage.value
+                or data.get("annotation_id", data.get("annotationId")) != annotation_id
+                or tuple(data.get("algorithms", data.get("algorithmIds", ()))) != ordered):
+            return AlgorithmLifecycleReceipt(
+                stage=stage, annotation_id=annotation_id, algorithms=ordered,
+                execution_mode=self.execution_mode, confirmed=False,
+                request_id=request_id, error_code=ALGORITHM_LIFECYCLE_UPSTREAM_REJECTED,
+                message="平台未返回可核验的算法生命周期回执。")
+        return AlgorithmLifecycleReceipt(
+            stage=expected_stage, annotation_id=annotation_id, algorithms=ordered,
+            execution_mode=self.execution_mode, confirmed=True, request_id=request_id,
+            platform_receipt_id=data.get("receipt_id", data.get("receiptId")),
+            message="平台已确认算法生命周期变更。")
+
+    def start(self, binding: Any, annotation_id: str, algorithms: Sequence[str], *,
+              request_id: str = "") -> AlgorithmLifecycleReceipt:
+        return self._call(binding, annotation_id, algorithms, operation="start", request_id=request_id)
+
+    def stop(self, binding: Any, annotation_id: str, algorithms: Sequence[str], *,
+             request_id: str = "") -> AlgorithmLifecycleReceipt:
+        return self._call(binding, annotation_id, algorithms, operation="stop", request_id=request_id)
 
 
 @runtime_checkable

@@ -4,6 +4,7 @@
 """
 import json
 import unittest
+from types import SimpleNamespace
 
 from lingxi_flight_control import FlightControlActionRequest, MemoryFlightControlSimulator, RuntimeBinding
 from lingxi_flight_control.ai_lifecycle import (
@@ -12,7 +13,8 @@ from lingxi_flight_control.ai_lifecycle import (
     CONFLICT_MESSAGE, CONFLICT_QUESTION, AlgorithmError, AlgorithmLifecycleReceipt,
     AlgorithmPlan, AlgorithmStage, AnnotationAlgorithmConfig, AnnotationGeometry,
     SimulatorAlgorithmLifecycleGateway, UnavailableAlgorithmLifecycleGateway,
-    UnavailableAnnotationAlgorithmGateway, algorithms_to_stop, annotation_active_set,
+    UnavailableAnnotationAlgorithmGateway, HttpAnnotationAlgorithmGateway,
+    HttpAlgorithmLifecycleGateway, algorithms_to_stop, annotation_active_set,
     apply_plan, conflict_clarification, normalize_algorithms, plan_selection,
 )
 from lingxi_flight_control.cockpit import CockpitService
@@ -78,6 +80,40 @@ class ContractTests(unittest.TestCase):
         self.assertIs(receipt.stage, AlgorithmStage.START_REQUESTED)
         with self.assertRaises(AlgorithmError):
             UnavailableAnnotationAlgorithmGateway().expected(binding(), 'ann-1')
+
+    def test_http_annotation_gateway_decodes_and_binds_project_config(self):
+        class Transport:
+            def read_annotation_algorithms(self, binding, **kwargs):
+                self.kwargs = kwargs
+                return SimpleNamespace(status_code=200, payload={'code': 200, 'data': {
+                    'annotation_id': 'ann-1', 'project_id': 'project', 'geometry': 'polygon',
+                    'algorithms': ['smoke', 'smoke'], 'version': 3}})
+        transport = Transport()
+        config = HttpAnnotationAlgorithmGateway(transport, site_id='site').expected(binding(), 'ann-1')
+        self.assertEqual(config.geometry, AnnotationGeometry.FACE)
+        self.assertEqual(config.algorithms, ('smoke',))
+        self.assertEqual(transport.kwargs['annotation_id'], 'ann-1')
+
+    def test_http_annotation_gateway_rejects_mismatched_annotation(self):
+        class Transport:
+            def read_annotation_algorithms(self, binding, **kwargs):
+                return SimpleNamespace(status_code=200, payload={'code': 200, 'data': {
+                    'annotation_id': 'other', 'geometry': 'point', 'algorithms': [], 'version': 0}})
+        with self.assertRaises(AlgorithmError) as caught:
+            HttpAnnotationAlgorithmGateway(Transport(), site_id='site').expected(binding(), 'ann-1')
+        self.assertEqual(caught.exception.code, 'ANNOTATION_BINDING_MISMATCH')
+
+    def test_http_lifecycle_gateway_only_confirms_typed_receipt(self):
+        class Transport:
+            def set_annotation_algorithm_state(self, binding, **kwargs):
+                return SimpleNamespace(status_code=200, payload={'code': 200, 'data': {
+                    'stage': 'started', 'annotation_id': kwargs['annotation_id'],
+                    'algorithms': list(kwargs['algorithms']), 'receipt_id': 'platform-r1'}})
+        receipt = HttpAlgorithmLifecycleGateway(Transport(), site_id='site').start(
+            binding(), 'ann-1', ['smoke'], request_id='start-1')
+        self.assertTrue(receipt.confirmed)
+        self.assertEqual(receipt.stage, AlgorithmStage.STARTED)
+        self.assertEqual(receipt.platform_receipt_id, 'platform-r1')
 
     def test_simulator_receipts_are_marked_as_simulator(self):
         gateway = SimulatorAlgorithmLifecycleGateway()
@@ -161,6 +197,23 @@ class SelectionTests(unittest.TestCase):
 
 
 class SimulatorLifecycleTests(unittest.TestCase):
+    def test_annotation_gateway_loads_expected_binding_before_enter_event(self):
+        class Gateway:
+            def expected(self, binding, annotation_id):
+                return AnnotationAlgorithmConfig(annotation_id, AnnotationGeometry.POINT, ('smoke',), 2,
+                                                 project_id=binding.project_id)
+        sim = MemoryFlightControlSimulator(
+            binding(), clock=lambda: 1000.0,
+            algorithm_gateway=SimulatorAlgorithmLifecycleGateway(),
+            annotation_gateway=Gateway())
+        sim.state.control_owner = 'actor'
+        sim.state.configured_algorithms = ['smoke']
+        sim.state.route_id = 'route-main'
+        sim.state.route_status = 'running'
+        sim.apply_task_event('annotation_entered', task_batch_id='batch', annotation_id='A')
+        self.assertEqual(sim.state.annotation_algorithms['A'], ['smoke'])
+        self.assertEqual(sim.state.active_algorithms, ['smoke'])
+
     def test_six_stages_are_recorded_separately(self):
         sim = simulator(annotation_algorithms={'A': ['smoke']})
         sim.apply_task_event('annotation_entered', task_batch_id='batch', annotation_id='A')
@@ -262,7 +315,7 @@ class SimulatorLifecycleTests(unittest.TestCase):
 class CockpitConflictTests(unittest.TestCase):
     def setUp(self):
         self.binding = binding()
-        self.sim = simulator(annotation_algorithms={'A': ['烟火']},
+        self.sim = simulator(annotation_algorithms={'A': ['烟火', '车辆']},
                              active_annotations=['A'])
         self.sim.state.configured_algorithms = ['烟火', '车辆', '人员']
         self.sim.state.global_algorithms = []
@@ -285,7 +338,7 @@ class CockpitConflictTests(unittest.TestCase):
         self.assertEqual(self.sim.state.global_algorithms, [])
 
     def test_non_conflicting_ai_still_produces_a_card(self):
-        reply = self.send('打开AI识别车辆')
+        reply = self.send('打开AI识别人员')
         self.assertEqual(reply['status'], 'preview_required', reply)
         self.assertEqual(reply['card']['action'], 'ai_algorithm_set')
 
@@ -306,12 +359,19 @@ class CockpitConflictTests(unittest.TestCase):
         self.assertEqual(second['card']['action'], 'ai_algorithm_set')
         self.assertEqual(second['card']['parameters'], {'algorithm': '烟火', 'enabled': True})
 
-    def test_replace_answer_produces_no_card(self):
+    def test_replace_answer_produces_confirmable_card_and_updates_annotation(self):
         self.send('打开AI识别烟火')
         reply = self.send('仅替换')
-        self.assertEqual(reply['status'], 'clarification', reply)
-        self.assertEqual(reply['error_code'], ALGORITHM_REPLACE_UNSUPPORTED)
-        self.assertFalse(reply.get('card'))
+        self.assertEqual(reply['status'], 'preview_required', reply)
+        self.assertEqual(reply['card']['algorithm_mode'], 'replace')
+        payload = {key: reply['card'][key] for key in (
+            'confirmation_id', 'confirmation_binding', 'command_id',
+            'idempotency_key', 'context_version')}
+        confirmed = self.service.handle(
+            'POST', '/api/flight-control/agent/confirm', json.dumps(payload),
+            {'X-Agent-Session': 'ai-conflict'}).payload
+        self.assertEqual(confirmed['status'], 'accepted', confirmed)
+        self.assertEqual(self.sim.state.annotation_algorithms['A'], ['烟火'])
         self.assertEqual(self.sim.state.global_algorithms, [])
 
 

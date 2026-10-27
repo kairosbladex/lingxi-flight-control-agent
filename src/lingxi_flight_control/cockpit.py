@@ -628,6 +628,7 @@ class _Conversation:
     completed_steps: dict = field(default_factory=dict)
     ordered_steps: list | None = None
     motion_source: str | None = None
+    pending_algorithm_mode: str | None = None
 
 
 class CockpitService:
@@ -1136,8 +1137,8 @@ class CockpitService:
                 session.completed_steps.clear()
                 session.ordered_steps = _ordered_motion_steps(text)
                 session.motion_source = _single_motion_source(text)
-            if conflict_answer == 'add' and conflict_intent:
-                # 「同时开启」只以被追问的原指令为依据，不把待答词拼进 grounding。
+            if conflict_answer in {'add', 'replace'} and conflict_intent:
+                # 冲突回答只以被追问的原指令为依据，不把待答词拼进 grounding。
                 grounding_text = conflict_intent
             ordered = session.ordered_steps
             if ordered is not None and list(session.completed_steps.values()) == ordered:
@@ -1149,19 +1150,18 @@ class CockpitService:
                 session.motion_source = None
                 session.requests[request_id] = (fingerprint, result)
                 return result
-            if conflict_answer == 'replace':
-                result = self._base(status='clarification', error_code=ALGORITHM_REPLACE_UNSUPPORTED,
-                    message=REPLACE_UNSUPPORTED_MESSAGE, request_id=request_id, state=state)
-                session.requests[request_id] = (fingerprint, result)
-                return result
             product_text = conflict_intent if conflict_answer == 'add' else text
+            if conflict_answer == 'replace':
+                product_text = conflict_intent
+                session.pending_algorithm_mode = 'replace'
             ai_call = _product_command(product_text)
             if (ai_call is not None and ai_call.name == 'ai_algorithm_set'
                     and ai_call.arguments.get('enabled') is True):
                 # V1.4 3.3：与标注已有 AI 冲突时必须先追问，未完成追问不生成确认卡。
                 question = conflict_clarification(
                     [ai_call.arguments.get('algorithm')], state,
-                    mode='add' if conflict_answer == 'add' else None)
+                    mode=('add' if conflict_answer == 'add' else
+                          'replace' if conflict_answer == 'replace' else None))
                 if question is not None:
                     result = self._base(
                         status='clarification',
@@ -1540,6 +1540,11 @@ class CockpitService:
                 return self._base(status='rejected', error_code='PAYLOAD_NOT_MOUNTED',
                                   message=mount_message, **common)
             command = uuid4().hex
+            if (call.name == 'ai_algorithm_set' and session.pending_algorithm_mode == 'replace'
+                    and not callable(getattr(self.executor, 'replace_annotation_algorithms', None))):
+                session.pending_algorithm_mode = None
+                return self._base(status='rejected', error_code=ALGORITHM_REPLACE_UNSUPPORTED,
+                                  message=REPLACE_UNSUPPORTED_MESSAGE, **common)
             if vendor:
                 from .vendor_control import VendorControlRequest
                 request = VendorControlRequest(command, command, call.arguments['method'], self.binding.context_version)
@@ -1561,6 +1566,9 @@ class CockpitService:
                     if isinstance(receipt['expires_at'], str) else receipt['expires_at'],
                     'execution_mode': self.execution_mode,
                     'receipt_tracking': receipt.get('receipt_tracking', False)}
+            if call.name == 'ai_algorithm_set' and session.pending_algorithm_mode:
+                card['algorithm_mode'] = session.pending_algorithm_mode
+                session.pending_algorithm_mode = None
             if vendor:
                 card['kind'] = 'vendor_control_request'
             session.card = card
@@ -1609,6 +1617,10 @@ class CockpitService:
                                       **({'kind': 'vendor_control_request'} if vendor else {}))
             method = self.executor.cancel if cancel else self.executor.confirm
             receipt = method(**payload).to_dict()
+            if (not cancel and receipt['status'] == 'accepted'
+                    and card.get('algorithm_mode') == 'replace'):
+                self.executor.replace_annotation_algorithms([card['parameters']['algorithm']])
+                receipt['state'] = self.executor.read_state()
             session.card = None
             response = self._base(**receipt)
             # Preserve the executor's known outcome even if a later state read

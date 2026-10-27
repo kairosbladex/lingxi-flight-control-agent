@@ -161,6 +161,10 @@ class SimulatorExecutor:
     def read_state(self) -> Mapping[str, Any]:
         return dict(self._simulator.state.to_dict())
 
+    def replace_annotation_algorithms(self, requested):
+        """在确认后的 AI 替换路径中透传到模拟器。"""
+        return self._simulator.replace_annotation_algorithms(requested)
+
 
 class LoopbackExecutor(SimulatorExecutor):
     """可注入回环执行器：本机闭环，用另一种模式名跑同一套握手。
