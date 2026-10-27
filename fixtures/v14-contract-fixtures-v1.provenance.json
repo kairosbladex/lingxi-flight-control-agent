@@ -9,6 +9,7 @@
     "fixtures/v14-authority-contract-v1.json",
     "fixtures/v14-target-candidates-v1.json",
     "fixtures/v14-task-events-v1.json",
+    "fixtures/v14-platform-adapter-v1.json",
     "fixtures/v14-receipt-states-v1.json"
   ],
   "wire_format_note": "Receipt wire values follow the existing lingxi-command-receipt/v1 field set (completed/failed/unknown/expired/conflict). 'succeeded' is only a canonical Agent-side name; it is not accepted on the wire because no verified platform field uses it.",

@@ -1,0 +1,71 @@
+{
+  "schema": "lingxi-v14-platform-adapters/v1",
+  "synthetic": true,
+  "note": "仅用于离线 typed 契约回放，不是 Java、MQTT 或设备抓包。",
+  "lifecycle": {
+    "request": {
+      "schema_version": "lingxi-ai-lifecycle/v1",
+      "operation": "start",
+      "request_id": "req-1",
+      "project_id": "project-1",
+      "site_id": "site-1",
+      "hangar_id": "hangar-1",
+      "drone_id": "drone-1",
+      "annotation_id": "annotation-1",
+      "algorithms": ["smoke"]
+    },
+    "response": {
+      "code": 200,
+      "data": {
+        "stage": "started",
+        "annotation_id": "annotation-1",
+        "algorithms": ["smoke"],
+        "receipt_id": "receipt-1"
+      }
+    }
+  },
+  "mapping_interruption": {
+    "request": {
+      "schema_version": "lingxi-mapping-interruption/v1",
+      "command_id": "cmd-1",
+      "action": "move_forward",
+      "task_batch_id": "batch-1",
+      "confirmed": true,
+      "idempotency_key": "idem-1"
+    },
+    "response": {
+      "code": 200,
+      "data": {
+        "atomic": true,
+        "confirmed": true,
+        "completed_steps": [
+          "stop_auto_stitching",
+          "invalidate_rebuild_type",
+          "invalidate_break_info",
+          "invalidate_breakpoint",
+          "close_resume_route",
+          "lock_original_task"
+        ],
+        "audit_id": "audit-1",
+        "task_resumable": false
+      }
+    }
+  },
+  "task_events": {
+    "response": {
+      "code": 200,
+      "data": [
+        {
+          "eventId": "event-1",
+          "kind": "low_battery_return",
+          "projectId": "project-1",
+          "hangarId": "hangar-1",
+          "droneId": "drone-1",
+          "taskBatchId": "batch-1",
+          "sequence": 1,
+          "occurredAt": 1001.0
+        }
+      ]
+    }
+  }
+}
