@@ -14,6 +14,8 @@
 import unittest
 from collections import defaultdict
 
+from lingxi_flight_control import flight_policy as policy
+from lingxi_flight_control import route_mapping as mapping
 from lingxi_flight_control.route_mapping import (
     ANNOTATION_GEOMETRIES,
     FLIGHT_RULES_AREA,
@@ -147,6 +149,23 @@ class SpecWordingTests(unittest.TestCase):
             MESSAGE_REJECT_GEOMETRY_ROUTE,
             "当前版本暂不支持自动规划复杂路径或网格航线，请手动接管。",
         )
+
+    def test_rejection_messages_alias_flight_policy_single_source(self):
+        # M2 集成评审：话术常量不得在 route_mapping 与 flight_policy 各写一份；
+        # 旧公开名必须是 flight_policy 常量的同一个对象（改 flight_policy 即全局生效）。
+        self.assertIs(mapping.MESSAGE_REJECT_GRID, policy.COMPLEX_ROUTE_MANUAL_MESSAGE)
+        self.assertIs(mapping.MESSAGE_REJECT_GEOMETRY_ROUTE, policy.COMPLEX_ROUTE_MANUAL_MESSAGE)
+        self.assertIs(mapping.MESSAGE_REJECT_MIXED, policy.MIXED_TARGET_MESSAGE)
+        self.assertIs(mapping.MESSAGE_REJECT_VOLUME, policy.BODY_TARGET_MESSAGE)
+        self.assertIs(mapping.MESSAGE_REJECT_VOLUME_TABLE_2, policy.BODY_TARGET_STANDARD_MESSAGE)
+
+    def test_module_docstring_declares_reference_only_and_unwired(self):
+        # M1/L1 集成评审：归属/接线口径必须写实，不能被后续当成生产真源。
+        doc = mapping.__doc__ or ""
+        for fragment in ("纯规则库", "参考实现", "未接线", "尚未裁决",
+                         "target_resolver", "handoff_contract"):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, doc)
 
     def test_flight_rule_fragments_are_verbatim_cell_slices(self):
         # 这些是表1/表2 单元格的逐字切片（保留原标点），不是重新改写的句子。

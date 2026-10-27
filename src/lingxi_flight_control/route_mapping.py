@@ -1,5 +1,25 @@
 """V1.4 3.2.1 / 3.2.2：触发词 → 航线类型、目标几何 → 允许航线/拦截的纯规则库。
 
+本仓归属与接线状态（2026-10-27 纠正）
+====================================
+**本模块是纯规则库 / 参考实现，当前未接线到 cockpit / service / agent 等生产路径**，
+本仓没有任何生产代码 import 它；目前只有单元测试（以及后续显式集成方）会调用。
+
+V1.4 3.2.1 / 3.2.2 的职责归属在本仓与规划 Agent（``lingxi-agent``）之间**尚未裁决**：
+设计规范要求地面规划阶段由规划 Agent 执行，而本仓既有
+``target_resolver.TargetGeometry`` + ``handoff_contract._parse_targets`` 已在承担
+3.2.2 的目标几何校验。在裁决前必须遵守：
+
+* 本模块不得作为运行时唯一真源；
+* 不得与 ``target_resolver`` / ``handoff_contract`` 对同一输入并行做强制校验，
+  避免双真源与两套拒绝话术；
+* 只允许作为纯判定辅助：输入「文本触发词 / 标注几何」，输出航线类型或规范话术，
+  不解析自然语言、不做几何求解、不生成航点、不调平台；
+* 拒绝话术的单一真源仍是 ``flight_policy``（本模块 ``MESSAGE_REJECT_*`` 只是别名，
+  不得再写重复字面量）。
+
+验收口径与分层建议见 ``docs/ACCEPTANCE_FLIGHT-V14.md`` 的「2026-10-27 纠正」段落。
+
 规范来源
 ========
 ``/Users/wangxiaolin/Desktop/灵犀平台自然语言智能控制功能设计规范V1.4.docx``：
@@ -65,6 +85,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+#: 拒绝话术单一真源：规范原文常量统一由 ``flight_policy`` 持有（M2 集成评审修复）。
+#: 本模块只做别名，不允许再写重复字面量，避免改一处静默分叉。
+from .flight_policy import (
+    BODY_TARGET_MESSAGE,
+    BODY_TARGET_STANDARD_MESSAGE,
+    COMPLEX_ROUTE_MANUAL_MESSAGE,
+    MIXED_TARGET_MESSAGE,
+)
 
 # ---------------------------------------------------------------------------
 # 3.2.1 表1 / 3.2.2 表2 的航线类型原文
@@ -137,23 +166,26 @@ REJECTION_GEOMETRY_ROUTE = "geometry_route_unsupported"
 REJECTION_IN_FLIGHT_TARGET = "in_flight_target_unsupported"
 
 # ---------------------------------------------------------------------------
-# 拒绝话术：逐字取自规范原文
+# 拒绝话术：单一真源在 flight_policy，本模块只保留旧常量名做别名
 # ---------------------------------------------------------------------------
+#
+# M2 集成评审修复：以下四句规范原文常量统一由 ``flight_policy`` 持有，
+# route_mapping 不再复制字面量；旧公开常量名保留以兼容既有调用/测试。
 
-#: 3.2.2 表2 体行「异常拦截」原文（短版）。
-MESSAGE_REJECT_VOLUME_TABLE_2 = "当前版本不支持立体目标，请标注为点或面。"
-#: 第五章表6 R8「期望系统返回」原文（完整版，默认对外话术）。
-MESSAGE_REJECT_VOLUME = "当前版本不支持立体目标规划，请将其标注为点或面。"
-#: 3.2.2 表2 混合类型行「异常拦截」原文（去掉单元格自带的引号）。
-MESSAGE_REJECT_MIXED = "单次任务暂不支持混合目标巡检，请分次下发。"
-#: 3.2.2 表2 线行「异常拦截」原文。
+#: 3.2.2 表2 体行「异常拦截」原文（短版）；= flight_policy.BODY_TARGET_STANDARD_MESSAGE。
+MESSAGE_REJECT_VOLUME_TABLE_2 = BODY_TARGET_STANDARD_MESSAGE
+#: 第五章表6 R8「期望系统返回」原文（完整版，默认对外话术）；= flight_policy.BODY_TARGET_MESSAGE。
+MESSAGE_REJECT_VOLUME = BODY_TARGET_MESSAGE
+#: 3.2.2 表2 混合类型行「异常拦截」原文；= flight_policy.MIXED_TARGET_MESSAGE。
+MESSAGE_REJECT_MIXED = MIXED_TARGET_MESSAGE
+#: 3.2.2 表2 线行「异常拦截」原文；flight_policy 无对应常量，唯一真源在本模块。
 MESSAGE_REJECT_MULTI_LINE = "暂不支持同时巡检多条线"
-#: 3.2.2 表2 面行「异常拦截」原文。
+#: 3.2.2 表2 面行「异常拦截」原文；flight_policy 无对应常量，唯一真源在本模块。
 MESSAGE_REJECT_MULTI_AREA = "暂不支持同时巡检多个面"
-#: 第五章表6 R6「期望系统返回」原文；网格航线直接拒绝。
-MESSAGE_REJECT_GRID = "当前版本暂不支持自动规划复杂路径或网格航线，请手动接管。"
+#: 第五章表6 R6「期望系统返回」原文；= flight_policy.COMPLEX_ROUTE_MANUAL_MESSAGE。
+MESSAGE_REJECT_GRID = COMPLEX_ROUTE_MANUAL_MESSAGE
 #: 表1 注记要求几何体航线直接拒绝；规范未给独立话术，复用统一话术（见模块假设 2）。
-MESSAGE_REJECT_GEOMETRY_ROUTE = "当前版本暂不支持自动规划复杂路径或网格航线，请手动接管。"
+MESSAGE_REJECT_GEOMETRY_ROUTE = COMPLEX_ROUTE_MANUAL_MESSAGE
 
 # ---------------------------------------------------------------------------
 # 3.2.1 表1 触发词 → 航线类型（按表内出现顺序，命中即按序优先）
