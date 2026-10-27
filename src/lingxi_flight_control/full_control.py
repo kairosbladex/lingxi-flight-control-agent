@@ -495,6 +495,7 @@ def _validate_parameters(action: FlightControlAction, parameters: Mapping[str, A
         FlightControlAction.AI_ALGORITHM_SET: ("algorithm", "enabled"),
     }
     optional: dict[FlightControlAction, tuple[str, ...]] = {
+        FlightControlAction.CONTROL_ACQUIRE: ("mode", "reason"),
         FlightControlAction.GIMBAL_UP: ("angle_deg",),
         FlightControlAction.GIMBAL_DOWN: ("angle_deg",),
         FlightControlAction.GIMBAL_LEFT: ("angle_deg",),
@@ -526,6 +527,13 @@ def _validate_parameters(action: FlightControlAction, parameters: Mapping[str, A
     if action == FlightControlAction.AI_ALGORITHM_SET:
         if not isinstance(parameters['algorithm'], str) or not parameters['algorithm'].strip() or len(parameters['algorithm']) > 128 or type(parameters['enabled']) is not bool:
             raise ValueError('explicit algorithm and boolean enabled required')
+    if action == FlightControlAction.CONTROL_ACQUIRE:
+        mode = parameters.get('mode', 'obtain')
+        if not isinstance(mode, str) or mode not in {'obtain', 'apply', 'force'}:
+            raise ValueError('control mode must be obtain, apply or force')
+        reason = parameters.get('reason')
+        if reason is not None and (not isinstance(reason, str) or not reason.strip() or len(reason) > 200):
+            raise ValueError('control request reason must contain 1-200 characters')
     if action in {
         FlightControlAction.MOVE_FORWARD, FlightControlAction.MOVE_BACKWARD,
         FlightControlAction.MOVE_LEFT, FlightControlAction.MOVE_RIGHT,
@@ -1422,6 +1430,8 @@ _P_TEXT = ToolParameter("string", min_length=1)
 _P_BUTTON_ACTION = ToolParameter("string", min_length=1)
 _P_ENABLED = ToolParameter("boolean")
 _P_WAYPOINTS = ToolParameter("array")
+_P_CONTROL_MODE = ToolParameter("string", enum=("obtain", "apply", "force"))
+_P_CONTROL_REASON = ToolParameter("string", min_length=1)
 
 
 @dataclass(frozen=True)
@@ -1448,7 +1458,9 @@ def _spec(domain: str, description: str, parameters: Mapping[str, ToolParameter]
 
 ACTION_SPECS: dict[FlightControlAction, ActionSpec] = {
     # 控制权
-    FlightControlAction.CONTROL_ACQUIRE: _spec("control", "获取无人机控制权；执行任何飞行动作前必须先获取"),
+    FlightControlAction.CONTROL_ACQUIRE: _spec(
+        "control", "获取或申请无人机控制权；执行任何飞行动作前必须先获取",
+        {"mode": _P_CONTROL_MODE, "reason": _P_CONTROL_REASON}),
     FlightControlAction.CONTROL_RELEASE: _spec("control", "释放当前持有的控制权"),
     FlightControlAction.REMOTE_REQUEST: _spec("control", "向远端发起接管请求"),
     FlightControlAction.REMOTE_APPROVE: _spec("control", "同意远端的接管请求"),

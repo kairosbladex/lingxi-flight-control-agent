@@ -63,6 +63,7 @@ AI使用ai_algorithm_set且算法必须来自state.configured_algorithms；结�
 没有控制权时说明需要先申请，不替用户暗中接管。未支持的能力如实说明，不改成近似动作。
 state.control_owned是当前操作者是否持有控制权的布尔标识，true表示已持有；control_request=none仅表示没有待审批的申请，不表示未持有控制权。
 已持有控制权时按用户原动作选择工具；只有用户明确请求申请或释放控制权时，才建议control_acquire或control_release，不能把其他动作替换成它们。
+control_acquire可选mode为obtain（获取/接管）或apply（申请，reason写明原因）；用户说“抢占”时不要伪造强制接管。
 禁止输出凭据、连接地址、厂商报文或调用未列出的工具。返回执行结果只能依据工具回执。
 直接询问当前状态可调用read_state；没有动作时简洁解释或提问，不编造成功。
 """
@@ -1515,6 +1516,16 @@ class CockpitService:
         common = {'request_id': request_id, 'state': self._state()}
         if result.tool_call and result.checkpoint.confirmation_binding:
             call = result.tool_call
+            if call.name == 'control_acquire':
+                transport = getattr(self.executor, '_transport', None)
+                if callable(getattr(transport, 'apply_control', None)):
+                    if '抢占' in grounding_text:
+                        return self._base(status='rejected', error_code='CONTROL_FORCE_UNSUPPORTED',
+                                          message='当前Java后端没有可核验的强制抢占接口，本次未申请或接管控制权。', **common)
+                    if ('申请' in grounding_text
+                            and call.arguments.get('mode', 'obtain') == 'obtain'):
+                        call = replace(call, arguments={
+                            'mode': 'apply', 'reason': '灵犀 Agent 申请无人机控制权'})
             vendor = call.name == 'request_vendor_control'
             vendor_intent = any(_vendor_request_agrees(method, grounding_text) for method in _VENDOR_REQUESTS)
             if vendor_intent and not vendor:

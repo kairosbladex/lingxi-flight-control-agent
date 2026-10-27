@@ -242,6 +242,29 @@ class PlatformExecutorTests(unittest.TestCase):
         self.assertIs(result.status, FlightControlStatus.REJECTED)
         self.assertIsNone(result.state["control_owner"])
 
+    def test_control_apply_returns_pending_without_claiming_owner(self):
+        self.snapshot = replace(self.snapshot, permissions=frozenset({"control_acquire", "read_state"}),
+                                capabilities={"control_acquire": True}, control_owner="other")
+        self.transport.apply_control = lambda *args, **kwargs: KtdHttpResponse(
+            200, {"code": 200, "data": "0"})
+        executor = self.executor()
+        result = self.confirm(executor, executor.preview(self.request(
+            "control_acquire", {"mode": "apply", "reason": "现场操作申请"}, "control-apply")))
+        self.assertEqual(result.status, "pending")
+        self.assertEqual(result.error_code, "CONTROL_REQUEST_PENDING")
+        self.assertEqual(result.state["control_owner"], "other")
+
+    def test_control_force_is_rejected_without_http_side_effect(self):
+        self.snapshot = replace(self.snapshot, permissions=frozenset({"control_acquire", "read_state"}),
+                                capabilities={"control_acquire": True}, control_owner="other")
+        self.transport.acquire_control = lambda *args, **kwargs: self.fail("force must not call obtain")
+        executor = self.executor()
+        result = self.confirm(executor, executor.preview(self.request(
+            "control_acquire", {"mode": "force"}, "control-force")))
+        self.assertEqual(result.error_code, "CONTROL_FORCE_UNSUPPORTED")
+        self.assertEqual(result.status, FlightControlStatus.REJECTED)
+        self.assertEqual(self.transport.calls, [])
+
     def test_control_release_requires_owner_and_verifies_release_snapshot(self):
         self.snapshot = replace(self.snapshot, permissions=frozenset({"control_release", "read_state"}),
                                 capabilities={"control_release": True})
@@ -508,6 +531,16 @@ class HttpTransportTests(unittest.TestCase):
         self.assertEqual(headers["Projectid"], "project-1")
         self.response_payload = {"code": 200, "data": "0"}
         self.assertEqual(self.transport().acquire_control(binding, site_id="site-1", session_id="trace-2").payload["data"], "0")
+
+    def test_control_apply_uses_fixed_post_endpoint_and_reason(self):
+        binding = RuntimeBinding("actor-1", "project-1", "hangar-1", "drone-1", "batch-1", 1)
+        response = self.transport().apply_control(binding, site_id="site-1", reason="现场操作申请")
+        self.assertEqual(response, KtdHttpResponse(200, {"code": 200}))
+        path, method, body, headers = self.requests[0]
+        self.assertEqual(method, "POST")
+        self.assertEqual(path, "https://platform.test/api/uavControlPower/apply")
+        self.assertEqual(body, {"uavId": "drone-1", "reason": "现场操作申请"})
+        self.assertEqual(headers["Projectid"], "project-1")
 
     def test_redirect_response_is_returned_without_retry(self):
         self.response_status = 302

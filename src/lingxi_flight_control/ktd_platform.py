@@ -568,6 +568,24 @@ class KtdHttpTransport:
     def release_control(self, binding: RuntimeBinding, *, site_id: str) -> KtdHttpResponse:
         return self._control_request("/uavControlPower/release", binding, site_id=site_id, query={})
 
+    def apply_control(self, binding: RuntimeBinding, *, site_id: str,
+                      reason: str) -> KtdHttpResponse:
+        if (not isinstance(binding, RuntimeBinding) or binding.actor_id != self.actor_id
+                or not all(_identifier(value) for value in
+                           (binding.project_id, binding.hangar_id, binding.drone_id, site_id))
+                or not isinstance(reason, str) or not 1 <= len(reason.strip()) <= 200):
+            raise KtdPlatformError("INVALID_REQUEST_CONTEXT")
+        request = Request(self._base_url + "/uavControlPower/apply",
+                          data=_json({"uavId": binding.drone_id, "reason": reason.strip()}).encode(),
+                          method="POST",
+                          headers={"Authorization": "Bearer " + self._token,
+                                   "Content-Type": "application/json",
+                                   "projectId": binding.project_id})
+        try:
+            return self._read_response(request, strict_json=True)
+        except Exception:
+            raise KtdPlatformError("CONTROL_TRANSPORT_UNKNOWN") from None
+
     def task_end_check(self, binding: RuntimeBinding, task_id: str) -> KtdHttpResponse:
         if binding.actor_id != self.actor_id or not re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', task_id):
             raise KtdPlatformError('TRANSPORT_SCOPE_MISMATCH')
@@ -1806,9 +1824,34 @@ class KtdPlatformExecutor:
                         "point_orbit_stop", "land", "land_alternate", "return_home"}:
             self._last_motion = None
 
-    def _execute_control(self, action: str, trace_id: str) -> KtdSnapshot:
+    def _execute_control(self, action: str, trace_id: str,
+                         parameters: Mapping[str, Any] | None = None) -> KtdSnapshot:
         """Call the fixed control-power endpoint, then prove the new owner from a fresh snapshot."""
         if action == "control_acquire":
+            parameters = parameters or {}
+            mode = parameters.get("mode", "obtain")
+            if mode == "force":
+                raise KtdPlatformError("CONTROL_FORCE_UNSUPPORTED")
+            if mode == "apply":
+                call = getattr(self._transport, "apply_control", None)
+                if not callable(call):
+                    raise KtdPlatformError("CONTROL_TRANSPORT_UNAVAILABLE")
+                response = call(self.binding, site_id=self.site_id,
+                                reason=parameters.get("reason", "灵犀 Agent 申请无人机控制权"))
+                payload = (response.payload if isinstance(response, KtdHttpResponse)
+                           and isinstance(response.payload, Mapping) else {})
+                if (not isinstance(response, KtdHttpResponse) or response.status_code != 200
+                        or payload.get("code") != 200):
+                    raise KtdPlatformError("CONTROL_APPLY_FAILED")
+                if payload.get("data") == "0":
+                    raise KtdPlatformError("CONTROL_REQUEST_PENDING")
+                if payload.get("data") != "1":
+                    raise KtdPlatformError("CONTROL_APPLY_FAILED")
+                verified = self._snapshot("read_state")
+                if (verified.control_owner != self.binding.actor_id
+                        or not _finite(verified.control_lease_expires_at, self._clock(), float("inf"))):
+                    raise KtdPlatformError("CONTROL_ACQUIRE_NOT_CONFIRMED")
+                return verified
             call = getattr(self._transport, "acquire_control", None)
             if not callable(call):
                 raise KtdPlatformError("CONTROL_TRANSPORT_UNAVAILABLE")
@@ -2341,7 +2384,8 @@ class KtdPlatformExecutor:
                             else str(request.action))
             if action_value in {"control_acquire", "control_release"}:
                 try:
-                    verified = self._execute_control(action_value, pending.receipt.trace_id)
+                    verified = self._execute_control(action_value, pending.receipt.trace_id,
+                                                     request.parameters)
                     fields["snapshot"] = verified
                     result = self._receipt(
                         request, FlightControlStatus.ACCEPTED, message=(
@@ -2350,13 +2394,19 @@ class KtdPlatformExecutor:
                 except KtdPlatformError as error:
                     deterministic = {
                         "CONTROL_ACQUIRE_FAILED", "CONTROL_ACQUIRE_NOT_CONFIRMED",
+                        "CONTROL_APPLY_FAILED", "CONTROL_FORCE_UNSUPPORTED",
+                        "CONTROL_REQUEST_PENDING",
                         "CONTROL_RELEASE_FAILED", "CONTROL_RELEASE_NOT_CONFIRMED",
                         "CONTROL_TRANSPORT_UNAVAILABLE",
                     }
                     if str(error) in deterministic:
-                        result = self._receipt(request, FlightControlStatus.REJECTED,
+                        status = ("pending" if str(error) == "CONTROL_REQUEST_PENDING"
+                                  else FlightControlStatus.REJECTED)
+                        result = self._receipt(request, status,
                                                error_code=str(error),
-                                               message=("未能从平台快照确认控制权已生效，未继续下发。"
+                                               message=("控制权申请已提交，当前仍由其他操作者持有；等待权威快照确认后再操作。"
+                                                        if str(error) == "CONTROL_REQUEST_PENDING" else
+                                                        "未能从平台快照确认控制权已生效，未继续下发。"
                                                         if action_value == "control_acquire"
                                                         else "未能从平台快照确认控制权已释放。"),
                                                **fields)
