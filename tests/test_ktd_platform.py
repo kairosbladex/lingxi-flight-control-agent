@@ -206,6 +206,14 @@ class PlatformExecutorTests(unittest.TestCase):
         self.assertIn("请先说‘悬停’", result.message)
         self.assertEqual(self.transport.calls, [])
 
+    def test_manual_hover_requires_stable_mode_and_zero_speeds(self):
+        self.snapshot = replace(self.snapshot, state={**self.snapshot.state,
+            "route_status": "idle", "flight_mode": "QHOVER",
+            "ground_speed_mps": 0.02, "vertical_speed_mps": -0.01})
+        self.assertIsNotNone(self.executor().preview(self.request()).confirmation_id)
+        self.snapshot = replace(self.snapshot, state={**self.snapshot.state, "ground_speed_mps": 1.0})
+        self.assertEqual(self.executor().preview(self.request(key="moving")).error_code, "HOVER_REQUIRED")
+
     def test_control_acquire_requires_success_and_fresh_owner_snapshot(self):
         self.snapshot = replace(self.snapshot, permissions=frozenset({"control_acquire", "read_state"}),
                                 capabilities={"control_acquire": True}, control_owner=None,

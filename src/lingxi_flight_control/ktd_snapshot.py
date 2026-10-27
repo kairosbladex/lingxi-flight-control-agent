@@ -23,7 +23,8 @@ _STATE_FIELDS = frozenset(_NUMERIC_STATE) | {'online', 'airborne', 'flight_statu
 #: V1.4 兼容扩展：平台真实返回时才校验，缺失保持“没有该事实”，不填默认值。
 _POLICY_FIELDS = frozenset({'task_type', 'mapping_invalidated', 'auto_stitching', 'low_battery_return',
     'device_limits', 'gimbal_pitch_deg', 'breakpoint_index', 'temporary_task_id', 'task_scope',
-    'route_id', 'task_batch_id', 'endurance_mileage'})
+    'route_id', 'task_batch_id', 'endurance_mileage', 'ground_speed_mps',
+    'vertical_speed_mps', 'flight_mode'})
 
 
 def _reject(code='INVALID_SNAPSHOT_RESPONSE'):
@@ -194,6 +195,10 @@ class KtdSnapshotProvider:
                     valid = _finite(item, 0, 10_000_000)
                 elif key == 'breakpoint_index':
                     valid = item is None or type(item) is int and item >= 0
+                elif key in {'ground_speed_mps', 'vertical_speed_mps'}:
+                    valid = _finite(item, -1000, 1000)
+                elif key == 'flight_mode':
+                    valid = item is None or (isinstance(item, str) and 0 < len(item) <= 128)
                 elif key == 'gimbal_pitch_deg':
                     valid = _finite(item, -90, 90)
                 else:

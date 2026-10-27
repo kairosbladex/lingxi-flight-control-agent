@@ -97,7 +97,8 @@ _PATHS = frozenset({"/screen/uav/operation/control", "/screen/uav/route/control"
                     "/screen/uav/camera/control", "/screen/uav/gimbal/control", "/screen/uav/fly/control",
                     '/screen/speaker/control', '/screen/lighting/control'})
 _STATE_FIELDS = frozenset({"online", "airborne", "longitude", "latitude", "altitude_m",
-                          "height_m", "yaw_deg", "battery_percent", "flight_status", "route_status"})
+                          "height_m", "yaw_deg", "battery_percent", "flight_status", "route_status",
+                          "ground_speed_mps", "vertical_speed_mps", "flight_mode"})
 
 
 def _hover_confirmed(state: Mapping[str, Any]) -> bool:
@@ -108,8 +109,15 @@ def _hover_confirmed(state: Mapping[str, Any]) -> bool:
     if isinstance(route_status, str) and route_status.lower() in {"hover", "paused"}:
         return True
     flight_status = state.get("flight_status")
-    return isinstance(flight_status, str) and flight_status.lower() in {
-        "hover", "hovering", "paused", "qhover", "qstabilize"}
+    if isinstance(flight_status, str) and flight_status.lower() in {
+            "hover", "hovering", "paused"}:
+        return True
+    mode = state.get("flight_mode")
+    ground = state.get("ground_speed_mps")
+    vertical = state.get("vertical_speed_mps")
+    return (isinstance(mode, str) and mode.upper() in {"QHOVER", "QLOITER", "QSTABILIZE"}
+            and type(ground) in (int, float) and type(vertical) in (int, float)
+            and abs(float(ground)) <= 0.1 and abs(float(vertical)) <= 0.1)
 
 
 def _json(value: Any) -> str:
