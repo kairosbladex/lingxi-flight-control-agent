@@ -1,34 +1,46 @@
 {
-  "reviewer": "teammate:line-c",
+  "reviewer": "teammate:line-d",
   "reviewer_kind": "external_cli",
-  "reviewed_tree": "8c90555b71da3c9e6cef8b6dcc8de28be561b07b",
+  "reviewed_tree": "4959b4e2ad087940643d807f9eb6f41c67c57253",
   "verdict": "pass",
   "findings": [
     {
       "severity": "low",
-      "file": "docs/evidence/v14-parallel-delivery-20261027.md:29 | docs/evidence/jury_scorecard_v14.json",
-      "issue": "新证据文档「合流与门禁」把 docs/evidence/jury_scorecard_v14.json 列为「成绩单」，但该文件是历史失效产物：timestamp=2026-10-27 16:18:01、mode=deterministic、git_head=a1e96ed（远早于当前合流树）、sign_off_passed=false、deterministic_only=true；docs/evidence/convergence_gate_20261031.md 已明确声明上一轮门禁报告作废。合流文档未注明「待本次完整签署门禁重跑后重写 / 当前为历史作废产物」，容易被误读成已有合格成绩单。建议加一句限定，或等 lead 跑完整门禁后再引用该路径。",
-      "repro": "cd /Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent && python3 -c \"import json;d=json.load(open('docs/evidence/jury_scorecard_v14.json'));print({k:d.get(k) for k in ('timestamp','mode','git_head','sign_off_passed','deterministic_only')})\" && sed -n '24,30p' docs/evidence/v14-parallel-delivery-20261027.md  # 文件仍是 a1e96ed 的 deterministic 历史产物，与当前树 8c90555b 无关"
+      "file": "tools/integration/platform_conformance_smoke.py",
+      "issue": "A2/A3 的 route_status=null / 字段缺失 fail-closed 断言落在 KtdPlatformAdapter（全仓仅 tests/ 与 smoke 引用，src 生产路径无调用者）；生产执行路径的实际拒绝在 authority_contract.require_authority → KtdPlatformExecutor._validate_snapshot（AUTHORITATIVE_STATE_INCOMPLETE），本 smoke 未断言该层。新文档已在覆盖矩阵把 A2 准确标注为 adapter、并在第 3 节披露字面 'unknown' 风险，但 A2 标题『飞行动作 fail-closed』仍易被读成生产执行路径已被 23/23 覆盖；生产路径另有 1322 离线套件覆盖。",
+      "repro": "grep -rn 'KtdPlatformAdapter' src/ 只命中 adapters/__init__.py 的导出；用 mock payload(route_status=None, permitted=('read_state','move_forward')) 构造 KtdSnapshotProvider+KtdPlatformExecutor 后调用 _validate_snapshot('move_forward') 实测返回 AUTHORITATIVE_STATE_INCOMPLETE。建议把该断言并入 A2/A3 或改测 require_authority。"
     },
     {
       "severity": "low",
-      "file": "src/lingxi_flight_control/route_mapping.py:18 | src/lingxi_flight_control/route_mapping.py:182,184",
-      "issue": "M2 修复后（4 条话术已 assertIs 收敛到 flight_policy）模块 docstring 的措辞过宽：写「本模块 MESSAGE_REJECT_* 只是别名，不得再写重复字面量」，但 MESSAGE_REJECT_MULTI_LINE / MESSAGE_REJECT_MULTI_AREA 仍是本模块字面量真源（flight_policy 无对应常量，且这与 ACCEPTANCE 纠正段只列 4 个别名的准确口径不一致）。现无行为问题，但后续若读者按 docstring 认为所有 MESSAGE_REJECT_* 都已单一真源，会误判。建议：把多线/多面两条也上移到 flight_policy，或把 docstring 改为「对 flight_policy 已有的 4 条话术为别名；多线/多面本模块暂为唯一真源（待上移）」。",
-      "repro": "cd /Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent && sed -n '16,20p' src/lingxi_flight_control/route_mapping.py && sed -n '180,185p' src/lingxi_flight_control/route_mapping.py && PYTHONPATH=src python3 -c \"from lingxi_flight_control import flight_policy as fp, route_mapping as rm; print([n for n in dir(fp) if 'MULTI_LINE' in n or 'MULTI_AREA' in n])\"  # flight_policy 无对应常量"
+      "file": "docs/evidence/platform-integration-prereq-20261027.md",
+      "issue": "A2『需要什么』字段清单不足以通过严格读取器：KtdSnapshotProvider._observation_time 还要求 `telemetry.sequence` 键存在且为 null、`generated_at >= max(sampled_at, received_at)`，并拒绝未来时间/过期/expires≠observed+5。A2 只列了 schema_version/snapshot_version/generated_at/expires_at/sampled_at/received_at/source/version 与 expires 公式，平台按 A2 逐字实现仍可能被 INVALID_SNAPSHOT_RESPONSE/AUTHORITATIVE_STATE_STALE 拒绝（sequence 在 docs/ktd-platform-contract.md:154 有，但 A2 的可执行清单没有引用到）。",
+      "repro": "sed -n '106,127p' src/lingxi_flight_control/ktd_snapshot.py；对比 docs/evidence/platform-integration-prereq-20261027.md 的 A2 段。建议 A2 补『telemetry.sequence 必须存在且为 null』『generated_at 不早于 sampled_at/received_at 的较晚者』。"
     },
     {
       "severity": "low",
-      "file": "src/lingxi_flight_control/cockpit.py:212,215-219,251 | tests/test_v14_phrase_gaps.py:703",
-      "issue": "M3 修复把「几何体航线/几何体航测/几何体测绘」并入 in-flight _COMPLEX_ROUTE_MENTION 并复用表6 R6「网格航线/复杂路径」话术拒绝；规范 1.1/3.2.1 注记只要求拒绝几何体航线、并未给独立话术，因此话术复用属规范未定义处的假设。线B 已在 route_mapping 模块假设 2 显式标注「规范未给独立话术，复用 MESSAGE_REJECT_GRID」，线A 的 cockpit 注释与用例名 rejected_with_same_spec_phrase 未标注该假设，两线披露口径不一致。建议 cockpit 注释/用例补一句「话术复用假设同 route_mapping 假设 2」。",
-      "repro": "cd /Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent && PYTHONPATH=src python3 -c \"from lingxi_flight_control.cockpit import _in_flight_unsupported as f; print(f('用几何体航线飞'))\" && sed -n '30,32p' src/lingxi_flight_control/route_mapping.py  # 返回表6 R6 网格话术；lineB 已把这类复用写成假设 2，lineA 未标"
+      "file": "tools/integration/platform_conformance_smoke.py",
+      "issue": "D1 的『已挂载镜头应通过』断言是空断言：camera_electro_optical 不在 flight_policy._LENS_ACTIONS（只有 camera_infrared→infrared、camera_wide→wide），payload_mount_message 对未知动作恒返回 None，因此 `payload_mount_message('camera_electro_optical', state) is None` 与挂载清单无关、永远不会失败。新文档 B4 把 electro_optical 列为本仓关心的镜头之一，但代码并未对它有挂载门禁（只有红外/广角/探照灯被校验）。",
+      "repro": "PYTHONPATH=src python3 -c \"from lingxi_flight_control import flight_policy as fp; print(fp._LENS_ACTIONS); print(fp.payload_mount_message('camera_electro_optical', {'mounted_lenses': []}))\" → _LENS_ACTIONS 无该键，返回 None；make mounted_lenses=[] 也不影响该断言。建议改用 camera_infrared/camera_wide 做正向断言，或给 electro_optical 补映射（需改 src，本线不做）。"
     },
     {
       "severity": "low",
-      "file": "src/lingxi_flight_control/route_mapping.py:203-207,431-452,239-241 | docs/evidence/v14-parallel-delivery-20261027.md:46",
-      "issue": "上一轮集成评审记录的残余 low 仍在（不阻塞本轮签署，且新证据文档第四节已如实列入）：(a) 否定启发式仍是 5 字窗口 + 单字标记，跨子句/「特别」「千万不要使用那个」等边界会误抑制或漏抑制；(b) conflict=True 的上游追问话术与 session.clarification 接线仍未做；(c) IN_FLIGHT_ROUTE_TYPES 仍不参与运行时判定（仅测试断言）。这三项在 v14-parallel-delivery 第四节第 5 条已声明为「不影响本轮签署的残余」，保留备查，不据此阻塞。",
-      "repro": "cd /Users/wangxiaolin/PycharmProjects/lingxi-flight-control-agent && PYTHONPATH=src python3 -c \"from lingxi_flight_control.route_mapping import map_trigger_to_route as m, decide_route as d; print(m('不要拍照，沿河巡查').route_type, d('不要绕一圈','点').route_type)\" && grep -rn 'IN_FLIGHT_ROUTE_TYPES' src/ tests/ | grep -v __pycache__"
+      "file": "tools/ci/offline_tests.sh",
+      "issue": "平台契约冒烟 23 项未接入共享门禁：offline_tests.sh 只 discover tests/（1322 项），不包含 tools/integration/platform_conformance_smoke.py 的 23 项。平台/契约相关 src 变更不会自动触发这组联调前置回归；新文档第 5 节把两条命令分开列，但『全量离线回归』1322 项并不覆盖这 23 项。",
+      "repro": "bash tools/ci/offline_tests.sh → 'Ran 1322 tests ... OK'，输出无 [PASS] A1..F1。建议在 offline_tests.sh 追加 python3 tools/integration/platform_conformance_smoke.py，或新增 tests/test_platform_conformance.py 调 run() 断言全部 Result.passed。"
+    },
+    {
+      "severity": "low",
+      "file": "tools/integration/platform_conformance_smoke.py",
+      "issue": "E1 依赖真实时间窗口：启动 100ms 采样线程、最多等 3s 收集 >=2 帧；高负载/线程调度抖动时存在 flaky 风险。它验证的是 tools/mocks 发生器本身，不涉及 src 运行时消费（文档第 1 节已如实标注 tools/mocks，故不是夸大，只是稳定性/相关性弱点）。",
+      "repro": "sed -n '457,473p' tools/integration/platform_conformance_smoke.py；慢机或高并发下 len(frames)<2 会 FAIL。建议同步注入帧或放宽 deadline。"
+    },
+    {
+      "severity": "low",
+      "file": "docs/evidence/platform-integration-prereq-20261027.md",
+      "issue": "A3 的代码路径表述不精确：`authority_contract.py` 是在 FIELD_GROUPS['control'] 列出 owner/lease（审计字段分组），并非 `Requirement.core`；实际拒绝发生在 KtdPlatformExecutor._validate_snapshot（CONTROL_NOT_OWNED / CONTROL_LEASE_UNAVAILABLE / CONTROL_LEASE_EXPIRED）与 ktd_snapshot._control。",
+      "repro": "sed -n '28,36p' src/lingxi_flight_control/authority_contract.py（FIELD_GROUPS）；grep -n 'control_owner' 显示只在审计函数记录；真正拒绝逻辑见 src/lingxi_flight_control/ktd_platform.py _validate_snapshot。建议把 A3 的『core 字段』改为『审计字段分组 + 执行器校验』。"
     }
   ],
   "no_findings": false,
-  "reviewed_at": "2026-10-27T17:07:51+08:00"
+  "reviewed_at": "2026-10-27T17:25:51+08:00"
 }

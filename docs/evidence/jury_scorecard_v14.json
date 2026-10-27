@@ -1,8 +1,8 @@
 {
-  "timestamp": "2026-10-27 17:08:24",
+  "timestamp": "2026-10-27 17:26:25",
   "mode": "sign_off",
-  "git_head": "60fea2ce5beb1abd9c64b2e23e6ae4673d1090a9",
-  "staged_tree": "8c90555b71da3c9e6cef8b6dcc8de28be561b07b",
+  "git_head": "c867d1b4b4155190e0b747171ad1e2ba8f5729d7",
+  "staged_tree": "4959b4e2ad087940643d807f9eb6f41c67c57253",
   "total_score": 100.0,
   "sign_off_threshold": 95.0,
   "sign_off_passed": true,
@@ -128,12 +128,12 @@
     {
       "name": "评审者非本 Agent 自评",
       "ok": true,
-      "detail": "reviewer_kind='external_cli', reviewer='teammate:line-c'"
+      "detail": "reviewer_kind='external_cli', reviewer='teammate:line-d'"
     },
     {
       "name": "评审对象与当前暂存树一致",
       "ok": true,
-      "detail": "reviewed_tree='8c90555b71da3c9e6cef8b6dcc8de28be561b07b', current_tree='8c90555b71da3c9e6cef8b6dcc8de28be561b07b'"
+      "detail": "reviewed_tree='4959b4e2ad087940643d807f9eb6f41c67c57253', current_tree='4959b4e2ad087940643d807f9eb6f41c67c57253'"
     },
     {
       "name": "评审结论为通过",
@@ -143,7 +143,7 @@
     {
       "name": "评审意见可追溯（至少一条 finding 或明确写 no_findings）",
       "ok": true,
-      "detail": "findings=4"
+      "detail": "findings=6"
     }
   ],
   "veto_failures": [],
@@ -154,5 +154,5 @@
     "eval_param_accuracy_pct": 100.0
   },
   "note": "数值均由命令输出解析；第二方评审文件：docs/evidence/redteam_review.json",
-  "elapsed_seconds": 17.89
+  "elapsed_seconds": 18.16
 }
