@@ -38,7 +38,7 @@ from .mapping_interruption import (
     UnavailableMappingInterruptionGateway,
 )
 from .ai_lifecycle import HttpAlgorithmLifecycleGateway, HttpAnnotationAlgorithmGateway
-from .task_events import PlatformTaskEventBridge
+from .task_events import TASK_EVENT_SOURCE_UNAVAILABLE, PlatformTaskEventBridge, TaskEventError
 
 
 #: 进程内锁只在同一执行器实例内串行化确认卡字典，**不**承担跨进程去重。
@@ -974,6 +974,16 @@ class KtdPlatformExecutor:
     def task_event_bridge(self):
         """真实任务事件桥；平台未声明事件接口时为 ``None``。"""
         return self._task_event_bridge
+
+    def read_task_events(self, *, after_sequence: int = -1):
+        """读取当前绑定的 typed 事件增量；失败不会降级成空列表。"""
+        bridge = self._task_event_bridge
+        if bridge is None:
+            raise KtdPlatformError(TASK_EVENT_SOURCE_UNAVAILABLE)
+        try:
+            return tuple(bridge.read_events(self.binding, after_sequence=after_sequence))
+        except TaskEventError as error:
+            raise KtdPlatformError(error.code) from None
 
     def runtime_context(self) -> ExecutionContext:
         return ExecutionContext(f"{self.binding.project_id}:{self.binding.hangar_id}:{self.binding.task_batch_id}",

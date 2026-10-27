@@ -28,6 +28,9 @@ class FakeTransport:
             raise self.failure
         return self.response
 
+    def read_task_events(self, binding, **kwargs):
+        return KtdHttpResponse(200, {"code": 200, "data": []})
+
 
 class PlatformExecutorTests(unittest.TestCase):
     def setUp(self):
@@ -77,6 +80,10 @@ class PlatformExecutorTests(unittest.TestCase):
         card = self.executor().preview(self.request())
         self.assertIs(card.status, FlightControlStatus.PREVIEW_REQUIRED)
         self.assertEqual(self.transport.calls, [])
+
+    def test_platform_executor_reads_typed_event_deltas(self):
+        executor = self.executor()
+        self.assertEqual(executor.read_task_events(after_sequence=3), ())
 
     def test_confirm_compiles_distance_and_returns_submission_not_completion(self):
         executor = self.executor()
