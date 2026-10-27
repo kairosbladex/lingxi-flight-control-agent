@@ -436,9 +436,13 @@ def post_temporary_decision(state: Any, *, now: float | None = None,
     timeout = POST_TEMPORARY_DECISION_TIMEOUT_SEC if timeout_sec is None else timeout_sec
     deadline = temporary_decision_deadline(state, timeout_sec=timeout)
     clock = _as_float(now)
+    completed = getattr(state, "route_status", None) == "temporary_completed"
+    # 只有「仍在等用户选择」的临时任务完成态才计时；用户已作过选择、或平台返航
+    # 已接管后，残留的 deadline 不得再把任务误判成超时。
+    decision_pending = completed and not _flag(state, "low_battery_return")
     remaining = None
     timed_out = False
-    if deadline is not None and clock is not None:
+    if decision_pending and deadline is not None and clock is not None:
         remaining = max(0.0, deadline - clock)
         timed_out = clock >= deadline
     base = {"timeout_sec": float(timeout), "deadline_at": deadline,
@@ -449,7 +453,6 @@ def post_temporary_decision(state: Any, *, now: float | None = None,
         # 4.2 优先级：平台返航已接管时，「临时任务完成后怎么选」不再成立。
         return {"required": False, "options": [], "default": None,
                 "error_code": None, "resumable": False, **base}
-    completed = getattr(state, "route_status", None) == "temporary_completed"
     if not completed:
         return {"required": False, "options": [], "default": None,
                 "error_code": None, "resumable": False, **base}

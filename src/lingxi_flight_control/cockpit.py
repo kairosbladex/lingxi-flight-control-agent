@@ -216,17 +216,37 @@ _COMPLEX_ROUTE_MENTION = re.compile(r'网格航线|网格航|螺旋飞|螺旋航
 _MAPPING_MENTION = re.compile(r'三维建模|倾斜摄影|正射影像')
 _MIXED_POINT_MENTION = re.compile(
     r'(?:去|到|飞往|前往|巡检|检查)[^，,。；;、\n]{0,24}(?:塔|楼|点|标注|目标|基站|电站|水塔|厂房|屋顶)')
-_MIXED_SHAPE_MENTION = re.compile(r'沿(?:着|线)|河道|河流|道路|公路|面状|全域|沿线')
+# 线/面目的地措辞：必须像「目的地」而不是载荷动作；「到点后全域拍照」不得算混合目标。
+_MIXED_SHAPE_CLAUSE = re.compile(
+    r'沿(?:着|线)?[^，,。；;、\n]{1,20}(?:河|路|线|道)(?:[^，,。；;、\n]{0,12}(?:巡视|巡检|检查|飞行|飞|扫描|覆盖))?'
+    r'|(?:面状|全域|整体|区域|范围)[^，,。；;、\n]{0,12}(?:航线|巡检|扫描|覆盖|巡视|检查|飞行)')
+# 顺序/并列的第二个目的地；单目标 + 载荷动作不构成混合目标。
+_MIXED_ORDER = re.compile(r'(?:再|然后|接着|并且|同时)')
+# 否定/替换/假设句不是执行意图：交给既有否定门禁或模型澄清，不按「不支持」话术拒绝。
+_NEGATED_OR_HYPOTHETICAL = re.compile(
+    r'不要|不用|不需要|别用|禁止|而不是|是否支持|能不能|能否|可不可以|如果|假如|假设')
 _MAPPING_IN_FLIGHT_MESSAGE = '飞控助手不支持飞行中发起测绘、立体或网格航线规划，请结束当前控制后使用任务规划入口。'
 
 
+def _mixed_target_mentioned(text):
+    """点目标 + 线/面目的地按顺序/并列复合才算混合；其余（单目标+全域拍照等）不算。"""
+    return bool(_MIXED_POINT_MENTION.search(text) and _MIXED_SHAPE_CLAUSE.search(text)
+                and _MIXED_ORDER.search(text))
+
+
 def _in_flight_unsupported(text):
-    """返回 4.4 表6 的确定性拦截 ``(error_code, 规范原文)``；不匹配返回 ``None``。"""
+    """返回 4.4 表6 的确定性拦截 ``(error_code, 规范原文)``；不匹配返回 ``None``。
+
+    只对**执行意图**生效：否定/替换/假设句（``不要用网格航线，改用正射影像``）
+    不按「不支持」话术拒绝，留给既有否定门禁或模型澄清。
+    """
+    if _NEGATED_OR_HYPOTHETICAL.search(text):
+        return None
     if _BODY_TARGET_MENTION.search(text):
         return 'UNSUPPORTED_TARGET_GEOMETRY', BODY_TARGET_MESSAGE
     if _COMPLEX_ROUTE_MENTION.search(text):
         return 'UNSUPPORTED_IN_FLIGHT_TASK', COMPLEX_ROUTE_MANUAL_MESSAGE
-    if _MIXED_POINT_MENTION.search(text) and _MIXED_SHAPE_MENTION.search(text):
+    if _mixed_target_mentioned(text):
         return 'MIXED_TARGET_UNSUPPORTED', MIXED_TARGET_MESSAGE
     if _MAPPING_MENTION.search(text):
         return 'UNSUPPORTED_IN_FLIGHT_TASK', _MAPPING_IN_FLIGHT_MESSAGE

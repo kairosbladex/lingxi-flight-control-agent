@@ -30,8 +30,10 @@ from .safety import SafetyFastPath, normalize
 from .simulator import MemoryFlightSimulator
 from .geometry import offset_target, relative_target
 from .task_events import (
-    TaskEventKind, TaskEventLedger, apply_task_event as task_events_apply, coerce_kind,
-    event_from_legacy, post_temporary_decision, validate_post_temporary_choice,
+    TEMPORARY_DECISION_TIMED_OUT, TaskEventError, TaskEventKind, TaskEventLedger,
+    apply_task_event as task_events_apply, apply_temporary_decision_timeout,
+    coerce_kind, event_from_legacy, post_temporary_decision, temporary_decision_timed_out,
+    validate_post_temporary_choice,
 )
 from .ai_lifecycle import (
     ALGORITHM_LIFECYCLE_UNAVAILABLE, AlgorithmLifecycleReceipt, AlgorithmStage,
@@ -263,6 +265,15 @@ class FlightControlState:
     route_resume_disabled: bool = False
     temporary_task_id: str | None = None
     low_battery_return: bool = False
+    #: V1.4 4.1.3：临时任务完成后的计时锚点/截止点；由 task_events 归约写入。
+    temporary_completed_at: float | None = None
+    temporary_decision_deadline: float | None = None
+    temporary_decision_timed_out: bool = False
+    #: V1.4 4.2：本次返航中断了一个未完成临时任务（前端据此提示充电重启后续飞）。
+    temporary_task_abandoned: bool = False
+    #: V1.4 4.3.2：设备已挂载能力清单。``None`` 表示**未核验**，不得默认成已挂载。
+    mounted_lenses: list[str] | None = None
+    mounted_payloads: list[str] | None = None
     configured_algorithms: list[str] = field(default_factory=list)
     global_algorithms: list[str] = field(default_factory=list)
     annotation_algorithms: dict[str, list[str]] = field(default_factory=dict)
@@ -328,6 +339,12 @@ class FlightControlState:
             "route_resume_disabled": self.route_resume_disabled,
             "temporary_task_id": self.temporary_task_id,
             "low_battery_return": self.low_battery_return,
+            # 计时锚点/截止点只服务任务事件状态机，属于对象内部状态；
+            # 对外只投影「是否超时」与「返航是否中断了临时任务」两个判断结果。
+            "temporary_decision_timed_out": self.temporary_decision_timed_out,
+            "temporary_task_abandoned": self.temporary_task_abandoned,
+            "mounted_lenses": None if self.mounted_lenses is None else list(self.mounted_lenses),
+            "mounted_payloads": None if self.mounted_payloads is None else list(self.mounted_payloads),
             "device_limits": deepcopy(self.device_limits),
             "configured_algorithms": list(self.configured_algorithms),
             "global_algorithms": list(self.global_algorithms),
@@ -948,16 +965,42 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
 
         ``resume_main`` 只恢复仍有效的巡检主线断点，``end_all`` 清空断点；
         两者都必须由用户明说，系统不猜。
+
+        V1.4 4.1.3：这里是**生产计时入口**。时钟来自构造时注入的确定性 ``clock``，
+        不读真实时间；deadline 已过时先按 4.2 低电量规则处理（保留主线断点 +
+        返航），事后再来的选择一律拒绝（``TEMPORARY_DECISION_TIMED_OUT``）。
         """
+        now = float(self._clock())
+        # 计时兜底先判定再归约：超时后不再接受事后选择，直接走 4.2 低电量规则。
+        if temporary_decision_timed_out(self.state, now=now):
+            timeout = apply_temporary_decision_timeout(self.state, now=now)
+            if timeout.get("applied"):
+                # 归约确实改变了路线状态才推进 generation；重放不推进。
+                self._route_revision += 1
+            if choice is not None:
+                raise TaskEventError(TEMPORARY_DECISION_TIMED_OUT)
+            return {"required": False, "choice": None, "timed_out": True,
+                    "action": timeout.get("action"), "applied": timeout.get("applied"),
+                    "route_status": self.state.route_status,
+                    "task_status": self.state.task_status,
+                    "low_battery_return": self.state.low_battery_return,
+                    "resumable": (bool(self.state.route_id)
+                                 and not self.state.mapping_invalidated
+                                 and self.state.breakpoint_index is not None
+                                 and not self.state.route_resume_disabled)}
         if choice is None:
-            return post_temporary_decision(self.state)
-        selected = validate_post_temporary_choice(self.state, choice)
+            return post_temporary_decision(self.state, now=now)
+        selected = validate_post_temporary_choice(self.state, choice, now=now)
         if selected == "end_all":
             self.apply_task_event("all_tasks_ended", task_batch_id=self.binding.task_batch_id)
             return {"required": False, "choice": selected,
                     "route_status": self.state.route_status, "resumable": False}
         self.state.route_status = "running"
         self.state.task_status = "route_executing"
+        # 用户已作出选择：计时兜底到此为止，残留 deadline 不得再触发返航。
+        self.state.temporary_decision_deadline = None
+        self.state.temporary_decision_timed_out = False
+        self.state.temporary_completed_at = None
         self.state.revision += 1
         self._route_revision += 1
         return {"required": False, "choice": selected,

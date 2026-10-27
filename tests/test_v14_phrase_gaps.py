@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 import unittest
-from unittest.mock import patch
 
 from lingxi_flight_control import (
     DecisionKind, FlightControlActionRequest, MemoryFlightControlSimulator, ModelDecision,
@@ -25,7 +24,7 @@ from lingxi_flight_control.ai_lifecycle import (
     BODY_ANNOTATION_AI_UNSUPPORTED, AlgorithmError, AnnotationAlgorithmConfig,
     AnnotationGeometry,
 )
-from lingxi_flight_control.cockpit import CockpitService
+from lingxi_flight_control.cockpit import CockpitService, _in_flight_unsupported
 from lingxi_flight_control.geometry import horizontal_distance_m
 
 # ---- 设计规范 V1.4 原文（从 docx 逐字复制，测试断言的唯一期望值来源） ----
@@ -46,6 +45,9 @@ DOC_TABLE6_BODY = "当前版本不支持立体目标规划，请将其标注为�
 DOC_3_2_2_BODY = "当前版本不支持立体目标，请标注为点或面。"                        # 3.2.2 表（变体）
 DOC_TABLE6_BODY_AI = "体标注不支持AI配置"                                       # 表6 场景「体标注配置AI拦截」引号内原文
 DOC_4_2_RECHARGE = "临时任务未完成，充电重启后将恢复原始任务。"                     # 4.2
+DOC_TABLE6_OBSTACLE = "指令已拦截，平台检测到前方存在障碍物，为了安全未执行移动。"   # 表6 R4
+DOC_TABLE6_MAPPING = "当前正在执行测绘任务，中断将导致测绘成果失效，是否确认？"        # 表6 R5
+DOC_TABLE6_GIMBAL = "当前云台俯仰角度上限为90度，已为您调整。"                       # 表6 R1（4.3.2）
 DOC_4_3_4_QUESTION = ("A和B距离较远，单次任务电量可能不足，"
                       "您是先去A再评估电量，还是放弃B点？")                        # 4.3.4 歧义追问
 
@@ -131,6 +133,22 @@ class PhraseRegistryTests(unittest.TestCase):
         self.assertEqual(policy.BODY_ANNOTATION_AI_PHRASE, DOC_TABLE6_BODY_AI)
         self.assertEqual(policy.BODY_ANNOTATION_AI_MESSAGE, DOC_TABLE6_BODY_AI + "。")
 
+    def test_table6_r4_obstacle_phrase_recorded_as_difference(self):
+        # 表6 R4 原文与当前对外实现（4.3.1 合并版）不同：只记录差异，不把「不同」当通过。
+        self.assertEqual(policy.TABLE6_OBSTACLE_MESSAGE, DOC_TABLE6_OBSTACLE)
+        self.assertEqual(policy.BLOCKED_MESSAGE,
+                         "指令已拦截，平台检测到路径存在障碍物、禁飞区或限高，为了安全未执行移动。")
+        self.assertNotEqual(policy.BLOCKED_MESSAGE, policy.TABLE6_OBSTACLE_MESSAGE)
+
+    def test_table6_r5_mapping_interrupt_phrase_recorded_as_difference(self):
+        # 表6 R5 原文与当前对外实现（4.1.2 合并版）不同：差异待产品裁决，见模块 docstring。
+        self.assertEqual(policy.TABLE6_MAPPING_INTERRUPT_MESSAGE, DOC_TABLE6_MAPPING)
+        self.assertNotEqual(policy.MAPPING_MESSAGE, policy.TABLE6_MAPPING_INTERRUPT_MESSAGE)
+        self.assertTrue(policy.MAPPING_MESSAGE.startswith("中断将导致测绘成果失效，是否确认继续？"))
+
+    def test_gimbal_pitch_max_phrase_is_verbatim(self):
+        self.assertEqual(policy.GIMBAL_PITCH_MAX_TEMPLATE.format(maximum=90), DOC_TABLE6_GIMBAL)
+
     def test_recharge_notice_is_verbatim(self):
         self.assertEqual(events.TEMPORARY_TASK_UNFINISHED_RECHARGE_MESSAGE, DOC_4_2_RECHARGE)
 
@@ -188,6 +206,23 @@ class ClampPhraseTests(unittest.TestCase):
         self.assertEqual(adjustments[0]["policy_message"],
                          "当前设备最大变焦倍数为12倍，已为您按最大变焦设置执行。")
 
+    def test_gimbal_up_clamp_reports_pitch_limit_phrase(self):
+        state = {"device_limits": {"gimbal_up": {"min": 0.1, "max": 90.0},
+                                   "gimbal_pitch_deg": {"min": -90.0, "max": 90.0}},
+                 "gimbal_pitch_deg": 0.0}
+        result, adjustments = policy.normalize_parameters("gimbal_up", {"angle_deg": 120.0}, state)
+        self.assertEqual(result["angle_deg"], 90.0)
+        self.assertEqual(adjustments[0]["policy_message"], DOC_TABLE6_GIMBAL)
+
+    def test_gimbal_down_clamp_reports_absolute_pitch_limit_phrase(self):
+        # 规范只给「上限」措辞；向下取极值命中下限，本仓以俯仰方向绝对限值填入 X（假设）。
+        state = {"device_limits": {"gimbal_down": {"min": 0.1, "max": 90.0},
+                                   "gimbal_pitch_deg": {"min": -90.0, "max": 90.0}},
+                 "gimbal_pitch_deg": 0.0}
+        result, adjustments = policy.normalize_parameters("gimbal_down", {"angle_deg": 120.0}, state)
+        self.assertEqual(result["angle_deg"], 90.0)
+        self.assertEqual(adjustments[0]["policy_message"], DOC_TABLE6_GIMBAL)
+
 
 class PayloadMountTests(unittest.TestCase):
     """4.3.2：镜头/探照灯是否挂载只看设备清单，缺失字段不冒充「未挂载」。"""
@@ -213,6 +248,23 @@ class PayloadMountTests(unittest.TestCase):
         state = {policy.MOUNTED_PAYLOADS_KEY: []}
         self.assertEqual(policy.payload_mount_message("payload_searchlight", state),
                          DOC_4_3_2_SEARCHLIGHT)
+
+    def test_simulator_snapshot_projects_mount_capabilities(self):
+        binding = RuntimeBinding('actor', 'project', 'hangar', 'drone', 'batch', 1)
+        simulator = MemoryFlightControlSimulator(binding)
+        # 未核验时是 None（不是「已挂载」，也不是空清单）。
+        self.assertIsNone(simulator.snapshot()['state'][policy.MOUNTED_LENSES_KEY])
+        self.assertIsNone(simulator.snapshot()['state'][policy.MOUNTED_PAYLOADS_KEY])
+        simulator.state.mounted_lenses = ['electro_optical']
+        simulator.state.mounted_payloads = ['megaphone']
+        snapshot = simulator.snapshot()['state']
+        self.assertEqual(snapshot[policy.MOUNTED_LENSES_KEY], ['electro_optical'])
+        self.assertEqual(snapshot[policy.MOUNTED_PAYLOADS_KEY], ['megaphone'])
+        # 快照投影后，纯策略函数直接可用（不经 patch）。
+        self.assertEqual(
+            policy.payload_mount_message('camera_infrared',
+                                         {policy.MOUNTED_LENSES_KEY: snapshot[policy.MOUNTED_LENSES_KEY]}),
+            DOC_4_3_2_LENS)
 
 
 class CompoundAmbiguityTests(unittest.TestCase):
@@ -308,21 +360,6 @@ class CockpitPhraseTriggerTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         return response.payload
 
-    def projected_state(self, service, **projection):
-        """**假设**：平台设备快照会投影已挂载能力清单；模拟器当前不投影这些字段。
-
-        本测试显式注入投影结果，只验证驾驶舱按清单拒绝/放行，不声称模拟器或
-        真实平台已经提供该字段（真实挂载能力契约未核验）。
-        """
-        real = service.executor.read_state
-
-        def read_state():
-            state = dict(real())
-            state.update(projection)
-            return state
-
-        return patch.object(service.executor, 'read_state', side_effect=read_state)
-
     # ---- 4.3.2 参数取极值 ----
 
     def test_volume_clamp_message_contains_spec_phrase(self):
@@ -348,25 +385,26 @@ class CockpitPhraseTriggerTests(unittest.TestCase):
     # ---- 4.3.2 未挂载镜头 / 探照灯 ----
 
     def test_unmounted_lens_is_rejected_with_spec_phrase(self):
+        # 真实状态链路：sim.state → snapshot/read_state → cockpit；不使用 patch。
+        self.simulator.state.mounted_lenses = ['electro_optical', 'wide']
         service = self.service(action('camera_infrared'))
-        with self.projected_state(service, mounted_lenses=['electro_optical', 'wide']):
-            result = self.message(service, '切到红外')
+        result = self.message(service, '切到红外')
         self.assertEqual(result['status'], 'rejected', result)
         self.assertEqual(result['error_code'], 'PAYLOAD_NOT_MOUNTED')
         self.assertEqual(result['message'], DOC_4_3_2_LENS)
         self.assertNotIn('card', result)
 
     def test_mounted_lens_reaches_preview(self):
+        self.simulator.state.mounted_lenses = ['electro_optical', 'infrared']
         service = self.service(action('camera_infrared'))
-        with self.projected_state(service, mounted_lenses=['electro_optical', 'infrared']):
-            result = self.message(service, '切到红外')
+        result = self.message(service, '切到红外')
         self.assertEqual(result['status'], 'preview_required', result)
         self.assertEqual(result['card']['action'], 'camera_infrared')
 
     def test_unmounted_searchlight_is_rejected_with_spec_phrase(self):
+        self.simulator.state.mounted_payloads = ['megaphone']
         service = self.service(action('payload_searchlight', enabled=True))
-        with self.projected_state(service, mounted_payloads=['megaphone']):
-            result = self.message(service, '打开探照灯')
+        result = self.message(service, '打开探照灯')
         self.assertEqual(result['status'], 'rejected', result)
         self.assertEqual(result['error_code'], 'PAYLOAD_NOT_MOUNTED')
         self.assertEqual(result['message'], DOC_4_3_2_SEARCHLIGHT)
@@ -418,10 +456,10 @@ class CockpitPhraseTriggerTests(unittest.TestCase):
         self.assertIn('请结束当前控制后使用任务规划入口', result['message'])
 
     def test_plan_step_with_unmounted_lens_is_rejected_with_spec_phrase(self):
+        self.simulator.state.mounted_lenses = ['electro_optical']
         planner = _Brain([action('camera_infrared'), final()])
         service = self.service(plan=True, planner=planner)
-        with self.projected_state(service, mounted_lenses=['electro_optical']):
-            result = self.message(service, '切到红外')
+        result = self.message(service, '切到红外')
         self.assertEqual(result['status'], 'clarification', result)
         self.assertEqual(result['message'], DOC_4_3_2_LENS)
 
@@ -572,6 +610,118 @@ class TemporaryDecisionTimeoutTests(unittest.TestCase):
         self.assertEqual(self.simulator.state.task_status, 'route_executing')
         self.assertEqual(self.simulator.state.breakpoint_index, 7)
 
+    # ---- 4.1.3 生产入口：resolve_temporary_outcome（注入确定性时钟） ----
+
+    def test_production_entry_before_deadline_still_requires_choice(self):
+        self.complete_temporary_task()
+        self.clock[0] = 1059.0
+        decision = self.simulator.resolve_temporary_outcome()
+        self.assertTrue(decision['required'])
+        self.assertFalse(decision['timed_out'])
+        self.assertEqual(decision['options'], list(events.POST_TEMPORARY_OPTIONS))
+
+    def test_production_entry_before_deadline_accepts_explicit_choice(self):
+        self.complete_temporary_task()
+        self.clock[0] = 1059.0
+        result = self.simulator.resolve_temporary_outcome('resume_main')
+        self.assertFalse(result['required'])
+        self.assertEqual(self.simulator.state.route_status, 'running')
+        self.assertEqual(self.simulator.state.task_status, 'route_executing')
+        self.assertFalse(self.simulator.state.low_battery_return)
+
+    def test_production_entry_after_deadline_applies_low_battery_rule(self):
+        self.complete_temporary_task()
+        self.clock[0] = 1060.0
+        result = self.simulator.resolve_temporary_outcome()
+        self.assertTrue(result['timed_out'])
+        self.assertTrue(result['applied'])
+        self.assertEqual(result['action'], 'low_battery_return')
+        self.assertTrue(self.simulator.state.low_battery_return)
+        self.assertEqual(self.simulator.state.task_status, 'returning_home')
+        # 4.2 断点语义：超时兜底保留主线断点，等待充电重启后续飞。
+        self.assertEqual(self.simulator.state.breakpoint_index, 7)
+
+    def test_production_entry_rejects_choice_after_deadline(self):
+        self.complete_temporary_task()
+        self.clock[0] = 1060.0
+        with self.assertRaises(events.TaskEventError) as caught:
+            self.simulator.resolve_temporary_outcome('resume_main')
+        self.assertEqual(caught.exception.code, events.TEMPORARY_DECISION_TIMED_OUT)
+        # 选择未被采纳：不恢复主线，已按低电量规则进入返航。
+        self.assertNotEqual(self.simulator.state.route_status, 'running')
+        self.assertTrue(self.simulator.state.low_battery_return)
+        self.assertEqual(self.simulator.state.task_status, 'returning_home')
+
+    def test_explicit_choice_before_deadline_disarms_timer(self):
+        # 用户已选「恢复主线」后，哪怕时钟越过原 deadline，也不得再判超时返航。
+        self.complete_temporary_task()
+        self.clock[0] = 1059.0
+        self.simulator.resolve_temporary_outcome('resume_main')
+        self.clock[0] = 5000.0
+        decision = self.simulator.resolve_temporary_outcome()
+        self.assertFalse(decision['timed_out'])
+        self.assertFalse(self.simulator.state.low_battery_return)
+        self.assertEqual(self.simulator.state.route_status, 'running')
+        self.assertIsNone(self.simulator.state.temporary_decision_deadline)
+
+    def test_production_entry_timeout_then_recharge_resumes_mainline(self):
+        self.complete_temporary_task()
+        self.clock[0] = 1200.0
+        self.simulator.resolve_temporary_outcome()
+        self.simulator.apply_task_event('recharged_online', task_batch_id='batch')
+        self.assertFalse(self.simulator.state.low_battery_return)
+        self.assertEqual(self.simulator.state.route_status, 'running')
+        self.assertEqual(self.simulator.state.task_status, 'route_executing')
+        self.assertEqual(self.simulator.state.breakpoint_index, 7)
+
+
+class InFlightUnsupportedBoundaryTests(unittest.TestCase):
+    """L6：不支持话术的确定性判定不能把单目标/载荷动作或否定句误判成拒绝。"""
+
+    def test_single_point_with_payload_action_is_not_mixed_target(self):
+        # 「到目标点后全域拍照」是单点目标 + 载荷动作，不是点+面混合目标。
+        self.assertIsNone(_in_flight_unsupported('到目标点后全域拍照'))
+
+    def test_negated_or_substituted_route_words_are_not_rejected(self):
+        for text in ('不要用网格航线，改用正射影像', '如果我用网格航线飞会怎样',
+                     '能不能用网格航线飞'):
+            self.assertIsNone(_in_flight_unsupported(text))
+
+    def test_table6_mixed_sample_is_still_rejected_verbatim(self):
+        self.assertEqual(_in_flight_unsupported('去A塔，再沿着B河道巡视'),
+                         ('MIXED_TARGET_UNSUPPORTED', DOC_TABLE6_MIXED))
+
+    def test_cockpit_does_not_reject_point_with_payload_action_as_mixed(self):
+        clock = [1000.0]
+        binding = RuntimeBinding('actor-9', 'project-1', 'hangar-1', 'drone-1', 'batch-1', 1)
+        simulator = MemoryFlightControlSimulator(binding, clock=lambda: clock[0])
+        simulator.state.control_owner = 'actor-9'
+        service = CockpitService(binding, simulator, lambda: None, clock=lambda: clock[0])
+        response = service.handle(
+            'POST', '/api/flight-control/agent/messages',
+            json.dumps({'text': '到目标点后全域拍照', 'request_id': 'mixed-neg-1',
+                        'context_version': 1}),
+            {'X-Agent-Session': 'mixed-neg-tab'})
+        result = response.payload
+        self.assertNotEqual(result.get('message'), DOC_TABLE6_MIXED)
+        self.assertNotEqual(result.get('error_code'), 'MIXED_TARGET_UNSUPPORTED')
+
+    def test_cockpit_lets_negated_route_words_fall_through_to_no_action_gate(self):
+        clock = [1000.0]
+        binding = RuntimeBinding('actor-9', 'project-1', 'hangar-1', 'drone-1', 'batch-1', 1)
+        simulator = MemoryFlightControlSimulator(binding, clock=lambda: clock[0])
+        simulator.state.control_owner = 'actor-9'
+        service = CockpitService(binding, simulator, lambda: None, clock=lambda: clock[0])
+        response = service.handle(
+            'POST', '/api/flight-control/agent/messages',
+            json.dumps({'text': '不要用网格航线，改用正射影像', 'request_id': 'mixed-neg-2',
+                        'context_version': 1}),
+            {'X-Agent-Session': 'mixed-neg-tab'})
+        result = response.payload
+        self.assertEqual(result['status'], 'clarification', result)
+        self.assertNotEqual(result.get('message'), DOC_TABLE6_COMPLEX)
+        self.assertNotIn('card', result)
+
 
 class TemporaryRechargeNoticeTests(unittest.TestCase):
     """4.2：返航时正在执行临时任务 → 前端提示充电重启后恢复原始任务。"""
@@ -613,21 +763,29 @@ class TemporaryRechargeNoticeTests(unittest.TestCase):
     def test_plain_flight_has_no_recharge_notice(self):
         self.assertIsNone(events.temporary_task_return_notice(self.simulator.state))
 
-    def test_status_query_surfaces_notice_when_snapshot_projects_flags(self):
-        clock = [1000.0]
-        binding = RuntimeBinding('actor-2', 'project-1', 'hangar-1', 'drone-1', 'batch-1', 1)
-        simulator = MemoryFlightControlSimulator(binding, clock=lambda: clock[0])
-        simulator.state.control_owner = 'actor-2'
-        service = CockpitService(binding, simulator, lambda: None, clock=lambda: clock[0])
-        projected = {'execution_mode': 'simulator', 'low_battery_return': True,
-                     'temporary_task_abandoned': True}
-        # 平台快照必须投影这两个布尔事实，提示才有依据；字段缺失时不提示（见上一用例）。
-        with patch.object(service, '_state', return_value=projected):
-            response = service.handle(
-                'POST', '/api/flight-control/agent/messages',
-                json.dumps({'text': '刷新状态', 'request_id': 'notice-query',
-                            'context_version': 1}),
-                {'X-Agent-Session': 'notice-tab'})
+    def test_simulator_snapshot_projects_return_flags(self):
+        self.start_temporary_task()
+        self.simulator.apply_task_event('low_battery_return', task_batch_id='batch')
+        snapshot = self.simulator.snapshot()['state']
+        self.assertTrue(snapshot['low_battery_return'])
+        self.assertTrue(snapshot['temporary_task_abandoned'])
+        # 充电重启后两个事实都复位，提示不再有依据。
+        self.simulator.apply_task_event('recharged_online', task_batch_id='batch')
+        snapshot = self.simulator.snapshot()['state']
+        self.assertFalse(snapshot['low_battery_return'])
+        self.assertFalse(snapshot['temporary_task_abandoned'])
+
+    def test_status_query_surfaces_notice_through_real_snapshot(self):
+        # 不 patch：simulator 真实事件 → to_dict/snapshot → CockpitService 状态查询。
+        self.start_temporary_task()
+        self.simulator.apply_task_event('low_battery_return', task_batch_id='batch')
+        service = CockpitService(self.binding, self.simulator, lambda: None,
+                                 clock=lambda: self.clock[0])
+        response = service.handle(
+            'POST', '/api/flight-control/agent/messages',
+            json.dumps({'text': '刷新状态', 'request_id': 'notice-query',
+                        'context_version': 1}),
+            {'X-Agent-Session': 'notice-tab'})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.payload['kind'], 'state_query')
         self.assertIn(DOC_4_2_RECHARGE, response.payload['message'])
@@ -644,6 +802,23 @@ class BodyAnnotationBackendPhraseTests(unittest.TestCase):
             config.validate(configured=('fire',))
         self.assertEqual(caught.exception.code, BODY_ANNOTATION_AI_UNSUPPORTED)
         self.assertEqual(str(caught.exception), policy.BODY_ANNOTATION_AI_MESSAGE)
+
+    def test_quote_punctuation_difference_is_recorded_not_normalized_away(self):
+        # 表6 引号内原文无句号；既有后端消息是「原文 + 。」。不擅自改后端文案，
+        # 只把「仅差一个结尾句号」固定为显式差异。
+        self.assertEqual(policy.BODY_ANNOTATION_AI_PHRASE, DOC_TABLE6_BODY_AI)
+        self.assertFalse(policy.BODY_ANNOTATION_AI_PHRASE.endswith("。"))
+        self.assertEqual(policy.BODY_ANNOTATION_AI_MESSAGE,
+                         policy.BODY_ANNOTATION_AI_PHRASE + "。")
+        config = AnnotationAlgorithmConfig(
+            annotation_id='annotation-1', geometry=AnnotationGeometry.BODY,
+            algorithms=('fire',), version=1)
+        with self.assertRaises(AlgorithmError) as caught:
+            config.validate(configured=('fire',))
+        message = str(caught.exception)
+        self.assertNotEqual(message, DOC_TABLE6_BODY_AI)
+        self.assertEqual(message.rstrip("。"), DOC_TABLE6_BODY_AI)
+        self.assertEqual(message, policy.BODY_ANNOTATION_AI_MESSAGE)
 
 
 if __name__ == '__main__':

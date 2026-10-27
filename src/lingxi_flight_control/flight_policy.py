@@ -1,4 +1,48 @@
-"""V1.3/V1.4 deterministic business rules; inputs come from the bound executor."""
+"""V1.3/V1.4 deterministic business rules; inputs come from the bound executor.
+
+规范内部冲突清单（待产品裁决，实现不得单方把某一版当唯一正确）
+============================================================
+
+V1.4 的正文规则章节（2.2.x / 4.x）与 4.4 表6「测试用例库」对同一场景给了不同话术。
+本模块**不擅自改写既有对外话术**：以下逐条列出两版原文、当前实现选用谁、影响范围，
+由产品/规范 owner 裁决；每一条都有对账测试固定差异（``tests/test_v14_phrase_gaps.py``）。
+
+1. 航线中强插微操
+   - 2.2.3：「当前正在执行自动航线，请先说‘暂停航线’或‘悬停’再操作。」
+   - 表6 R2：「当前正在执行自动航线，请先说‘暂停航线’或‘悬停’。」
+   - 当前：``ROUTE_MESSAGE`` 沿用 2.2.3（多「再操作」）。影响：按「表6 逐字」验收会判不符。
+2. 变焦超限取极值
+   - 2.2.5：「当前设备最大变焦倍数为30倍，已为您按最大变焦设置执行。」
+   - 4.3.2：「当前设备最大变焦为30倍，已为您按最大变焦设置。」
+   - 表6 R3：「指令已拦截，当前设备最大变焦倍数为30倍，已为您按最大变焦设置。」
+   - 当前：``CAMERA_ZOOM_MAX_MESSAGE`` 采用 2.2.5；表6 变体保留在
+     ``CAMERA_ZOOM_MAX_INTERCEPT_MESSAGE`` 仅供对账。影响：同上。
+3. 平台判定遇障（表6 R4）
+   - 4.3.1：「指令已拦截，平台检测到前方X米存在障碍物/禁飞区。」
+   - 表6 R4：「指令已拦截，平台检测到前方存在障碍物，为了安全未执行移动。」
+   - 当前：``BLOCKED_MESSAGE`` 为合并版（路径障碍物/禁飞区/限高），表6 原文只记录在
+     ``TABLE6_OBSTACLE_MESSAGE``，不改对外话术。
+4. 测绘任务被干预（表6 R5）
+   - 4.1.2：「中断将导致测绘成果失效，是否确认继续？」+ 关闭拼图/不可恢复说明
+   - 表6 R5：「当前正在执行测绘任务，中断将导致测绘成果失效，是否确认？」
+   - 当前：``MAPPING_MESSAGE`` 采用 4.1.2 合并版；表6 原文只记录在
+     ``TABLE6_MAPPING_INTERRUPT_MESSAGE``，不改对外话术。
+5. 体目标拒绝
+   - 3.2.2：「当前版本不支持立体目标，请标注为点或面。」
+   - 表6 R8：「当前版本不支持立体目标规划，请将其标注为点或面。」
+   - 当前：用户可见话术取 ``BODY_TARGET_MESSAGE``（表6 R8），3.2.2 变体保留在
+     ``BODY_TARGET_STANDARD_MESSAGE``。
+6. 体标注不支持 AI 配置（表6 R9）
+   - 表6 引号内：「体标注不支持AI配置」（句号在引号外）。
+   - 当前后端 ai_lifecycle 的消息为「体标注不支持AI配置。」（句号在引号内）。
+   - 当前：``BODY_ANNOTATION_AI_PHRASE`` 记录引号内逐字原文，
+     ``BODY_ANNOTATION_AI_MESSAGE`` 记录既有实现的带句号形式；不改既有后端文案，
+     只在测试里固定「仅差一个结尾句号」的差异。
+7. 云台俯仰取极值（表6 R1 / 4.3.2）
+   - 规范只给「上限」话术：「当前云台俯仰角度上限为X度，已为您调整。」
+   - 向下取极值时命中的是俯仰**下限**；本仓以俯仰方向的绝对限值填入 X（**解释性假设**），
+     向下场景的措辞是否成立需产品裁决。
+"""
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 import inspect
@@ -66,6 +110,14 @@ MIXED_TARGET_MESSAGE = "单次任务暂不支持混合目标巡检，请分次�
 BODY_TARGET_MESSAGE = "当前版本不支持立体目标规划，请将其标注为点或面。"
 #: 3.2.2 表的变体表述；仅用于对账，不做用户可见话术。
 BODY_TARGET_STANDARD_MESSAGE = "当前版本不支持立体目标，请标注为点或面。"
+
+#: 4.4 表6 R4「平台判定遇障」原文；当前对外仍用 ``BLOCKED_MESSAGE`` 合并版（见模块 docstring）。
+TABLE6_OBSTACLE_MESSAGE = "指令已拦截，平台检测到前方存在障碍物，为了安全未执行移动。"
+#: 4.4 表6 R5「测绘任务被干预」原文；当前对外仍用 ``MAPPING_MESSAGE`` 4.1.2 合并版。
+TABLE6_MAPPING_INTERRUPT_MESSAGE = "当前正在执行测绘任务，中断将导致测绘成果失效，是否确认？"
+
+#: 4.3.2 / 表6 R1：云台俯仰取极值话术（X 为俯仰方向限值；规范未区分上下限，见 docstring）。
+GIMBAL_PITCH_MAX_TEMPLATE = "当前云台俯仰角度上限为{maximum:g}度，已为您调整。"
 
 #: 2.1.1 / 3.3 / 4.4 表6：体标注不参与 AI 配置（表6 引号内原文无句号）。
 BODY_ANNOTATION_AI_PHRASE = "体标注不支持AI配置"
@@ -151,6 +203,7 @@ def normalize_parameters(action, parameters, state):
             or not finite(limit.get("max")) or limit["min"] > limit["max"]):
         raise PolicyError("DEVICE_LIMITS_UNAVAILABLE", "当前设备参数表无效。")
     low, high = max(protocol_low, limit["min"]), min(protocol_high, limit["max"])
+    pitch_bound = None
     if action in {"gimbal_up", "gimbal_down"}:
         pitch = state.get("gimbal_pitch_deg")
         pitch_limits = limits.get("gimbal_pitch_deg")
@@ -160,6 +213,8 @@ def normalize_parameters(action, parameters, state):
         if not finite(lower) or not finite(upper) or not -90 <= lower <= pitch <= upper <= 90:
             raise PolicyError("DEVICE_LIMITS_UNAVAILABLE", "当前云台角度或俯仰限值无效。")
         high = min(high, upper - pitch if action == "gimbal_up" else pitch - lower)
+        # 取极值话术里的 X：规范示例是「上限」，向下取极值命中下限时用方向的绝对限值。
+        pitch_bound = upper if action == "gimbal_up" else abs(lower)
     if low > high:
         raise PolicyError("DEVICE_LIMIT_REACHED", "当前设备已到达可用极限，未执行调整。")
     effective = min(high, max(low, value))
@@ -172,6 +227,8 @@ def normalize_parameters(action, parameters, state):
         template = _MAX_CLAMP_TEMPLATES.get(action)
         if template is not None and effective == high and value > high:
             adjustment["policy_message"] = template.format(maximum=high)
+        elif pitch_bound is not None and effective == high and value > high:
+            adjustment["policy_message"] = GIMBAL_PITCH_MAX_TEMPLATE.format(maximum=pitch_bound)
         adjustments.append(adjustment)
     return result, adjustments
 
