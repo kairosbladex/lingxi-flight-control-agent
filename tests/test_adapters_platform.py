@@ -49,6 +49,10 @@ class KtdPlatformAdapterTests(unittest.TestCase):
         micro_payload = self.adapter.format_micro_operation_payload(201, mode=2, param=10.0)
         self.assertEqual(micro_payload, {"type": 201, "mode": 2, "param": 10.0})
 
+    def test_permissive_route_status_fallback_is_rejected(self):
+        with self.assertRaises(ValueError):
+            KtdPlatformAdapter(fallback_policy="allow")
+
 
 if __name__ == "__main__":
     unittest.main()

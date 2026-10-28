@@ -17,6 +17,7 @@
 - **Java 适配候选**：`KtdPlatformExecutor` 编译15个已核验写动作，默认关闭，
   需要服务端权威状态、权限、控制权租约及持久幂等日志。HTTP受理不代表设备完成。
   当前正式Java接口缺少完整权威快照契约，尚不能安全启用；见 [接口核对](docs/ktd-platform-contract.md)。
+- Zhuoyi 平台入口保持逐项确认；整份计划只有在终态回执、独立到位证据和持久幂等契约同时具备时才会开放。
 - **地图与视频展示候选**：前端已接本地地理底图和独立播放器；服务端只读当前资源已有的视频描述，
   默认媒体来源白名单为空。地址不进入模型、控制状态或检查点，读取/播放不启流。
   来源策略、会话绑定和验证边界见 [媒体契约](docs/visuals-media-contract.md)。
@@ -257,6 +258,10 @@ PYTHONPATH=src python3 tools/agent_service.py --executor simulator --port 8791
 PYTHONPATH=src python3 tools/bench/service_e2e.py --restart-between-requests
 ```
 
+驾驶舱整份计划会把确认卡、步骤游标、步骤结果和等待到位状态写入同一个
+`CheckpointStore`。使用 `FileCheckpointStore` 时，服务重启会重新校验绑定哈希、上下文版本和
+设备状态后恢复；`submitted`、未知回执或缺少独立到位证据不会推进下一步。
+
 ## 工具检索层
 
 59 个工具的契约全量下发占 3213~3525 tokens，且每次请求都要重付。`RuleBasedToolSelector`
@@ -274,6 +279,8 @@ decider = OllamaDecider(model="qwen3.5:9b", tool_selector=RuleBasedToolSelector(
 改变状态的动作会带上前置的 `control_acquire`（否则多步任务第一步就断）；已执行/待确认/
 已回放的观察里的工具永远保留；候选面低于 `min_candidates=8` 也回退全量（过窄的工具面会
 诱导模型调错动作）；检索层抛异常时只记 `selector_errors` 并退化成全量。
+
+`cockpit_server.py`、`platform_cockpit_server.py` 和 `zhuoyi_cockpit_server.py` 的普通驾驶舱模型入口默认启用该检索器；计划专用注册表不复用这套工具面。
 
 实测（46 条用例，同一批用例与 system prompt，唯一变量是「是否检索」，`qwen3.5:9b`）：
 

@@ -59,7 +59,7 @@ def main():
             else:
                 raise RuntimeError('isolated Java startup timed out')
             service = CockpitService(binding, executor, lambda: None, gateway_token=token,
-                enable_plan_execution=True, plan_decider_factory=lambda: None)
+                enable_plan_execution=False)
             agent = build_standalone_server(service, '127.0.0.1', 0)
             servers.append(agent)
             threading.Thread(target=agent.serve_forever, daemon=True).start()

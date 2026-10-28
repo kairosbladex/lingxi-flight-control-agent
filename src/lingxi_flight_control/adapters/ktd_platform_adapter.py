@@ -47,6 +47,8 @@ class KtdPlatformAdapter:
     """外部 Java 平台接口与快照健壮适配器。"""
 
     def __init__(self, *, fallback_policy: str = "fail_closed"):
+        if fallback_policy != "fail_closed":
+            raise ValueError("fallback_policy must remain fail_closed")
         self.fallback_policy = fallback_policy
 
     def adapt_snapshot(self, raw_snapshot: Mapping[str, Any],

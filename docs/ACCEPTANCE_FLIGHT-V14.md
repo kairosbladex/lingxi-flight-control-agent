@@ -17,6 +17,18 @@
 P5 再用 SQLite 持久化 reservation 消除了「跨进程并发时网关可能调用两次」的窗口。
 所有结论都不能证明真实飞行成功。
 
+## 2026-10-28 收口补充
+
+本轮在上述基线之上完成了四项收口：
+
+- 三个驾驶舱入口默认启用 `RuleBasedToolSelector`；检索异常仍回退全量，安全工具和控制权前置动作不被裁掉。
+- 计划步骤确认卡把 `requested_parameters`、`adjustments`、`warnings` 透传到前端并逐步展示；前端拒绝有效值与调整结果不一致的卡片。
+- 计划游标、步骤结果、绑定哈希、状态版本和 `awaiting_arrival` 状态写入既有 `CheckpointStore`；重启恢复前重新校验绑定，平台没有独立到位证据时不推进后续步骤。
+- Zhuoyi 平台入口保持逐项确认，`supports_plan_execution` 在独立到位契约补齐前为关闭状态；`KtdPlatformAdapter` 只接受 `fail_closed`，不提供宽松 `route_status` 回退。
+
+本轮验证：Python 离线套件 **1356 tests OK**，前端单测 **179 tests OK**，前端 `npm run build` 通过。
+上述结果仍属于离线、模拟器和隔离夹具证据；真实 Java 事件、终态回执、设备位姿/媒体效果和真实平台写入仍未验证。
+
 ## 一、本轮修复（先修代码，再改文档）
 
 | # | 问题 | 风险 | 修复 | 回归用例 |

@@ -6,7 +6,7 @@ import sys
 import secrets
 import json
 
-from lingxi_flight_control import OllamaDecider
+from lingxi_flight_control import OllamaDecider, RuleBasedToolSelector
 from lingxi_flight_control.cockpit import COCKPIT_SYSTEM_PROMPT
 from lingxi_flight_control.ollama_decider import DEFAULT_BASE_URL, DEFAULT_MODEL
 from lingxi_flight_control.platform_runtime import PlatformRuntimeConfig, build_platform_cockpit
@@ -62,6 +62,7 @@ def main(argv=None):
         decider = lambda: OllamaDecider(
             model=args.model, base_url=args.base_url, system_prompt=COCKPIT_SYSTEM_PROMPT,
             timeout=args.model_timeout, max_attempts=1, max_output_tokens=2048,
+            tool_selector=RuleBasedToolSelector(),
             keep_alive=-1 if args.model_keep_alive == '-1' else args.model_keep_alive)
         if args.browser_gateway:
             from lingxi_flight_control.browser_gateway import BrowserGateway

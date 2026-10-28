@@ -7,10 +7,9 @@ verification instance; the Java side still decides whether publishing is configu
 import argparse
 import os
 
-from lingxi_flight_control import OllamaDecider, RuntimeBinding
+from lingxi_flight_control import OllamaDecider, RuleBasedToolSelector, RuntimeBinding
 from lingxi_flight_control.cockpit import COCKPIT_SYSTEM_PROMPT, CockpitService
 from lingxi_flight_control.ollama_decider import DEFAULT_BASE_URL, DEFAULT_MODEL
-from lingxi_flight_control.plan import plan_clarify_detector, plan_system_prompt
 from lingxi_flight_control.standalone_preview import build_standalone_server
 from lingxi_flight_control.zhuoyi_platform import ZhuoyiPlatformExecutor
 
@@ -27,7 +26,6 @@ def main():
     parser.add_argument('--port', type=int, default=8795)
     parser.add_argument('--model', default=DEFAULT_MODEL)
     parser.add_argument('--base-url', default=DEFAULT_BASE_URL)
-    parser.add_argument('--max-plan-steps', type=int, default=5)
     args = parser.parse_args()
 
     binding = RuntimeBinding(
@@ -47,22 +45,20 @@ def main():
         receipt_timeout=float(env('ZHUOYI_PLATFORM_RECEIPT_TIMEOUT', '10')),
         allow_insecure_http=True,
     )
-    decider = lambda prompt, plan=False: (  # noqa: E731
+    decider = lambda prompt: (  # noqa: E731
         lambda: OllamaDecider(
             model=args.model, base_url=args.base_url, system_prompt=prompt,
             timeout=60, max_attempts=1, max_output_tokens=2048, keep_alive='30m',
-            clarify_detector=plan_clarify_detector if plan else None)
+            tool_selector=RuleBasedToolSelector())
     )
     service = CockpitService(
         binding, executor, decider(COCKPIT_SYSTEM_PROMPT),
         gateway_token=env('FLIGHT_AGENT_GATEWAY_TOKEN'),
-        timeout_sec=180, enable_plan_execution=True,
-        plan_decider_factory=decider(plan_system_prompt(args.max_plan_steps), plan=True),
-        max_plan_steps=args.max_plan_steps)
+        timeout_sec=180, enable_plan_execution=False)
     server = build_standalone_server(service, '127.0.0.1', args.port,
                                      allowed_origin='http://127.0.0.1:5173')
     print(f'飞控 Agent http://127.0.0.1:{server.server_port} · platform · '
-          f'整份计划一次确认 · Java={executor.base_url}', flush=True)
+          f'逐项确认（计划等待独立到位契约） · Java={executor.base_url}', flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

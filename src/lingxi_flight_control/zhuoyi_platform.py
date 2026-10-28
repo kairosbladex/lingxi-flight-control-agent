@@ -57,7 +57,9 @@ class ZhuoyiPlatformExecutor:
     """RuntimeExecutor for the Java Agent flight-control API."""
 
     execution_mode = "platform"
-    supports_plan_execution = True
+    # 平台当前只返回命令终态，没有独立位置/姿态到位证据；不能授权整份计划自动续步。
+    supports_plan_execution = False
+    supports_verified_plan_execution = False
     supports_parallel_execution = True
 
     def __init__(

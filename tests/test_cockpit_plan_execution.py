@@ -1,5 +1,6 @@
 """复合指令闭环：模型规划整份计划，用户一次确认，按顺序执行。"""
 import json
+import tempfile
 import unittest
 
 from lingxi_flight_control import (
@@ -11,6 +12,7 @@ from lingxi_flight_control.full_control import (
 )
 from lingxi_flight_control.geometry import relative_target
 from lingxi_flight_control.models import ExecutionContext
+from lingxi_flight_control.session import FileCheckpointStore
 
 
 def action(name, **arguments):
@@ -174,6 +176,35 @@ class CockpitPlanExecutionTests(unittest.TestCase):
         self.assertEqual(self.confirm(card)['plan_status'], 'completed')
         self.assertEqual(self.simulator.state.camera['photo_count'], 1)
 
+    def test_pending_plan_survives_service_restart_with_file_checkpoint_store(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = FileCheckpointStore(directory, clock=lambda: self.clock[0])
+            first = CockpitService(
+                self.binding, self.simulator, lambda: self.fallback,
+                clock=lambda: self.clock[0], store=store, enable_plan_execution=True,
+                plan_decider_factory=lambda: self.planner, max_plan_steps=5)
+            planner = Brain([action('move_forward', distance_m=10), action('camera_photo'), final()])
+            first._plan_factory = lambda: planner
+            proposal = first.handle(
+                'POST', '/api/flight-control/agent/messages',
+                json.dumps({'text': '往前飞10米，并帮我拍张照', 'request_id': 'restart-1', 'context_version': 1}),
+                {'X-Agent-Session': 'restart-tab'}).payload
+            self.assertEqual(proposal['status'], 'preview_required')
+
+            second = CockpitService(
+                self.binding, self.simulator, lambda: self.fallback,
+                clock=lambda: self.clock[0],
+                store=FileCheckpointStore(directory, clock=lambda: self.clock[0]),
+                enable_plan_execution=True, plan_decider_factory=lambda: Brain([]), max_plan_steps=5)
+            card = proposal['card']
+            payload = {key: card[key] for key in (
+                'confirmation_id', 'confirmation_binding', 'command_id', 'idempotency_key', 'context_version')}
+            receipt = second.handle(
+                'POST', '/api/flight-control/agent/confirm', json.dumps(payload),
+                {'X-Agent-Session': 'restart-tab'}).payload
+            self.assertEqual(receipt['plan_status'], 'completed')
+            self.assertEqual([step['status'] for step in receipt['steps']], ['accepted', 'accepted'])
+
     def test_zero_step_result_is_not_turned_into_a_card(self):
         self.plan(final('当前没有需要执行的动作。'))
         proposal = self.message('现在无人机高度是多少？')
@@ -222,7 +253,7 @@ class CockpitPlanExecutionTests(unittest.TestCase):
                 self.binding, FakePlatformExecutor(), lambda: self.fallback,
                 gateway_token='x' * 32, enable_plan_execution=True,
                 plan_decider_factory=lambda: self.planner)
-        self.assertIn('verified completion receipts', str(raised.exception))
+        self.assertIn('verified completion and arrival evidence', str(raised.exception))
 
 
 if __name__ == '__main__':
@@ -234,6 +265,7 @@ class _UnsettledPlatform:
 
     execution_mode = "platform"
     supports_plan_execution = True
+    supports_verified_plan_execution = True
 
     def __init__(self, *, verify_arrival):
         self.verify_arrival = verify_arrival
@@ -305,8 +337,9 @@ class PlatformPlanArrivalTests(unittest.TestCase):
             key: card[key] for key in ("confirmation_id", "confirmation_binding",
                                        "command_id", "idempotency_key", "context_version")}),
             headers).payload
-        self.assertEqual(receipt["error_code"], "ARRIVAL_NOT_OBSERVED")
-        self.assertEqual(receipt["failed_step"], 1)
+        self.assertEqual(receipt["error_code"], "PLAN_AWAITING_ARRIVAL")
+        self.assertEqual(receipt["plan_status"], "awaiting_arrival")
+        self.assertIsNone(receipt["failed_step"])
         self.assertEqual(executor.previews, ["move_forward"])
         self.assertEqual(executor.confirms, ["move_forward"])
 

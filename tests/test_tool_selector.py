@@ -346,5 +346,19 @@ class BenchCoverageTests(unittest.TestCase):
                         f"平均候选面 {sum(sizes) / len(sizes):.1f} 相对全量 {len(bench.SPEC)} 不够小")
 
 
+class ProductionFactoryWiringTests(unittest.TestCase):
+    """生产入口默认接入检索；计划专用模型仍由独立注册表负责。"""
+
+    def test_cockpit_entrypoints_construct_deciders_with_selector(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        for relative in ('tools/cockpit_server.py', 'tools/platform_cockpit_server.py',
+                         'tools/zhuoyi_cockpit_server.py'):
+            with self.subTest(relative=relative):
+                with open(os.path.join(root, relative), encoding='utf-8') as handle:
+                    source = handle.read()
+                self.assertIn('RuleBasedToolSelector', source)
+                self.assertIn('tool_selector=', source)
+
+
 if __name__ == "__main__":
     unittest.main()

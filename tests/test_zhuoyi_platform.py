@@ -126,7 +126,8 @@ class ZhuoyiPlatformExecutorTests(unittest.TestCase):
         # completed 只是接口终态，不是另一次位置回读。
         self.assertFalse(receipt.arrival_verified)
         self.assertEqual(self.platform.receipts["cmd-1"]["status"], "completed")
-        self.assertEqual(self.executor.supports_plan_execution, True)
+        self.assertEqual(self.executor.supports_plan_execution, False)
+        self.assertEqual(self.executor.supports_verified_plan_execution, False)
 
     def test_dji_move_below_20_metres_is_not_submitted(self):
         self.platform.state["height_m"] = 10

@@ -2,7 +2,12 @@
 """Local simulator UI service; enabling a physical backend is an integration task."""
 import argparse
 
-from lingxi_flight_control import MemoryFlightControlSimulator, OllamaDecider, RuntimeBinding
+from lingxi_flight_control import (
+    MemoryFlightControlSimulator,
+    OllamaDecider,
+    RuleBasedToolSelector,
+    RuntimeBinding,
+)
 from lingxi_flight_control.cockpit import COCKPIT_SYSTEM_PROMPT, CockpitService
 from lingxi_flight_control.ollama_decider import DEFAULT_BASE_URL, DEFAULT_MODEL
 from lingxi_flight_control.plan import plan_clarify_detector, plan_system_prompt
@@ -27,6 +32,7 @@ def main():
         return lambda: OllamaDecider(
             model=args.model, base_url=args.base_url, system_prompt=prompt,
             timeout=20, max_attempts=1, max_output_tokens=2048, keep_alive='30m',
+            tool_selector=None if plan else RuleBasedToolSelector(),
             clarify_detector=plan_clarify_detector if plan else None)
 
     service = CockpitService(

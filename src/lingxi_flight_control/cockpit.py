@@ -26,7 +26,16 @@ from .full_control import (
     RuntimeBinding, _CONTROL_FREE_ACTIONS, parameter_json_schema,
 )
 from .plan import build_plan_registry, plan_binding_hash, plan_clarify_detector
-from .models import DecisionKind, LoopStatus, ModelDecision, ToolCall, ToolDefinition, ToolParameter, ToolSchema
+from .models import (
+    AgentCheckpoint,
+    DecisionKind,
+    LoopStatus,
+    ModelDecision,
+    ToolCall,
+    ToolDefinition,
+    ToolParameter,
+    ToolSchema,
+)
 from .ktd_platform import KtdPlatformError
 from .ollama_decider import ModelOutputTruncatedError, ModelTimeoutError, PromptBudgetExceeded
 from .safety import SafetyFastPath
@@ -617,6 +626,13 @@ class _PendingPlan:
     expires_at: float
     steps: list[dict]
     execution_order: str = 'sequential'
+    next_step: int = 0
+    results: list[dict] = field(default_factory=list)
+    status: str = 'pending'
+    awaiting_step: int | None = None
+    awaiting_before_pose: dict | None = None
+    state_revision: object = None
+    last_state_revision: object = None
 
 
 @dataclass
@@ -641,8 +657,9 @@ class _Conversation:
 class CockpitService:
     """One server-authorized resource binding, isolated browser conversations.
 
-    Checkpoints reuse CheckpointStore; pending cards disappear on restart. Platform
-    executors must independently journal send attempts before contacting Java.
+    Checkpoints reuse CheckpointStore; pending plans are serialized into the existing
+    checkpoint context. Platform executors must independently journal send attempts
+    before contacting Java.
     """
     def __init__(self, binding: RuntimeBinding, executor, decider_factory, *,
                  clock=time.time, store=None, gateway_token=None, max_turns=30,
@@ -669,10 +686,11 @@ class CockpitService:
             raise ValueError('enable_direct_commands must be a boolean')
         self._direct_commands = enable_direct_commands
         if enable_plan_execution:
-            # 模拟器天然同步完成；平台执行器必须显式声明已完成回执验证。
+            # 模拟器天然同步完成；平台执行器必须显式声明终态与独立到位证据。
             if not (self.execution_mode == 'simulator'
-                    or getattr(self.executor, 'supports_plan_execution', False)):
-                raise ValueError('plan execution requires verified completion receipts')
+                    or (getattr(self.executor, 'supports_plan_execution', False)
+                        and getattr(self.executor, 'supports_verified_plan_execution', False))):
+                raise ValueError('plan execution requires verified completion and arrival evidence')
             if not callable(plan_decider_factory):
                 raise ValueError('plan execution requires a plan decider factory')
             if (isinstance(max_plan_steps, bool) or not isinstance(max_plan_steps, int)
@@ -741,9 +759,188 @@ class CockpitService:
         if key not in self._sessions:
             if len(self._sessions) >= self._max_sessions:
                 raise _ApiError('SESSION_LIMIT', '会话数量已达上限，请稍后重试。', 429)
-            self._sessions[key] = _Conversation(last_used=now)
+            session = _Conversation(last_used=now)
+            self._sessions[key] = session
+            self._restore_session_state(key, session)
         self._sessions[key].last_used = now
         return self._sessions[key]
+
+    @staticmethod
+    def _empty_checkpoint():
+        return AgentCheckpoint(user_input='', context={}, messages=[], tool_calls=[], observations=[], max_steps=1)
+
+    @staticmethod
+    def _serialize_plan(plan):
+        if plan is None:
+            return None
+        return {
+            'plan_id': plan.plan_id,
+            'confirmation_binding': plan.confirmation_binding,
+            'expires_at': plan.expires_at,
+            'steps': deepcopy(plan.steps),
+            'execution_order': plan.execution_order,
+            'next_step': plan.next_step,
+            'results': deepcopy(plan.results),
+            'status': plan.status,
+            'awaiting_step': plan.awaiting_step,
+            'awaiting_before_pose': deepcopy(plan.awaiting_before_pose),
+            'state_revision': plan.state_revision,
+            'last_state_revision': plan.last_state_revision,
+        }
+
+    @staticmethod
+    def _restore_plan(value):
+        if value is None:
+            return None
+        if not isinstance(value, dict):
+            raise ValueError('invalid persisted plan')
+        if (not isinstance(value.get('plan_id'), str) or not _ID.fullmatch(value['plan_id'])
+                or not isinstance(value.get('confirmation_binding'), str)
+                or not math.isfinite(float(value.get('expires_at')))):
+            raise ValueError('persisted plan identity is invalid')
+        steps = value.get('steps')
+        if not isinstance(steps, list) or not steps:
+            raise ValueError('persisted plan steps are invalid')
+        next_step = value.get('next_step', 0)
+        if type(next_step) is not int or not 0 <= next_step <= len(steps):
+            raise ValueError('persisted plan cursor is invalid')
+        status = value.get('status', 'pending')
+        if status not in {'pending', 'running', 'awaiting_arrival', 'stopped', 'completed', 'cancelled', 'unknown'}:
+            raise ValueError('persisted plan status is invalid')
+        awaiting_step = value.get('awaiting_step')
+        if awaiting_step is not None and (type(awaiting_step) is not int or not 0 <= awaiting_step < len(steps)):
+            raise ValueError('persisted awaiting step is invalid')
+        execution_order = value.get('execution_order', 'sequential')
+        if execution_order not in {'sequential', 'parallel'}:
+            raise ValueError('persisted execution order is invalid')
+        return _PendingPlan(
+            plan_id=value['plan_id'],
+            confirmation_binding=value['confirmation_binding'],
+            expires_at=float(value['expires_at']),
+            steps=deepcopy(steps),
+            execution_order=execution_order,
+            next_step=next_step,
+            results=deepcopy(value.get('results', [])),
+            status=status,
+            awaiting_step=awaiting_step,
+            awaiting_before_pose=deepcopy(value.get('awaiting_before_pose')),
+            state_revision=value.get('state_revision'),
+            last_state_revision=value.get('last_state_revision'),
+        )
+
+    def _restore_session_state(self, session_id, session):
+        """从现有检查点恢复驾驶舱计划；损坏状态只失效旧卡，不继续执行。"""
+        try:
+            record = self._store.load(session_id)
+        except (SessionExpired, SessionNotFound):
+            if self._plan_enabled:
+                try:
+                    self._store.save(session_id, self._empty_checkpoint())
+                except Exception:
+                    pass
+            return
+        try:
+            state = record.checkpoint.context.get('cockpit_session', {})
+            if not isinstance(state, dict) or state.get('schema_version') != 1:
+                return
+            session.epoch = int(state.get('epoch', 0))
+            session.turns = int(state.get('turns', 0))
+            session.active_intent = str(state.get('active_intent', ''))
+            session.clarification = bool(state.get('clarification', False))
+            session.card = deepcopy(state.get('card')) if isinstance(state.get('card'), dict) else None
+            session.plan = self._restore_plan(state.get('plan'))
+            if session.plan is not None:
+                expected_binding = plan_binding_hash(
+                    self.binding,
+                    [{'action': step['action'], 'parameters': step['parameters']}
+                     for step in session.plan.steps],
+                    session.plan.state_revision, session.plan.execution_order)
+                if (session.card is None
+                        or session.card.get('confirmation_binding') != session.plan.confirmation_binding
+                        or expected_binding != session.plan.confirmation_binding):
+                    raise ValueError('persisted plan binding is invalid')
+            session.requests = {
+                item['request_id']: (item['fingerprint'], deepcopy(item.get('response')))
+                for item in state.get('requests', [])
+                if isinstance(item, dict) and isinstance(item.get('request_id'), str)
+            }
+            session.receipts = {
+                (item['fingerprint'], bool(item.get('cancel'))): deepcopy(item['response'])
+                for item in state.get('receipts', [])
+                if isinstance(item, dict) and isinstance(item.get('fingerprint'), str)
+                and isinstance(item.get('response'), dict)
+            }
+            waiting = state.get('waiting')
+            if isinstance(waiting, dict):
+                session.waiting = _WaitingCommand(
+                    waiting['command_id'], int(waiting['context_version']), waiting['intent'],
+                    waiting['action'], deepcopy(waiting['parameters']), int(waiting.get('query_version', 0)))
+            completed = state.get('completed_steps', {})
+            if isinstance(completed, dict):
+                session.completed_steps = {
+                    key: (value[0], deepcopy(value[1])) for key, value in completed.items()
+                    if isinstance(key, str) and isinstance(value, list) and len(value) == 2
+                }
+            ordered = state.get('ordered_steps')
+            if isinstance(ordered, list):
+                session.ordered_steps = [tuple(item) for item in ordered if isinstance(item, list) and len(item) == 2]
+            session.motion_source = state.get('motion_source')
+            session.pending_algorithm_mode = state.get('pending_algorithm_mode')
+        except (KeyError, TypeError, ValueError, OverflowError):
+            session.card = None
+            session.plan = None
+            session.waiting = None
+            session.receipts.clear()
+            session.requests.clear()
+            session.epoch += 1
+
+    def _persist_session_state(self, session_id, session):
+        """把计划游标和结果原子写回既有检查点存储。"""
+        if not self._plan_enabled and session.plan is None:
+            return True
+        try:
+            try:
+                record = self._store.load(session_id)
+            except (SessionExpired, SessionNotFound):
+                record = self._store.save(session_id, self._empty_checkpoint())
+            context = dict(record.checkpoint.context)
+            context['cockpit_session'] = {
+                'schema_version': 1,
+                'epoch': session.epoch,
+                'turns': session.turns,
+                'active_intent': session.active_intent,
+                'clarification': session.clarification,
+                'card': deepcopy(session.card),
+                'plan': self._serialize_plan(session.plan),
+                'requests': [
+                    {'request_id': key, 'fingerprint': value[0], 'response': deepcopy(value[1])}
+                    for key, value in session.requests.items()
+                ],
+                'receipts': [
+                    {'fingerprint': key[0], 'cancel': key[1], 'response': deepcopy(value)}
+                    for key, value in session.receipts.items()
+                ],
+                'waiting': None if session.waiting is None else {
+                    'command_id': session.waiting.command_id,
+                    'context_version': session.waiting.context_version,
+                    'intent': session.waiting.intent,
+                    'action': session.waiting.action,
+                    'parameters': deepcopy(session.waiting.parameters),
+                    'query_version': session.waiting.query_version,
+                },
+                'completed_steps': {
+                    key: [value[0], deepcopy(value[1])] for key, value in session.completed_steps.items()
+                },
+                'ordered_steps': [list(item) for item in session.ordered_steps or []],
+                'motion_source': session.motion_source,
+                'pending_algorithm_mode': session.pending_algorithm_mode,
+            }
+            record.checkpoint.context = context
+            self._store.save(session_id, record.checkpoint)
+        except Exception:
+            # 计划状态无法持久化时，继续保留当前响应，但调用方不得宣称跨进程可恢复。
+            return False
+        return True
 
     def _invalidate(self, session):
         if session.card:
@@ -1035,8 +1232,10 @@ class CockpitService:
                                     request_id=request_id)
                 session.turns += 1
                 session.requests[request_id] = (fingerprint, result)
+                self._persist_session_state(session_id, session)
                 return result
             self._invalidate(session)
+            self._persist_session_state(session_id, session)
             # Read dependencies before reserving this id. A failed preparation
             # must not leave an immortal IN_PROGRESS entry.
             history = self._history(session_id)[-10:]
@@ -1085,6 +1284,7 @@ class CockpitService:
                             raise _PlanRejected(control_error)
                         result, pending = self._plan_card(session, steps, request_id, self.executor.read_state(), execution_order='parallel')
                         session.card, session.plan = deepcopy(result['card']), pending
+                        self._persist_session_state(session_id, session)
                     except _PlanRejected as error:
                         result = self._base(status='clarification', message=str(error), request_id=request_id, state=state)
                     session.requests[request_id] = (fingerprint, result)
@@ -1209,6 +1409,7 @@ class CockpitService:
                             {'role': 'assistant', 'status': response['status'], 'text': response['message']},
                         ])
                     session.requests[request_id] = (fingerprint, response)
+                    self._persist_session_state(session_id, session)
                     return response
             model_failure_code = None
             try:
@@ -1258,6 +1459,7 @@ class CockpitService:
                     result.checkpoint.context['conversation'] = history[-12:]
                     self._store.save(session_id, result.checkpoint)
                 session.requests[request_id] = (fingerprint, response)
+                self._persist_session_state(session_id, session)
                 return response
         finally:
             with self._lock:
@@ -1265,6 +1467,7 @@ class CockpitService:
                 if session.requests.get(request_id, (None, None))[1] is None:
                     session.requests[request_id] = (fingerprint, self._base(status='error',
                         error_code='MODEL_ERROR', message='本次理解失败，未执行动作。', request_id=request_id))
+                self._persist_session_state(session_id, session)
 
     # ---- 复合指令：整份计划 -------------------------------------------------
 
@@ -1463,7 +1666,9 @@ class CockpitService:
             internal_steps.append({**deepcopy(step),
                                    'command_id': command,
                                    'idempotency_key': command})
-        pending = _PendingPlan(plan_id, binding_hash, expires_at, internal_steps, execution_order)
+        pending = _PendingPlan(
+            plan_id, binding_hash, expires_at, internal_steps, execution_order,
+            state_revision=state_revision, last_state_revision=state_revision)
         card = {
             'kind': 'flight_plan',
             'execution_order': execution_order,
@@ -1623,7 +1828,11 @@ class CockpitService:
                                   message='确认卡不存在、已被替换或不属于当前会话。', state=self._state())
             if card.get('kind') == 'flight_plan':
                 response = self._finish_plan(session_id, session, payload, cancel)
-                session.receipts[(fingerprint, cancel)] = response
+                # 等待独立到位时保留计划，允许同一确认绑定在证据到达后继续；
+                # 其它终态写入回放账本，重启后也不会重复下发。
+                if response.get('plan_status') != 'awaiting_arrival':
+                    session.receipts[(fingerprint, cancel)] = response
+                self._persist_session_state(session_id, session)
                 return response
             if not cancel:
                 vendor = card.get('kind') == 'vendor_control_request'
@@ -1633,6 +1842,7 @@ class CockpitService:
                 if ((vendor or action not in _CONTROL_FREE_ACTIONS and action != FlightControlAction.READ_STATE)
                         and raw_state.get('control_owner') != self.binding.actor_id):
                     self._invalidate(session)
+                    self._persist_session_state(session_id, session)
                     return self._base(status='rejected', error_code='CONTROL_NOT_OWNED',
                                       message='控制权已变化，请重新检查。', state=self._state(),
                                       **({'kind': 'vendor_control_request'} if vendor else {}))
@@ -1674,10 +1884,11 @@ class CockpitService:
             except Exception:
                 response['warning_code'] = 'CHECKPOINT_SAVE_FAILED'
                 session.active_intent, session.clarification = '', False
+            self._persist_session_state(session_id, session)
             return response
 
     def _finish_plan(self, session_id, session, payload, cancel):
-        """整份计划确认：逐步骤 preview/confirm，任何一步异常即停止。"""
+        """整份计划确认：逐步骤 preview/confirm，并持久化游标与独立到位等待。"""
         card = session.card
         plan = session.plan
         if not card or plan is None or self._confirmation(card) != payload:
@@ -1689,6 +1900,7 @@ class CockpitService:
             session.card = None
             session.plan = None
             session.active_intent, session.clarification = '', False
+            self._persist_session_state(session_id, session)
             return self._base(status='expired', error_code='CONFIRMATION_EXPIRED',
                               kind='flight_plan', plan_status='expired',
                               message='计划确认卡已经过期，未执行任何步骤。',
@@ -1697,6 +1909,7 @@ class CockpitService:
             session.card = None
             session.plan = None
             session.active_intent, session.clarification = '', False
+            self._persist_session_state(session_id, session)
             return self._base(status='cancelled', kind='flight_plan', plan_status='cancelled',
                               message='整份飞行计划已取消，未执行任何步骤。', state=self._state())
         raw_state = self.executor.read_state()
@@ -1704,26 +1917,49 @@ class CockpitService:
         current_binding = plan_binding_hash(
             self.binding,
             [{'action': step['action'], 'parameters': step['parameters']} for step in plan.steps],
-            current_revision, plan.execution_order)
-        if current_binding != payload['confirmation_binding']:
+            plan.state_revision, plan.execution_order)
+        expected_revision = plan.last_state_revision
+        revision_changed = (plan.next_step == 0 and current_binding != payload['confirmation_binding'])
+        if (expected_revision is not None and plan.status != 'awaiting_arrival'
+                and current_revision != expected_revision):
+            revision_changed = True
+        if revision_changed or current_binding != payload['confirmation_binding']:
             session.card = None
             session.plan = None
             session.active_intent, session.clarification = '', False
+            self._persist_session_state(session_id, session)
             return self._base(status='rejected', error_code='CONFIRMATION_MISMATCH',
                               kind='flight_plan', plan_status='rejected',
                               message='计划绑定或设备状态已变化，请重新生成计划。',
                               state=self._state())
-        results, stopped = [], None
+        results, stopped = deepcopy(plan.results), None
         if plan.execution_order == 'parallel':
             results, stopped = self._execute_parallel(plan)
-        for index, step in enumerate(plan.steps):
+            plan.results = deepcopy(results)
+            plan.next_step = len(plan.steps) if stopped is None else max(0, stopped[0] - 1)
+            plan.status = 'completed' if stopped is None else 'stopped'
+            plan.last_state_revision = self._revision(self.executor.read_state())
+            self._persist_session_state(session_id, session)
+        elif plan.status == 'awaiting_arrival':
+            waiting_index = plan.awaiting_step
+            if waiting_index is None or not self._plan_arrival_observed(plan, waiting_index):
+                return self._plan_waiting_response(session_id, session, plan, results)
+            plan.next_step = waiting_index + 1
+            plan.awaiting_step = None
+            plan.awaiting_before_pose = None
+            plan.status = 'running'
+            plan.last_state_revision = self._revision(self.executor.read_state())
+            self._persist_session_state(session_id, session)
+        for index in range(plan.next_step, len(plan.steps)):
             if plan.execution_order == 'parallel':
                 break
+            step = plan.steps[index]
             action = FlightControlAction(step['action'])
             if action not in _CONTROL_FREE_ACTIONS:
                 raw = self.executor.read_state()
                 if raw.get('control_owner') != self.binding.actor_id:
                     stopped = (index + 1, 'CONTROL_NOT_OWNED', '控制权已变化')
+                    plan.status = 'stopped'
                     break
             request = FlightControlActionRequest(
                 step['command_id'], step['idempotency_key'], action,
@@ -1734,6 +1970,7 @@ class CockpitService:
                     results.append(self._plan_step_result(index, step, preview))
                     stopped = (index + 1, preview.error_code or 'PLAN_STEP_REJECTED',
                                preview.message or '该步骤未被接受')
+                    plan.status = 'stopped'
                     break
                 if (preview.parameters != step['parameters'] or MAPPING_MESSAGE in preview.warnings):
                     self.executor.cancel(preview.confirmation_id, command_id=request.command_id,
@@ -1741,9 +1978,10 @@ class CockpitService:
                         confirmation_binding=preview.confirmation_binding,
                         context_version=self.binding.context_version)
                     stopped = (index + 1, 'POLICY_STATE_CHANGED', '参数或测绘中断风险发生变化，需要重新确认')
+                    plan.status = 'stopped'
                     break
                 before_pose = None
-                if index + 1 < len(plan.steps) and step['action'] in PATH_ACTIONS:
+                if step['action'] in PATH_ACTIONS:
                     try:
                         before_pose = self.executor.read_state()
                     except Exception:
@@ -1760,11 +1998,14 @@ class CockpitService:
                                 'status': 'error', 'error_code': 'PLAN_STEP_EXCEPTION',
                                 'message': '执行器异常，计划已停止'})
                 stopped = (index + 1, 'PLAN_STEP_EXCEPTION', '执行器异常')
+                plan.status = 'stopped'
                 break
             results.append(self._plan_step_result(index, step, receipt))
+            plan.results = deepcopy(results)
             if receipt.status not in {FlightControlStatus.ACCEPTED, FlightControlStatus.DUPLICATE}:
                 stopped = (index + 1, receipt.error_code or 'PLAN_STEP_FAILED',
                            receipt.message or '该步骤执行失败')
+                plan.status = 'stopped'
                 break
             if index + 1 < len(plan.steps) and step['action'] in PATH_ACTIONS:
                 try:
@@ -1772,13 +2013,21 @@ class CockpitService:
                 except Exception:
                     observed = None
                 if not arrival_observed(step['action'], step['parameters'], before_pose, observed):
-                    stopped = (index + 1, 'ARRIVAL_NOT_OBSERVED',
-                               '没有读到该步的独立到位位置，后续步骤未执行')
-                    break
+                    plan.awaiting_step = index
+                    plan.awaiting_before_pose = deepcopy(before_pose)
+                    plan.status = 'awaiting_arrival'
+                    self._persist_session_state(session_id, session)
+                    return self._plan_waiting_response(session_id, session, plan, results)
             elif index + 1 < len(plan.steps) and not self._arrival_settled(step, receipt):
-                stopped = (index + 1, 'PLAN_AWAITING_ARRIVAL',
-                           '该步平台尚未确认到位，后续步骤未执行')
-                break
+                plan.awaiting_step = index
+                plan.awaiting_before_pose = None
+                plan.status = 'awaiting_arrival'
+                self._persist_session_state(session_id, session)
+                return self._plan_waiting_response(session_id, session, plan, results)
+            plan.next_step = index + 1
+            plan.last_state_revision = self._revision(self.executor.read_state())
+            plan.status = 'running'
+            self._persist_session_state(session_id, session)
         session.card = None
         session.plan = None
         session.active_intent, session.clarification = '', False
@@ -1786,6 +2035,9 @@ class CockpitService:
         session.motion_source = None
         session.completed_steps.clear()
         completed = stopped is None
+        plan.status = 'completed' if completed else 'stopped'
+        plan.results = deepcopy(results)
+        plan.next_step = len(plan.steps) if completed else plan.next_step
         response = self._base(
             status='accepted' if completed else 'rejected',
             kind='flight_plan',
@@ -1800,6 +2052,42 @@ class CockpitService:
                      if plan.execution_order == 'parallel' else
                      '计划已按顺序全部执行。' if completed else
                      f'计划在第{stopped[0]}步停止：{stopped[2]}；后续步骤未执行。'),
+            state=self._state())
+        self._save_history(session_id, [
+            {'role': 'tool', 'action': result['action'],
+             'parameters': result['parameters'], 'status': result['status'],
+             'device_effect': 'not_verified'} for result in results
+        ] + [{'role': 'assistant', 'kind': 'flight_plan',
+              'status': response['plan_status'], 'text': response['message']}])
+        self._persist_session_state(session_id, session)
+        return response
+
+    @staticmethod
+    def _revision(state):
+        return state.get('revision') if isinstance(state, dict) else None
+
+    def _plan_arrival_observed(self, plan, index):
+        step = plan.steps[index]
+        if step['action'] in PATH_ACTIONS:
+            try:
+                observed = self.executor.read_state()
+            except Exception:
+                return False
+            return arrival_observed(step['action'], step['parameters'],
+                                   plan.awaiting_before_pose, observed)
+        return False
+
+    def _plan_waiting_response(self, session_id, session, plan, results):
+        response = self._base(
+            status='accepted',
+            kind='flight_plan',
+            execution_order=plan.execution_order,
+            plan_id=plan.plan_id,
+            plan_status='awaiting_arrival',
+            steps=deepcopy(results),
+            failed_step=None,
+            error_code='PLAN_AWAITING_ARRIVAL',
+            message='上一动作尚未取得独立到位证据，计划已暂停；确认到位后可继续，禁止重复下发。',
             state=self._state())
         self._save_history(session_id, [
             {'role': 'tool', 'action': result['action'],
