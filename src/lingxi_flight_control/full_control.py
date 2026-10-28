@@ -48,6 +48,7 @@ from .flight_policy import (
     ADJUSTABLE, CONTROL_MESSAGE, MAPPING_MESSAGE, PATH_ACTIONS, POLICY_VERSION, MICRO_ACTIONS,
     TEMPORARY_ACTIONS, INTERRUPTING_ACTIONS, RESUME_ACTIONS, PolicyError,
     check_flight_policy, check_path, mapping_interruption, normalize_parameters,
+    proposal_parameters,
 )
 
 if TYPE_CHECKING:  # 运行时避免与 executor 成环（executor 依赖本模块的类型）
@@ -1671,7 +1672,8 @@ def build_full_control_tool_registry(
         registry.register(ToolDefinition(
             name=action.value,
             description=spec.description,
-            schema=ToolSchema(properties=dict(spec.parameters), required=spec.required),
+            schema=ToolSchema(properties=proposal_parameters(action.value, spec.parameters),
+                              required=spec.required),
             handler=handler,
             side_effect=mutating,
             requires_confirmation=mutating,
