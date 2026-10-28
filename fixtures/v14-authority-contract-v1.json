@@ -1,0 +1,70 @@
+{
+  "schema": "lingxi-v14-authority-fixture/v1",
+  "synthetic": true,
+  "note": "合成夹具，不是任何 Java/平台响应的抓包。仅用于验证字段契约的接受与拒绝分支。",
+  "state": {
+    "task_type": "inspection",
+    "route_id": "route-main-1",
+    "breakpoint_index": 7,
+    "temporary_task_id": "temp-task-1",
+    "mapping_invalidated": false,
+    "auto_stitching": true,
+    "low_battery_return": false,
+    "task_scope": "bound_main_only",
+    "task_batch_id": "batch-1",
+    "device_limits": {
+      "camera_zoom": {"min": 1, "max": 30},
+      "gimbal_pitch_deg": {"min": -90, "max": 30}
+    }
+  },
+  "expected_status": {
+    "project_id": "present",
+    "actor_id": "present",
+    "site_id": "present",
+    "hangar_id": "present",
+    "drone_id": "present",
+    "task_batch_id": "present",
+    "snapshot_version": "present",
+    "context_version": "present",
+    "control_owner": "present",
+    "control_lease_expires_at": "present",
+    "online": "present",
+    "airborne": "present",
+    "flight_status": "present",
+    "route_status": "present",
+    "task_type": "present",
+    "route_id": "present",
+    "breakpoint_index": "present",
+    "mapping_invalidated": "present",
+    "auto_stitching": "present",
+    "temporary_task_id": "present",
+    "low_battery_return": "present",
+    "longitude": "present",
+    "latitude": "present",
+    "altitude_m": "present",
+    "yaw_deg": "present",
+    "device_limits": "present",
+    "permissions": "present",
+    "capabilities": "present",
+    "action_availability": "present"
+  },
+  "negative": [
+    {"name": "route_id_empty", "state": {"route_id": ""}, "error": "INVALID_POLICY_SNAPSHOT"},
+    {"name": "route_id_wrong_type", "state": {"route_id": 12}, "error": "INVALID_POLICY_SNAPSHOT"},
+    {"name": "task_batch_echo_mismatch", "state": {"task_batch_id": "other-batch"}, "error": "RESOURCE_BINDING_MISMATCH"},
+    {"name": "breakpoint_without_route", "state": {"route_id": null, "breakpoint_index": 3}, "error": "INVALID_POLICY_SNAPSHOT"},
+    {"name": "breakpoint_negative", "state": {"breakpoint_index": -1}, "error": "INVALID_POLICY_SNAPSHOT"},
+    {"name": "device_limits_inverted_range", "state": {"device_limits": {"camera_zoom": {"min": 30, "max": 1}}}, "error": "INVALID_POLICY_SNAPSHOT"},
+    {"name": "device_limits_unknown_action", "state": {"device_limits": {"not_an_action": {"min": 1, "max": 2}}}, "error": "INVALID_POLICY_SNAPSHOT"},
+    {"name": "mapping_invalidated_not_bool", "state": {"mapping_invalidated": "yes"}, "error": "INVALID_POLICY_SNAPSHOT"},
+    {"name": "auto_stitching_not_bool", "state": {"auto_stitching": 1}, "error": "INVALID_POLICY_SNAPSHOT"},
+    {"name": "low_battery_return_not_bool", "state": {"low_battery_return": "true"}, "error": "INVALID_POLICY_SNAPSHOT"},
+    {"name": "temporary_task_id_wrong_type", "state": {"temporary_task_id": 42}, "error": "INVALID_POLICY_SNAPSHOT"},
+    {"name": "task_type_unknown", "state": {"task_type": "surveillance"}, "error": "INVALID_POLICY_SNAPSHOT"},
+    {"name": "unknown_policy_key", "state": {"route_name": "main"}, "error": "INVALID_SNAPSHOT_RESPONSE"}
+  ],
+  "missing_state_key": {
+    "state_without": "flight_status",
+    "error": "AUTHORITATIVE_STATE_INCOMPLETE"
+  }
+}

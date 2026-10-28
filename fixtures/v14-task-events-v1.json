@@ -1,0 +1,82 @@
+{
+  "schema": "lingxi-v14-task-events/v1",
+  "synthetic": true,
+  "note": "合成事件序列，不是任何平台事件流；用于验证幂等、乱序、旧临时任务与低电量优先级。",
+  "binding": {"project_id": "project-1", "hangar_id": "hangar-1", "drone_id": "drone-1", "task_batch_id": "batch-1"},
+  "scenarios": [
+    {
+      "name": "replace_then_complete_then_resume",
+      "events": [
+        {"event_id": "ev-1", "kind": "temporary_task_replaced", "sequence": 0, "temporary_task_id": "temp-a"},
+        {"event_id": "ev-2", "kind": "temporary_task_completed", "sequence": 1, "temporary_task_id": "temp-a"}
+      ],
+      "expect": {"temporary_task_id": null, "route_status": "temporary_completed", "breakpoint_index": 4}
+    },
+    {
+      "name": "stale_temporary_completion",
+      "events": [
+        {"event_id": "ev-10", "kind": "temporary_task_replaced", "sequence": 0, "temporary_task_id": "temp-new"},
+        {"event_id": "ev-11", "kind": "temporary_task_completed", "sequence": 1, "temporary_task_id": "temp-old"}
+      ],
+      "expect_error": "STALE_TEMPORARY_TASK_EVENT"
+    },
+    {
+      "name": "low_battery_wins_over_temporary",
+      "events": [
+        {"event_id": "ev-20", "kind": "temporary_task_replaced", "sequence": 0, "temporary_task_id": "temp-a"},
+        {"event_id": "ev-21", "kind": "low_battery_return", "sequence": 1},
+        {"event_id": "ev-22", "kind": "temporary_task_replaced", "sequence": 2, "temporary_task_id": "temp-b"}
+      ],
+      "expect_error": "LOW_BATTERY_RETURN_PRIORITY"
+    },
+    {
+      "name": "recharged_resumes_main_only",
+      "events": [
+        {"event_id": "ev-30", "kind": "temporary_task_replaced", "sequence": 0, "temporary_task_id": "temp-a"},
+        {"event_id": "ev-31", "kind": "low_battery_return", "sequence": 1},
+        {"event_id": "ev-32", "kind": "recharged_online", "sequence": 2}
+      ],
+      "expect": {"temporary_task_id": null, "route_status": "running", "task_status": "route_executing"}
+    },
+    {
+      "name": "mapping_invalidated_blocks_resume",
+      "events": [
+        {"event_id": "ev-40", "kind": "low_battery_return", "sequence": 0},
+        {"event_id": "ev-41", "kind": "mapping_invalidated", "sequence": 1},
+        {"event_id": "ev-42", "kind": "recharged_online", "sequence": 2}
+      ],
+      "expect": {"route_status": "ended", "task_status": "ended", "breakpoint_index": null}
+    },
+    {
+      "name": "end_all_clears_breakpoint",
+      "events": [
+        {"event_id": "ev-50", "kind": "all_tasks_ended", "sequence": 0}
+      ],
+      "expect": {"breakpoint_index": null, "temporary_task_id": null, "route_status": "ended"}
+    },
+    {
+      "name": "out_of_order_sequence",
+      "events": [
+        {"event_id": "ev-60", "kind": "temporary_task_replaced", "sequence": 5, "temporary_task_id": "temp-a"},
+        {"event_id": "ev-61", "kind": "temporary_task_completed", "sequence": 4, "temporary_task_id": "temp-a"}
+      ],
+      "expect_error": "STALE_TASK_EVENT"
+    },
+    {
+      "name": "duplicate_event_is_idempotent",
+      "events": [
+        {"event_id": "ev-70", "kind": "temporary_task_replaced", "sequence": 0, "temporary_task_id": "temp-a"},
+        {"event_id": "ev-70", "kind": "temporary_task_replaced", "sequence": 0, "temporary_task_id": "temp-a"}
+      ],
+      "expect": {"temporary_task_id": "temp-a"},
+      "expect_duplicates": 1
+    },
+    {
+      "name": "wrong_task_batch",
+      "events": [
+        {"event_id": "ev-80", "kind": "all_tasks_ended", "sequence": 0, "task_batch_id": "batch-2"}
+      ],
+      "expect_error": "TASK_EVENT_BINDING_MISMATCH"
+    }
+  ]
+}

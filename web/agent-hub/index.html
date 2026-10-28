@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>灵犀智能助手</title>
+    <!--
+      聚合宿主页：只提供一个入口和两个互斥的 iframe，不读写助手页面内部状态。
+      两个助手各自保持独立会话、确认与授权；本页不发送任何业务请求。
+      默认同源部署：
+        /task-dispatch/    任务下发 Agent（lingxi-agent）
+        /flight-agent-ui/  飞控 Agent（lingxi-flight-agent-ui）
+      可用 ?task=<url>&flight=<url>&view=task|flight 覆盖（仅 http/https 或站内路径）。
+    -->
+    <style>
+      :root {
+        --hub-bg: #0b1a30;
+        --hub-bar: #0a1526;
+        --hub-fg: #dbe7f5;
+        --hub-muted: #8fa6c2;
+        --hub-border: rgba(120, 170, 230, 0.28);
+        --hub-active: #2f75ed;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: flex;
+        flex-direction: column;
+        background: var(--hub-bg);
+        color: var(--hub-fg);
+        font: 13px/1.4 -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans SC",
+          "Microsoft YaHei", sans-serif;
+      }
+      .hub-bar {
+        flex: 0 0 44px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 12px;
+        background: var(--hub-bar);
+        border-bottom: 1px solid var(--hub-border);
+        position: relative;
+        z-index: 2;
+      }
+      .hub-brand {
+        flex: 0 0 auto;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+      }
+      .hub-hint {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--hub-muted);
+        font-size: 12px;
+      }
+      .hub-tabs {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 4px;
+        padding: 3px;
+        border: 1px solid var(--hub-border);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.03);
+      }
+      .hub-tab {
+        appearance: none;
+        border: 0;
+        border-radius: 999px;
+        padding: 4px 14px;
+        background: transparent;
+        color: var(--hub-muted);
+        font: inherit;
+        font-weight: 500;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .hub-tab:hover { color: var(--hub-fg); }
+      .hub-tab[aria-selected="true"] { background: var(--hub-active); color: #fff; }
+      .hub-tab:focus-visible,
+      .hub-link:focus-visible { outline: 2px solid #7db2ff; outline-offset: 2px; }
+      .hub-link {
+        flex: 0 0 auto;
+        color: var(--hub-muted);
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .hub-link:hover { color: var(--hub-fg); text-decoration: underline; }
+      .hub-views { position: relative; flex: 1 1 auto; min-height: 0; }
+      .hub-view {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border: 0;
+        background: transparent;
+        visibility: hidden;
+        opacity: 0;
+      }
+      .hub-view.is-active { visibility: visible; opacity: 1; }
+      .hub-fallback {
+        position: absolute;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        text-align: center;
+        color: var(--hub-muted);
+      }
+      .hub-views.is-empty .hub-fallback { display: flex; }
+      @media (max-width: 720px) {
+        .hub-bar { flex-basis: 40px; gap: 8px; padding: 0 8px; }
+        .hub-hint { display: none; }
+        .hub-tab { padding: 4px 10px; }
+        .hub-brand { font-size: 12px; }
+        .hub-link { font-size: 12px; }
+      }
+      @media (max-width: 460px) {
+        .hub-brand { display: none; }
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .hub-view { transition: opacity 120ms ease; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="hub-bar">
+      <span class="hub-brand">灵犀智能助手</span>
+      <span class="hub-hint">任务下发与飞行控制各自独立会话，互不代确认</span>
+      <nav class="hub-tabs" role="tablist" aria-label="助手能力">
+        <button
+          class="hub-tab"
+          role="tab"
+          type="button"
+          data-view="task"
+          id="tab-task"
+          aria-controls="view-task"
+          aria-selected="true"
+        >任务下发</button>
+        <button
+          class="hub-tab"
+          role="tab"
+          type="button"
+          data-view="flight"
+          id="tab-flight"
+          aria-controls="view-flight"
+          aria-selected="false"
+        >飞行控制</button>
+      </nav>
+      <a class="hub-link" id="hub-external" href="/task-dispatch/" target="_blank" rel="noopener">在新窗口打开</a>
+    </header>
+    <main class="hub-views" id="hub-views">
+      <iframe
+        id="view-task"
+        class="hub-view"
+        title="任务下发助手"
+        allow="microphone; clipboard-write; fullscreen"
+        referrerpolicy="same-origin"
+      ></iframe>
+      <iframe
+        id="view-flight"
+        class="hub-view"
+        title="飞行控制助手"
+        allow="clipboard-write; fullscreen"
+        referrerpolicy="same-origin"
+      ></iframe>
+      <div class="hub-fallback">没有可显示的助手页面，请检查部署路径。</div>
+    </main>
+    <script type="module">
+      const DEFAULTS = { task: '/task-dispatch/', flight: '/flight-agent-ui/' }
+      const TITLES = { task: '任务下发 - 灵犀智能助手', flight: '飞行控制 - 灵犀智能助手' }
+      const params = new URLSearchParams(globalThis.location.search)
+
+      /** 只接受 http/https 或站内绝对路径，杜绝 javascript:/data: 之类的 iframe 地址。 */
+      function safeSource(raw, fallback) {
+        if (typeof raw !== 'string' || !raw.trim()) return fallback
+        try {
+          const url = new URL(raw.trim(), globalThis.location.origin)
+          if (url.protocol !== 'http:' && url.protocol !== 'https:') return fallback
+          return url.href
+        } catch {
+          return fallback
+        }
+      }
+
+      const sources = {
+        task: safeSource(params.get('task'), DEFAULTS.task),
+        flight: safeSource(params.get('flight'), DEFAULTS.flight),
+      }
+      const frames = {
+        task: document.getElementById('view-task'),
+        flight: document.getElementById('view-flight'),
+      }
+      const tabs = {
+        task: document.getElementById('tab-task'),
+        flight: document.getElementById('tab-flight'),
+      }
+      const viewsHost = document.getElementById('hub-views')
+      const external = document.getElementById('hub-external')
+      let current = ''
+
+      function rememberView(view) {
+        try {
+          const url = new URL(globalThis.location.href)
+          url.searchParams.set('view', view)
+          globalThis.history.replaceState(null, '', url)
+        } catch {
+          /* file:// 或不支持 history 的环境只影响地址栏，不影响切换。 */
+        }
+      }
+
+      function activate(view, { updateUrl = true } = {}) {
+        if (!frames[view]) view = 'task'
+        if (view === current) return
+        current = view
+        for (const name of Object.keys(frames)) {
+          const frame = frames[name]
+          const active = name === view
+          frame.classList.toggle('is-active', active)
+          frame.setAttribute('aria-hidden', active ? 'false' : 'true')
+          tabs[name].setAttribute('aria-selected', active ? 'true' : 'false')
+          tabs[name].tabIndex = active ? 0 : -1
+        }
+        const frame = frames[view]
+        // 懒加载：首次切换才请求对应助手，之后保留 iframe 与会话，不重载。
+        if (!frame.dataset.loaded) {
+          frame.src = sources[view]
+          frame.dataset.loaded = '1'
+        }
+        viewsHost.classList.remove('is-empty')
+        external.href = sources[view]
+        document.title = TITLES[view]
+        if (updateUrl) rememberView(view)
+      }
+
+      for (const [name, tab] of Object.entries(tabs)) {
+        tab.addEventListener('click', () => activate(name))
+        tab.addEventListener('keydown', (event) => {
+          if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+          event.preventDefault()
+          const next = name === 'task' ? 'flight' : 'task'
+          activate(next)
+          tabs[next].focus()
+        })
+      }
+
+      globalThis.addEventListener('keydown', (event) => {
+        if (!event.altKey || event.ctrlKey || event.metaKey) return
+        if (event.key === '1') activate('task')
+        if (event.key === '2') activate('flight')
+      })
+
+      // iframe 页面本身会发请求；宿主页不注入脚本、不读取跨源内容、不转发消息。
+      activate(params.get('view') === 'flight' ? 'flight' : 'task', { updateUrl: false })
+    </script>
+  </body>
+</html>

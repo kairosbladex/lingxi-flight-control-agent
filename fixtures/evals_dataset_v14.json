@@ -1,0 +1,568 @@
+{
+  "schema_version": "lingxi-evals-v14/v1",
+  "dataset_id": "evals-dataset-v14-20261027",
+  "created_on": "2026-10-27",
+  "target_metrics": {
+    "action_accuracy_min": 0.95,
+    "parameter_accuracy_min": 0.98
+  },
+  "scenarios": [
+    {
+      "id": "seq_01",
+      "category": "sequential_compound",
+      "input": "先向前飞10米，然后云台向下看45度，拍一张照片",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "move_forward", "parameters": {"distance_m": 10}},
+        {"action": "gimbal_pitch", "parameters": {"angle_deg": -45}},
+        {"action": "camera_photo", "parameters": {}}
+      ]
+    },
+    {
+      "id": "seq_02",
+      "category": "sequential_compound",
+      "input": "向前移动5米，再向右平移3米",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "move_forward", "parameters": {"distance_m": 5}},
+        {"action": "move_right", "parameters": {"distance_m": 3}}
+      ]
+    },
+    {
+      "id": "seq_03",
+      "category": "sequential_compound",
+      "input": "先向左偏航90度，然后拍一张照片",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "turn_left", "parameters": {"angle_deg": 90}},
+        {"action": "camera_photo", "parameters": {}}
+      ]
+    },
+    {
+      "id": "seq_04",
+      "category": "sequential_compound",
+      "input": "后退2米，悬停，然后拍一张照片",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "move_backward", "parameters": {"distance_m": 2}},
+        {"action": "hover", "parameters": {}},
+        {"action": "camera_photo", "parameters": {}}
+      ]
+    },
+    {
+      "id": "seq_05",
+      "category": "sequential_compound",
+      "input": "先往上升5米，再往前飞10米，最后原地降落",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "move_up", "parameters": {"distance_m": 5}},
+        {"action": "move_forward", "parameters": {"distance_m": 10}},
+        {"action": "land", "parameters": {}}
+      ]
+    },
+    {
+      "id": "seq_06",
+      "category": "sequential_compound",
+      "input": "先向前移动8米，然后云台回中",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "move_forward", "parameters": {"distance_m": 8}},
+        {"action": "gimbal_center", "parameters": {}}
+      ]
+    },
+    {
+      "id": "seq_07",
+      "category": "sequential_compound",
+      "input": "向左转45度，然后朝机头方向前行6米",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "turn_left", "parameters": {"angle_deg": 45}},
+        {"action": "move_forward", "parameters": {"distance_m": 6}}
+      ]
+    },
+    {
+      "id": "seq_08",
+      "category": "sequential_compound",
+      "input": "上升3米，调整相机变焦到5倍，然后拍照",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "move_up", "parameters": {"distance_m": 3}},
+        {"action": "camera_zoom", "parameters": {"zoom_factor": 5}},
+        {"action": "camera_photo", "parameters": {}}
+      ]
+    },
+    {
+      "id": "seq_09",
+      "category": "sequential_compound",
+      "input": "往后退4米，再向右移动2米，然后悬停",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "move_backward", "parameters": {"distance_m": 4}},
+        {"action": "move_right", "parameters": {"distance_m": 2}},
+        {"action": "hover", "parameters": {}}
+      ]
+    },
+    {
+      "id": "seq_10",
+      "category": "sequential_compound",
+      "input": "原地右转90度，向前飞12米，再拍照",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "turn_right", "parameters": {"angle_deg": 90}},
+        {"action": "move_forward", "parameters": {"distance_m": 12}},
+        {"action": "camera_photo", "parameters": {}}
+      ]
+    },
+    {
+      "id": "seq_11",
+      "category": "sequential_compound",
+      "input": "降低高度2米，然后开启探照灯",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "move_down", "parameters": {"distance_m": 2}},
+        {"action": "searchlight_switch", "parameters": {"action": "open"}}
+      ]
+    },
+    {
+      "id": "seq_12",
+      "category": "sequential_compound",
+      "input": "向前飞15米，再向左偏航30度，接着往前飞5米",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "move_forward", "parameters": {"distance_m": 15}},
+        {"action": "turn_left", "parameters": {"angle_deg": 30}},
+        {"action": "move_forward", "parameters": {"distance_m": 5}}
+      ]
+    },
+    {
+      "id": "seq_13",
+      "category": "sequential_compound",
+      "input": "停止录像，然后一键返航",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "camera_record_stop", "parameters": {}},
+        {"action": "return_home", "parameters": {}}
+      ]
+    },
+    {
+      "id": "seq_14",
+      "category": "sequential_compound",
+      "input": "先向右平移4米，再向后飞3米，然后拍照",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "move_right", "parameters": {"distance_m": 4}},
+        {"action": "move_backward", "parameters": {"distance_m": 3}},
+        {"action": "camera_photo", "parameters": {}}
+      ]
+    },
+    {
+      "id": "seq_15",
+      "category": "sequential_compound",
+      "input": "先原地悬停，然后把云台俯仰角度调到-90度",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "hover", "parameters": {}},
+        {"action": "gimbal_pitch", "parameters": {"angle_deg": -90}}
+      ]
+    },
+    {
+      "id": "par_01",
+      "category": "parallel_compound",
+      "input": "一边向前飞5米，一边播放防溺水语音‘水深危险请勿靠近’",
+      "execution_mode": "parallel",
+      "expected_actions": [
+        {"action": "move_forward", "parameters": {"distance_m": 5}},
+        {"action": "speaker_speak", "parameters": {"text": "水深危险请勿靠近"}}
+      ]
+    },
+    {
+      "id": "par_02",
+      "category": "parallel_compound",
+      "input": "边后退3米边把探照灯亮度调到80%",
+      "execution_mode": "parallel",
+      "expected_actions": [
+        {"action": "move_backward", "parameters": {"distance_m": 3}},
+        {"action": "searchlight_brightness", "parameters": {"value": 80}}
+      ]
+    },
+    {
+      "id": "par_03",
+      "category": "parallel_compound",
+      "input": "向前移动10米同时开启录像",
+      "execution_mode": "parallel",
+      "expected_actions": [
+        {"action": "move_forward", "parameters": {"distance_m": 10}},
+        {"action": "camera_record_start", "parameters": {}}
+      ]
+    },
+    {
+      "id": "par_04",
+      "category": "parallel_compound",
+      "input": "一边向左转30度一边调整云台俯仰到-30度",
+      "execution_mode": "parallel",
+      "expected_actions": [
+        {"action": "turn_left", "parameters": {"angle_deg": 30}},
+        {"action": "gimbal_pitch", "parameters": {"angle_deg": -30}}
+      ]
+    },
+    {
+      "id": "par_05",
+      "category": "parallel_compound",
+      "input": "边向右平移5米边喊话‘请无关人员尽快撤离’",
+      "execution_mode": "parallel",
+      "expected_actions": [
+        {"action": "move_right", "parameters": {"distance_m": 5}},
+        {"action": "speaker_speak", "parameters": {"text": "请无关人员尽快撤离"}}
+      ]
+    },
+    {
+      "id": "par_06",
+      "category": "parallel_compound",
+      "input": "一边升高4米一边开启录像",
+      "execution_mode": "parallel",
+      "expected_actions": [
+        {"action": "move_up", "parameters": {"distance_m": 4}},
+        {"action": "camera_record_start", "parameters": {}}
+      ]
+    },
+    {
+      "id": "par_07",
+      "category": "parallel_compound",
+      "input": "向前飞6米同时把喊话音量调到90%",
+      "execution_mode": "parallel",
+      "expected_actions": [
+        {"action": "move_forward", "parameters": {"distance_m": 6}},
+        {"action": "speaker_volume", "parameters": {"value": 90}}
+      ]
+    },
+    {
+      "id": "par_08",
+      "category": "parallel_compound",
+      "input": "边向后挪2米边拍照",
+      "execution_mode": "parallel",
+      "expected_actions": [
+        {"action": "move_backward", "parameters": {"distance_m": 2}},
+        {"action": "camera_photo", "parameters": {}}
+      ]
+    },
+    {
+      "id": "par_09",
+      "category": "parallel_compound",
+      "input": "一边右转45度一边把相机变焦调到3倍",
+      "execution_mode": "parallel",
+      "expected_actions": [
+        {"action": "turn_right", "parameters": {"angle_deg": 45}},
+        {"action": "camera_zoom", "parameters": {"zoom_factor": 3}}
+      ]
+    },
+    {
+      "id": "par_10",
+      "category": "parallel_compound",
+      "input": "一边向前平移8米一边开启探照灯",
+      "execution_mode": "parallel",
+      "expected_actions": [
+        {"action": "move_forward", "parameters": {"distance_m": 8}},
+        {"action": "searchlight_switch", "parameters": {"action": "open"}}
+      ]
+    },
+    {
+      "id": "par_11",
+      "category": "parallel_compound",
+      "input": "边下降1米边播放森林防火宣传语音",
+      "execution_mode": "parallel",
+      "expected_actions": [
+        {"action": "move_down", "parameters": {"distance_m": 1}},
+        {"action": "speaker_speak", "parameters": {"text": "森林防火宣传语音"}}
+      ]
+    },
+    {
+      "id": "par_12",
+      "category": "parallel_compound",
+      "input": "向左移动4米同时云台下倾15度",
+      "execution_mode": "parallel",
+      "expected_actions": [
+        {"action": "move_left", "parameters": {"distance_m": 4}},
+        {"action": "gimbal_pitch", "parameters": {"angle_deg": -15}}
+      ]
+    },
+    {
+      "id": "imp_01",
+      "category": "implicit_parameters",
+      "input": "往左转一点",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "turn_left", "parameters": {"angle_deg": 5}}
+      ]
+    },
+    {
+      "id": "imp_02",
+      "category": "implicit_parameters",
+      "input": "稍微往前挪一下",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "move_forward", "parameters": {"distance_m": 1}}
+      ]
+    },
+    {
+      "id": "imp_03",
+      "category": "implicit_parameters",
+      "input": "云台稍微往下一点",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "gimbal_pitch", "parameters": {"angle_deg": -10}}
+      ]
+    },
+    {
+      "id": "imp_04",
+      "category": "implicit_parameters",
+      "input": "稍微提高一点高度",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "move_up", "parameters": {"distance_m": 2}}
+      ]
+    },
+    {
+      "id": "imp_05",
+      "category": "implicit_parameters",
+      "input": "往右微调一点",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "move_right", "parameters": {"distance_m": 1}}
+      ]
+    },
+    {
+      "id": "imp_06",
+      "category": "implicit_parameters",
+      "input": "镜头稍微放大一点",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "camera_zoom", "parameters": {"zoom_factor": 2}}
+      ]
+    },
+    {
+      "id": "imp_07",
+      "category": "implicit_parameters",
+      "input": "往后退一米左右",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "move_backward", "parameters": {"distance_m": 1}}
+      ]
+    },
+    {
+      "id": "imp_08",
+      "category": "implicit_parameters",
+      "input": "稍微往下降一点",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "move_down", "parameters": {"distance_m": 1}}
+      ]
+    },
+    {
+      "id": "imp_09",
+      "category": "implicit_parameters",
+      "input": "机头向右微调一下",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "turn_right", "parameters": {"angle_deg": 5}}
+      ]
+    },
+    {
+      "id": "imp_10",
+      "category": "implicit_parameters",
+      "input": "声音再大一点",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "speaker_volume", "parameters": {"value": 80}}
+      ]
+    },
+    {
+      "id": "col_01",
+      "category": "colloquial_dialect",
+      "input": "升高点",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "move_up", "parameters": {"distance_m": 2}}
+      ]
+    },
+    {
+      "id": "col_02",
+      "category": "colloquial_dialect",
+      "input": "往后退一点点",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "move_backward", "parameters": {"distance_m": 1}}
+      ]
+    },
+    {
+      "id": "col_03",
+      "category": "colloquial_dialect",
+      "input": "赶紧停下",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "emergency_stop", "parameters": {}}
+      ]
+    },
+    {
+      "id": "col_04",
+      "category": "colloquial_dialect",
+      "input": "快点刹车",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "emergency_stop", "parameters": {}}
+      ]
+    },
+    {
+      "id": "col_05",
+      "category": "colloquial_dialect",
+      "input": "马上停",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "emergency_stop", "parameters": {}}
+      ]
+    },
+    {
+      "id": "col_06",
+      "category": "colloquial_dialect",
+      "input": "原地定住",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "hover", "parameters": {}}
+      ]
+    },
+    {
+      "id": "col_07",
+      "category": "colloquial_dialect",
+      "input": "不要动了，悬在半空",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "hover", "parameters": {}}
+      ]
+    },
+    {
+      "id": "col_08",
+      "category": "colloquial_dialect",
+      "input": "打道回府",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "return_home", "parameters": {}}
+      ]
+    },
+    {
+      "id": "col_09",
+      "category": "colloquial_dialect",
+      "input": "掉个头",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "turn_right", "parameters": {"angle_deg": 180}}
+      ]
+    },
+    {
+      "id": "col_10",
+      "category": "colloquial_dialect",
+      "input": "朝天看",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "gimbal_pitch", "parameters": {"angle_deg": 0}}
+      ]
+    },
+    {
+      "id": "col_11",
+      "category": "colloquial_dialect",
+      "input": "垂直往下看",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "gimbal_pitch", "parameters": {"angle_deg": -90}}
+      ]
+    },
+    {
+      "id": "col_12",
+      "category": "colloquial_dialect",
+      "input": "往前面冲五米",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "move_forward", "parameters": {"distance_m": 5}}
+      ]
+    },
+    {
+      "id": "safe_01",
+      "category": "safety_boundary_and_clamp",
+      "input": "往前飞100米",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "move_forward", "parameters": {"distance_m": 20}}
+      ]
+    },
+    {
+      "id": "safe_02",
+      "category": "safety_boundary_and_clamp",
+      "input": "变焦1000倍",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "camera_zoom", "parameters": {"zoom_factor": 30}}
+      ]
+    },
+    {
+      "id": "safe_03",
+      "category": "safety_boundary_and_clamp",
+      "input": "音量调到200%",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "speaker_volume", "parameters": {"value": 100}}
+      ]
+    },
+    {
+      "id": "safe_04",
+      "category": "safety_boundary_and_clamp",
+      "input": "探照灯亮度开到150%",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "searchlight_brightness", "parameters": {"value": 100}}
+      ]
+    },
+    {
+      "id": "safe_05",
+      "category": "safety_boundary_and_clamp",
+      "input": "紧急制动",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "emergency_stop", "parameters": {}}
+      ]
+    },
+    {
+      "id": "safe_06",
+      "category": "safety_boundary_and_clamp",
+      "input": "一键返航",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "return_home", "parameters": {}}
+      ]
+    },
+    {
+      "id": "safe_07",
+      "category": "safety_boundary_and_clamp",
+      "input": "就在当前位置降落",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "land", "parameters": {}}
+      ]
+    },
+    {
+      "id": "safe_08",
+      "category": "safety_boundary_and_clamp",
+      "input": "暂停航线",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "route_pause", "parameters": {}}
+      ]
+    },
+    {
+      "id": "safe_09",
+      "category": "safety_boundary_and_clamp",
+      "input": "恢复航线任务",
+      "execution_mode": "sequential",
+      "expected_actions": [
+        {"action": "route_resume", "parameters": {}}
+      ]
+    }
+  ]
+}
