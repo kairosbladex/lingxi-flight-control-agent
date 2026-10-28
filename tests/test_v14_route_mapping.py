@@ -497,6 +497,12 @@ class CombinedDecisionTests(unittest.TestCase):
         self.assertEqual(decision.route_type, ROUTE_ORBIT)
         self.assertEqual(decision.flight_rules, FLIGHT_RULES_ORBIT)
 
+    def test_negated_orbit_wording_does_not_request_orbit(self):
+        for text in ("去1号点巡检，不要环绕", "去A塔，不用绕一圈"):
+            with self.subTest(text=text):
+                decision = decide_route(text, GEOMETRY_POINT)
+                self.assertEqual(decision.route_type, ROUTE_WAYPOINT)
+
     def test_common_words_do_not_false_positive_rejections(self):
         # 「螺旋桨」「网格化片区」「普通几何体描述」是正常词，不是不支持的航线。
         for text in ("检查螺旋桨", "巡查网格化片区", "检查建筑几何体是否变形"):

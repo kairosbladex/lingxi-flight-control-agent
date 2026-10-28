@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import sqlite3
 import tempfile
+import threading
 import unittest
 
 from lingxi_flight_control.full_control import FlightControlActionRequest, FlightControlStatus, RuntimeBinding
@@ -153,6 +154,64 @@ class PlatformExecutorTests(unittest.TestCase):
         self.assertEqual(result.to_dict()["status"], "cancelled")
         self.assertEqual(self.confirm(executor, card).to_dict()["status"], "rejected")
         self.assertEqual(self.transport.calls, [])
+
+    def test_confirm_releases_lock_while_finishing_relative_gimbal(self):
+        self.snapshot = replace(
+            self.snapshot,
+            permissions=frozenset({"gimbal_up", "read_state"}),
+            capabilities={"gimbal_up": True},
+        )
+        sleeping = threading.Event()
+        release = threading.Event()
+
+        def blocking_sleep(_seconds):
+            sleeping.set()
+            if not release.wait(2):
+                raise AssertionError("gimbal stop did not resume")
+
+        executor = KtdPlatformExecutor(
+            self.binding, site_id="site-1", task_id="java-task-1",
+            transport=self.transport, snapshot_provider=lambda: self.snapshot,
+            journal=SqliteCommandJournal(self.journal_path), enabled=True,
+            clock=lambda: self.now, sleep=blocking_sleep,
+        )
+        card = executor.preview(self.request("gimbal_up", {}, "gimbal-lock"))
+        self.assertIs(card.status, FlightControlStatus.PREVIEW_REQUIRED)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            confirm_future = pool.submit(self.confirm, executor, card)
+            self.assertTrue(sleeping.wait(1))
+            read_future = pool.submit(executor.preview,
+                                      self.request("read_state", {}, "gimbal-read"))
+            self.assertEqual(read_future.result(timeout=1).to_dict()["status"], "observed")
+            release.set()
+            self.assertIn(confirm_future.result(timeout=2).to_dict()["status"],
+                          {"submitted", "unknown"})
+
+    def test_adjustable_preview_reads_one_snapshot_after_context_gate(self):
+        self.snapshot = replace(
+            self.snapshot,
+            permissions=frozenset({"speaker_volume", "read_state"}),
+            capabilities={"speaker_volume": True},
+        )
+        calls = []
+
+        def provider():
+            calls.append(True)
+            return self.snapshot
+
+        executor = KtdPlatformExecutor(
+            self.binding, site_id="site-1", task_id="java-task-1",
+            transport=self.transport, snapshot_provider=provider,
+            journal=SqliteCommandJournal(self.journal_path), enabled=True,
+            clock=lambda: self.now,
+        )
+        card = executor.preview(self.request("speaker_volume", {"value": 100}, "volume-once"))
+        self.assertIs(card.status, FlightControlStatus.PREVIEW_REQUIRED)
+        self.assertEqual(len(calls), 1)
+        stale = executor.preview(FlightControlActionRequest(
+            "stale", "stale-key", "speaker_volume", {"value": 100}, 2))
+        self.assertEqual(stale.error_code, "STALE_CONTEXT")
+        self.assertEqual(len(calls), 1)
 
     def test_all_six_distances_use_metres_and_existing_operation_codes(self):
         for action, expected in (("move_forward", 202), ("move_backward", 203),

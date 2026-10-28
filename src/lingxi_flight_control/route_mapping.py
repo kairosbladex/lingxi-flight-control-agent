@@ -648,7 +648,7 @@ def decide_route(
     if geometry is not None:
         geometry = _validated_geometry(geometry)
 
-    if orbit_requested is None and any(word in text for word in ORBIT_TRIGGER_WORDS):
+    if orbit_requested is None and _first_unnegated(text, ORBIT_TRIGGER_WORDS) is not None:
         orbit_requested = True
 
     unsupported = _unsupported_route_kind_rejection(
