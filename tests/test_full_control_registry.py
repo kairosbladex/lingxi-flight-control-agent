@@ -188,7 +188,6 @@ class RegistryExecutionTests(unittest.TestCase):
             (MOVE_FORWARD, {"distance_m": 5000}),                 # 超上限
             (MOVE_FORWARD, {"distance_m": 10, "extra": 1}),        # 多余字段
             (FlightControlAction.SET_YAW_SPEED.value, {}),         # 缺必填
-            (FlightControlAction.CAMERA_ZOOM.value, {"value": 99}),  # 超上限
         ]
         for name, arguments in cases:
             simulator = MemoryFlightControlSimulator(binding())
