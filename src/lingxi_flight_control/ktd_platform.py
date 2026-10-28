@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 import copy
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 import hashlib
@@ -1021,6 +1022,21 @@ class KtdPlatformExecutor:
         self._last_interruption: dict[str, Any] | None = None
         self._last_reservation: dict[str, Any] | None = None
         self._lock = threading.RLock()
+        self._active_turns: dict[str, threading.Event] = {}
+
+    @contextmanager
+    def _without_lock(self):
+        """执行平台慢调用时释放实例锁，允许急停和悬停及时进入。"""
+        self._lock.release()
+        try:
+            yield
+        finally:
+            self._lock.acquire()
+
+    def _abort_active_turns(self) -> None:
+        """让并发的急停/悬停确认尽快结束正在进行的转向闭环。"""
+        for event in tuple(self._active_turns.values()):
+            event.set()
 
     @property
     def vendor_request_methods(self) -> tuple[str, ...]:
@@ -1975,8 +1991,11 @@ class KtdPlatformExecutor:
         started, counter = self._clock(), 0
         previous_error = previous_yaw = None
         stagnant = 0
+        abort_event = self._active_turns.get(trace_id)
         try:
             for pulse in range(self._turn_max_pulses):
+                if abort_event is not None and abort_event.is_set():
+                    return "TURN_ABORTED", "收到急停或悬停请求，已停止转向"
                 pose = self._read_pose()
                 if pose is None:
                     return "POSE_UNAVAILABLE", "无法回读姿态，已停止转向"
@@ -2017,6 +2036,8 @@ class KtdPlatformExecutor:
                     return "PLATFORM_REJECTED", "平台拒绝了回中指令"
                 counter += 1
                 self._sleep(0.15)
+                if abort_event is not None and abort_event.is_set():
+                    return "TURN_ABORTED", "收到急停或悬停请求，已停止转向"
                 if pulse % 4 == 3:
                     current = self._load_snapshot()
                     if current.control_owner != self.binding.actor_id:
@@ -2172,16 +2193,12 @@ class KtdPlatformExecutor:
     def preview(self, request: FlightControlActionRequest) -> KtdReceipt:
         with self._lock:
             adjustments = []
+            snapshot = None
             try:
                 if not isinstance(request, FlightControlActionRequest):
                     raise ValueError("invalid request")
-                if request.action in ADJUSTABLE and request.action in SUPPORTED_ACTIONS:
-                    if not self._enabled:
-                        return self._reject(request, 'PLATFORM_DISABLED')
-                    policy_snapshot = self._snapshot(request.action)
-                    effective, adjustments = normalize_parameters(request.action, request.parameters, policy_snapshot.state)
-                    request = replace(request, parameters=effective)
-                request.validate()
+                if request.context_version != self.binding.context_version:
+                    return self._reject(request, "STALE_CONTEXT")
                 if not _identifier(request.command_id) or not _identifier(request.idempotency_key):
                     raise ValueError("invalid identifiers")
                 if isinstance(request, JavaActionRequest):
@@ -2193,25 +2210,29 @@ class KtdPlatformExecutor:
                     spec = ACTION_SPECS[action]
                     if set(request.parameters) - set(spec.parameters) or any(key not in request.parameters for key in spec.required):
                         raise ValueError("invalid schema")
+                action_value = action.value if isinstance(action, FlightControlAction) else action
+                if action_value == 'ai_algorithm_set':
+                    # 平台只有任务级总开关；没有标注级生命周期契约时必须 fail-closed。
+                    return self._reject(request, 'ALGORITHM_LIFECYCLE_UNAVAILABLE')
+                if action_value not in SUPPORTED_ACTIONS:
+                    return self._reject(request, "ACTION_UNSUPPORTED")
+                if action != FlightControlAction.READ_STATE and not self._enabled:
+                    return self._reject(request, "PLATFORM_DISABLED")
+                if action_value in ADJUSTABLE:
+                    snapshot = self._snapshot(action_value)
+                    effective, adjustments = normalize_parameters(
+                        action_value, request.parameters, snapshot.state)
+                    request = replace(request, parameters=effective)
+                request.validate()
             except (PolicyError, KtdPlatformError) as exc:
                 return self._reject(request, exc.code if isinstance(exc, PolicyError) else str(exc))
             except (ValueError, TypeError, AttributeError, OverflowError):
                 if not isinstance(request, FlightControlActionRequest):
                     request = FlightControlActionRequest("invalid", "invalid", "read_state")
                 return self._reject(request, "INVALID_PARAMETERS")
-            if request.context_version != self.binding.context_version:
-                return self._reject(request, "STALE_CONTEXT")
-            if action != FlightControlAction.READ_STATE and not self._enabled:
-                return self._reject(request, "PLATFORM_DISABLED")
-            action_value = action.value if isinstance(action, FlightControlAction) else action
-            if action_value == 'ai_algorithm_set':
-                # V1.4 2.1.2：平台只有任务级总开关，没有算法粒度的启停契约，
-                # 不能把总开关冒充成算法生命周期。
-                return self._reject(request, 'ALGORITHM_LIFECYCLE_UNAVAILABLE')
-            if action_value not in SUPPORTED_ACTIONS:
-                return self._reject(request, "ACTION_UNSUPPORTED")
             try:
-                snapshot = self._snapshot(action_value)
+                if snapshot is None:
+                    snapshot = self._snapshot(action_value)
                 if action == FlightControlAction.READ_STATE:
                     return self._receipt(request, "observed", snapshot=snapshot, message="已读取权威状态")
                 command = self._compile(request, snapshot, interruption_pending=True)
@@ -2367,6 +2388,13 @@ class KtdPlatformExecutor:
                     previous = self._journal.read(scope)
                     return KtdReceipt.from_dict(previous[1]) if previous and previous[0] == fingerprint else self._reject(request, "IDEMPOTENCY_CONFLICT")
                 self._pending.pop(confirmation_id)
+                action_value = (request.action.value
+                                if isinstance(request.action, FlightControlAction)
+                                else str(request.action))
+                if not vendor and action_value in _TURN_TYPES:
+                    self._active_turns[pending.receipt.trace_id] = threading.Event()
+                elif not vendor and action_value in {"emergency_stop", "hover"}:
+                    self._abort_active_turns()
             except KtdPlatformError as error:
                 self._pending.pop(confirmation_id, None)
                 rejected_code = str(error)
@@ -2400,8 +2428,9 @@ class KtdPlatformExecutor:
                             else str(request.action))
             if action_value in {"control_acquire", "control_release"}:
                 try:
-                    verified = self._execute_control(action_value, pending.receipt.trace_id,
-                                                     request.parameters)
+                    with self._without_lock():
+                        verified = self._execute_control(action_value, pending.receipt.trace_id,
+                                                         request.parameters)
                     fields["snapshot"] = verified
                     result = self._receipt(
                         request, FlightControlStatus.ACCEPTED, message=(
@@ -2448,8 +2477,9 @@ class KtdPlatformExecutor:
                         'snapshotVersion': snapshot.version,
                         'expiresAt': min(pending.deadline, snapshot.observed_at + self._max_age),
                         'hangarId': self.binding.hangar_id}})
-                response = (self._transport.submit_vendor_request(command, context) if vendor
-                            else self._transport.submit(command, context))
+                with self._without_lock():
+                    response = (self._transport.submit_vendor_request(command, context) if vendor
+                                else self._transport.submit(command, context))
                 if isinstance(response, KtdHttpResponse) and isinstance(response.payload, Mapping):
                     code = response.payload.get("code")
                     if response.status_code == 200 and type(code) is int and code == 200:
@@ -2479,21 +2509,28 @@ class KtdPlatformExecutor:
                         error_code = None
                         if not vendor and status == 'submitted':
                             if action_value in _TURN_TYPES:
-                                outcome, detail = self._run_turn(
-                                    request, snapshot, trace_id=pending.receipt.trace_id)
+                                try:
+                                    with self._without_lock():
+                                        outcome, detail = self._run_turn(
+                                            request, snapshot, trace_id=pending.receipt.trace_id)
+                                finally:
+                                    self._active_turns.pop(pending.receipt.trace_id, None)
                                 if outcome == "OK":
                                     status, message = ("accepted",
                                                        f"转向完成：{detail}；设备效果以姿态回读为准")
                                 elif outcome in {"TURN_TOLERANCE_NOT_REACHED", "TURN_TIMEOUT",
-                                                 "TURN_DIVERGING", "TURN_NOT_RESPONDING"}:
+                                                 "TURN_DIVERGING", "TURN_NOT_RESPONDING",
+                                                 "TURN_ABORTED"}:
                                     status, error_code = "rejected", outcome
                                     message = f"转向停止：{detail}"
                                 else:
                                     status, error_code = "unknown", outcome
                                     message = "转向结果未知，禁止自动重试"
                             elif action_value in _RELATIVE_GIMBAL:
-                                if not self._finish_gimbal(
-                                        request, trace_id=pending.receipt.trace_id):
+                                with self._without_lock():
+                                    stopped = self._finish_gimbal(
+                                        request, trace_id=pending.receipt.trace_id)
+                                if not stopped:
                                     status, error_code = "unknown", "GIMBAL_STOP_FAILED"
                                     message = "云台停止指令未确认，禁止重复提交"
                                 else:
@@ -2518,6 +2555,8 @@ class KtdPlatformExecutor:
                         result = self._receipt(request, FlightControlStatus.REJECTED, error_code="PLATFORM_REJECTED",
                                                message="平台拒绝请求，未确认设备效果", **fields)
             except Exception:
+                if not vendor and action_value in _TURN_TYPES:
+                    self._active_turns.pop(pending.receipt.trace_id, None)
                 pass  # 已持久记录 unknown；不读取异常文本，不重试。
             try:
                 self._journal.finish(scope, fingerprint, result.to_dict(), now=self._clock())
