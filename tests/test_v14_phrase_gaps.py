@@ -771,8 +771,8 @@ class InFlightUnsupportedBoundaryTests(unittest.TestCase):
                         'context_version': 1}),
             {'X-Agent-Session': 'geometry-tab'})
         result = response.payload
-        self.assertEqual(result['status'], 'clarification', result)
-        self.assertNotEqual(result.get('message'), DOC_TABLE6_COMPLEX)
+        self.assertEqual(result['status'], 'final', result)
+        self.assertEqual(result.get('kind'), 'no_action')
 
     def test_cockpit_does_not_reject_point_with_payload_action_as_mixed(self):
         clock = [1000.0]

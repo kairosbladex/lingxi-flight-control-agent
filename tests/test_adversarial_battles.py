@@ -139,11 +139,12 @@ class AdversarialBattlesTests(unittest.TestCase):
         text = "先向前飞999米，，然后云台向下看100度，，再紧急刹车！"
         res = decompose_intent(text)
         self.assertEqual(len(res["actions"]), 3)
-        # 前向位移必须智能 clamp 到 20 米极值
+        # 解析层保留原始数值，设备极值由执行器归一化。
         self.assertEqual(res["actions"][0]["action"], "move_forward")
-        self.assertEqual(res["actions"][0]["parameters"]["distance_m"], 20.0)
+        self.assertEqual(res["actions"][0]["parameters"]["distance_m"], 999)
         # 云台俯仰向下 100 度必须被解析
-        self.assertEqual(res["actions"][1]["action"], "gimbal_pitch")
+        self.assertEqual(res["actions"][1]["action"], "gimbal_down")
+        self.assertEqual(res["actions"][1]["parameters"], {"angle_deg": 100})
         # 紧急刹车被识别为急停
         self.assertEqual(res["actions"][2]["action"], "emergency_stop")
 

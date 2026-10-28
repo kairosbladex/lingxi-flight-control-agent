@@ -57,6 +57,7 @@ CONTROL_MESSAGE = "您尚未获取无人机控制权，请先申请后再下发�
 ROUTE_MESSAGE = "当前正在执行自动航线，请先说‘暂停航线’或‘悬停’再操作。"
 HOVER_MESSAGE = "当前无人机尚未悬停，请先说‘悬停’后再操作。"
 MAPPING_MESSAGE = "中断将导致测绘成果失效，是否确认继续？确认后关闭自动拼图，原测绘任务不可恢复。"
+MAPPING_NOT_RESUMABLE_MESSAGE = "原测绘任务已被中断，成果失效，不可恢复航线。"
 MOVES = frozenset({"move_forward", "move_backward", "move_left", "move_right", "move_up", "move_down"})
 MICRO_ACTIONS = MOVES | {"turn_left", "turn_right"}
 TEMPORARY_ACTIONS = frozenset({"point_flight", "point_orbit"})
@@ -150,10 +151,16 @@ _MAX_CLAMP_TEMPLATES = {
     "searchlight_brightness": SEARCHLIGHT_BRIGHTNESS_MAX_TEMPLATE,
 }
 
-# These are protocol envelopes, not claims about any connected device.
+# These are protocol envelopes, not claims about any connected device. Raw values
+# stay visible to the model; the executor clamps them against this envelope and
+# the current device table.
 ADJUSTABLE = {
-    'speaker_volume': ('value', 0, 100),
-    'searchlight_brightness': ('value', 0, 100),
+    **{action: ("distance_m", 0.01, 20) for action in MOVES},
+    "turn_left": ("angle_deg", 0.01, 360),
+    "turn_right": ("angle_deg", 0.01, 360),
+    "takeoff": ("altitude_m", 1, 500),
+    "speaker_volume": ("value", 0, 100),
+    "searchlight_brightness": ("value", 0, 100),
     "camera_zoom": ("value", 1, 30),
     "gimbal_digital_zoom": ("value", 1, 30),
     "set_move_speed": ("value", 0.1, 50),
@@ -164,6 +171,10 @@ ADJUSTABLE = {
     "gimbal_up": ("angle_deg", 0.1, 90),
     "gimbal_down": ("angle_deg", 0.1, 90),
 }
+
+# Older platform snapshots omit movement limits; their protocol envelope is a
+# safe fallback. Other settings remain fail-closed without a device table.
+_PROTOCOL_CLAMP_ACTIONS = frozenset(MOVES | {"turn_left", "turn_right", "takeoff"})
 
 
 class PolicyError(ValueError):
@@ -198,7 +209,27 @@ def normalize_parameters(action, parameters, state):
         raise PolicyError("INVALID_PARAMETERS", "参数必须是有限数值。")
     limits = state.get("device_limits", {})
     limit = limits.get(action) if isinstance(limits, Mapping) else None
+    if action in {"speaker_volume", "searchlight_brightness"} and value != int(value):
+        rounded = round(value)
+        result[key] = rounded
+        adjustments.append({
+            "parameter": key,
+            "requested": value,
+            "effective": rounded,
+            "message": f"百分比参数必须为整数，已将{value:g}取整为{rounded:g}；确认后执行。",
+        })
+        value = rounded
     if limit is None:
+        if action in _PROTOCOL_CLAMP_ACTIONS:
+            effective = min(protocol_high, max(protocol_low, value))
+            if effective != value:
+                result[key] = effective
+                adjustments.append({
+                    "parameter": key, "requested": value, "effective": effective,
+                    "minimum": protocol_low, "maximum": protocol_high,
+                    "message": f"协议允许范围为{protocol_low:g}至{protocol_high:g}，已将{value:g}调整为{effective:g}；确认后执行。",
+                })
+            return result, adjustments
         if not protocol_low <= value <= protocol_high:
             raise PolicyError("DEVICE_LIMITS_UNAVAILABLE", "未取得当前设备参数表，不能猜测设备极值。")
         return result, adjustments
@@ -327,7 +358,7 @@ def mapping_interruption(action, state):
 def check_flight_policy(action, state):
     if action in RESUME_ACTIONS and (state.get("mapping_invalidated") is True
                                      or state.get("route_resume_disabled") is True):
-        raise PolicyError("MAPPING_NOT_RESUMABLE", "原测绘任务已被中断，成果失效，不可恢复航线。")
+        raise PolicyError("MAPPING_NOT_RESUMABLE", MAPPING_NOT_RESUMABLE_MESSAGE)
     # V1.4 2.2.3：自动航线执行中拦截平移/升降/转向。指点飞行与环绕按 4.1.1
     # 作为“临时变更”接管并保留主线断点，不属于本条拦截范围（见验收文档解释分歧）。
     if (action in MICRO_ACTIONS

@@ -80,7 +80,7 @@ class IntentScenarioContractTests(unittest.TestCase):
 
     def test_unknown_action_or_invalid_arguments_do_not_become_labels(self):
         for field, value in (("expected_action", "arbitrary_shell"),
-                             ("expected_arguments", {"distance_m": 1001}),
+                             ("expected_arguments", {"distance_m": "bad"}),
                              ("expected_arguments", {"distance_m": True}),
                              ("expected_arguments", {"distance_m": 10, "execute": True})):
             with self.subTest(field=field, value=value), self.assertRaises(ValueError):

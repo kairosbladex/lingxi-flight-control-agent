@@ -198,8 +198,10 @@ class CockpitModelFailureTests(unittest.TestCase):
 
     def test_model_step_exhaustion_is_a_run_budget_failure(self):
         self.configure(max_model_steps=1)
+        invalid = tool_response(distance=10)
+        invalid['message']['tool_calls'][0]['function']['arguments']['extra'] = 1
         with mock.patch('urllib.request.urlopen',
-                        return_value=http_response(tool_response(distance=999))) as transport:
+                        return_value=http_response(invalid)) as transport:
             self.assert_failure(self.message(), 'MODEL_STEP_LIMIT')
         self.assertEqual(transport.call_count, 1)
 

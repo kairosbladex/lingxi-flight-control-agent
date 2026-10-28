@@ -159,7 +159,8 @@ class CockpitVendorControlTests(unittest.TestCase):
             with self.subTest(text=text, method=method):
                 self.proposed_method = method
                 result = self.message(self.service(enabled=True, methods=METHODS), text)
-                self.assertEqual(result.payload['status'], 'clarification', result.payload)
+                expected = 'final' if text == '不要进入DRC模式' else 'clarification'
+                self.assertEqual(result.payload['status'], expected, result.payload)
                 self.assertNotIn('card', result.payload)
         self.assertEqual(self.writes(), [])
 

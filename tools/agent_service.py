@@ -33,6 +33,7 @@ from lingxi_flight_control import (
     OllamaDecider,
     RuntimeBinding,
     SafetyFastPathDecider,
+    RuleBasedToolSelector,
     build_full_control_tool_registry,
     coerce_executor,
     project_observation_result,
@@ -78,7 +79,8 @@ def build_decider(args: argparse.Namespace) -> SafetyFastPathDecider:
     避免每个请求都重新预填充 59 个工具 schema。
     """
     brain = OllamaDecider(model=args.model, base_url=args.base_url, keep_alive="30m",
-                          result_projector=project_observation_result)
+                          result_projector=project_observation_result,
+                          tool_selector=RuleBasedToolSelector())
     return SafetyFastPathDecider(brain)
 
 

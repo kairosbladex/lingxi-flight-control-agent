@@ -1,4 +1,5 @@
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 
 from lingxi_flight_control import (
     FlightControlAction,
@@ -139,6 +140,32 @@ class FullControlSimulatorTests(unittest.TestCase):
                                        confirmation_binding=card.confirmation_binding, context_version=1)
         self.assertEqual(stale.status, FlightControlStatus.STALE_CONTEXT)
         self.assertEqual(self.simulator.snapshot()["binding"]["drone_id"], "drone-2")
+
+    def test_parallel_confirmations_keep_state_updates_atomic(self):
+        requests = [
+            FlightControlActionRequest("parallel-1", "parallel-1", FlightControlAction.MOVE_FORWARD,
+                                       {"distance_m": 1}, 1),
+            FlightControlActionRequest("parallel-2", "parallel-2", FlightControlAction.SPEAKER_SPEAK,
+                                       {"text": "注意安全"}, 1),
+        ]
+        cards = [self.simulator.preview(request) for request in requests]
+
+        def confirm(card, request):
+            return self.simulator.confirm(
+                card.confirmation_id,
+                command_id=request.command_id,
+                idempotency_key=request.idempotency_key,
+                confirmation_binding=card.confirmation_binding,
+                context_version=1,
+            )
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(confirm, cards, requests))
+        self.assertEqual([result.status for result in results],
+                         [FlightControlStatus.ACCEPTED, FlightControlStatus.ACCEPTED])
+        self.assertEqual(self.simulator.state.revision, 3)
+        self.assertGreater(self.simulator.state.latitude, 0.0)
+        self.assertEqual(self.simulator.state.payloads["speaker_text"], "注意安全")
 
     def test_natural_language_to_structured_action_and_tool_coverage(self):
         move = parse_flight_control_text("向前 12 米", command_id="c", idempotency_key="k", context_version=1)

@@ -86,6 +86,20 @@ _DENY_PHRASES = ('不要', '别起飞', '别飞', '别动', '不执行', '如果
                  '不用', '不需要', '无需', '禁止', '勿', '明天', '后天', '定时', '待会', '稍后', '等会',
                  '大约', '大概', '差不多', '约莫', '大致', '来米',
                  'don\'t', 'do not', 'if ', 'can you explain')
+_NO_ACTION_NEGATION = re.compile(
+    r'^\s*(?:(?:先|暂时)\s*)?(?:不要|别|不用|不需要|无需|勿|禁止|don\'t|do not)'
+    r'(?=\s|[\u3400-\u9fff]|$)', re.I)
+_NO_ACTION_ALTERNATIVE = re.compile(
+    r'改用|换成|而是|但是|然后|再|并且|同时|instead|rather|but|then|and', re.I)
+_NO_ACTION_CONSTRAINT = re.compile(
+    r'悬停|悬在|保持当前位置|产生位移|机头方向|控制权|解释|示例|功能|流程|摇杆|键盘', re.I)
+
+
+def _is_explicit_no_action(text):
+    clauses = [part.strip() for part in re.split(r'[,，;；。!?！？\n]+', text) if part.strip()]
+    return (len(clauses) == 1 and _NO_ACTION_NEGATION.match(clauses[0]) is not None
+            and _NO_ACTION_ALTERNATIVE.search(clauses[0]) is None
+            and _NO_ACTION_CONSTRAINT.search(clauses[0]) is None)
 # 消息中的角色标记或“资料等于审批”不能变成操作意图，更不能替代确认入口。
 _AUTHORITY_CLAIM = re.compile(
     r'\b(?:system|developer|assistant|tool)\s*[:：]'
@@ -176,13 +190,14 @@ def _separate_motion_constraints(text):
 _PLAN_ARRIVAL_ACTIONS = PATH_ACTIONS | {'turn_left', 'turn_right'}
 _CONTINUE = frozenset({'继续', '下一步', '继续下一步', 'continue', 'next'})
 # Strict full-sentence grammar; ambiguous numbers and extra clauses fall back.
-_DIRECT_NUMBER = (r'(?:[0-9]+(?:\.[0-9]+)?|半|'
+_DIRECT_NUMBER = (r'(?:[负-]?(?:[0-9]+(?:\.[0-9]+)?|半)|'
                   r'(?:[一二两三四五六七八九]|十[一二三四五六七八九]?|二十|零)'
                   r'(?:点[零一二三四五六七八九]+)?)')
 _DIRECT_PHOTO = re.compile(r'(?:请|帮我)?(?:拍照|拍(?:一)?张(?:照片|照))[。!！]?')
 _DIRECT_MOVE = re.compile(r'(?:请|帮我)?(?P<motion>向前飞|往前飞|前进|向前平移|'
     r'向后飞|往后飞|往后退|后退|向后平移|向左飞|往左飞|向左平移|'
-    r'向右飞|往右飞|向右平移)\s*(?P<number>' + _DIRECT_NUMBER + r')\s*米[。!！]?')
+    r'向右飞|往右飞|向右平移|上升|向上飞|往上飞|向上平移|下降|向下飞|往下飞|向下平移)\s*(?P<number>'
+    + _DIRECT_NUMBER + r')\s*米[。!！]?')
 
 
 def _direct_command(text):
@@ -192,11 +207,12 @@ def _direct_command(text):
     if match is None:
         return None
     value = _number(match['number'])
-    if not math.isfinite(value) or not 0 < value <= 20:
+    if not math.isfinite(value):
         return None
     motion = match['motion']
     direction = next((name for character, name in (
-        ('前', 'forward'), ('后', 'backward'), ('左', 'left'), ('右', 'right')) if character in motion), None)
+        ('前', 'forward'), ('后', 'backward'), ('左', 'left'), ('右', 'right'),
+        ('上', 'up'), ('下', 'down')) if character in motion), None)
     return ToolCall('move_' + direction, {'distance_m': value}) if direction else None
 
 
@@ -323,8 +339,6 @@ def build_proposal_registry(executor):
     registry = ToolRegistry(runtime_context_provider=runtime.runtime_context)
     for action, spec in ACTION_SPECS.items():
         parameters = proposal_parameters(action.value, spec.parameters)
-        if 'distance_m' in parameters:
-            parameters['distance_m'] = replace(parameters['distance_m'], maximum=20)
         mutating = action != FlightControlAction.READ_STATE
         def forbidden(_arguments):
             raise RuntimeError('proposal tools cannot execute')
@@ -885,11 +899,14 @@ class CockpitService:
             if isinstance(ordered, list):
                 session.ordered_steps = [tuple(item) for item in ordered if isinstance(item, list) and len(item) == 2]
             session.motion_source = state.get('motion_source')
-            session.pending_algorithm_mode = state.get('pending_algorithm_mode')
+            # 这是一次性澄清答案；确认卡本身已保存 algorithm_mode，恢复后不能
+            # 把旧的“仅替换”意图套到新的普通 AI 请求上。
+            session.pending_algorithm_mode = None
         except (KeyError, TypeError, ValueError, OverflowError):
             session.card = None
             session.plan = None
             session.waiting = None
+            session.pending_algorithm_mode = None
             session.receipts.clear()
             session.requests.clear()
             session.epoch += 1
@@ -950,6 +967,7 @@ class CockpitService:
             session.card = None
         session.plan = None
         session.waiting = None
+        session.pending_algorithm_mode = None
         session.epoch += 1
 
     @staticmethod
@@ -1271,7 +1289,7 @@ class CockpitService:
                 session.active_intent, session.clarification = '', False
                 session.requests[request_id] = (fingerprint, result)
                 return result
-            parallel = re.fullmatch(r'(?:一)?边(.+?)(?:一)?边(?:喊话|播报)[:：](.{1,500})', text)
+            parallel = re.fullmatch(r'(?:一)?边(.+?)(?:一)?边(?:喊话|播报)(?:[:：]\s*)?(.{1,500})', text)
             if parallel and self._plan_enabled and (self.execution_mode == 'simulator' or getattr(self.executor, 'supports_parallel_execution', False)):
                 motion = _direct_command(parallel[1].strip())
                 if motion and motion.name.startswith('move_'):
@@ -1301,6 +1319,15 @@ class CockpitService:
                     request_id=request_id, state=state)
                 session.requests[request_id] = (fingerprint, result)
                 session.active_intent, session.clarification = '', False
+                return result
+            if _is_explicit_no_action(text):
+                result = self._base(status='final', kind='no_action',
+                                    message='本次不会执行动作。', request_id=request_id, state=state)
+                session.active_intent, session.clarification = '', False
+                session.completed_steps.clear()
+                session.ordered_steps = None
+                session.motion_source = None
+                session.requests[request_id] = (fingerprint, result)
                 return result
             if (not immediate_text or contains_unsafe_content(text) or _AUTHORITY_CLAIM.search(text)
                     or any(phrase in immediate_text.lower() for phrase in _DENY_PHRASES)
@@ -1766,9 +1793,12 @@ class CockpitService:
                 return self._base(status='rejected', error_code='PAYLOAD_NOT_MOUNTED',
                                   message=mount_message, **common)
             command = uuid4().hex
-            if (call.name == 'ai_algorithm_set' and session.pending_algorithm_mode == 'replace'
-                    and not callable(getattr(self.executor, 'replace_annotation_algorithms', None))):
+            algorithm_mode = session.pending_algorithm_mode if call.name == 'ai_algorithm_set' else None
+            if call.name == 'ai_algorithm_set':
+                # 预览失败或用户取消时也必须消费一次性替换意图。
                 session.pending_algorithm_mode = None
+            if (call.name == 'ai_algorithm_set' and algorithm_mode == 'replace'
+                    and not callable(getattr(self.executor, 'replace_annotation_algorithms', None))):
                 return self._base(status='rejected', error_code=ALGORITHM_REPLACE_UNSUPPORTED,
                                   message=REPLACE_UNSUPPORTED_MESSAGE, **common)
             if vendor:
@@ -1792,9 +1822,8 @@ class CockpitService:
                     if isinstance(receipt['expires_at'], str) else receipt['expires_at'],
                     'execution_mode': self.execution_mode,
                     'receipt_tracking': receipt.get('receipt_tracking', False)}
-            if call.name == 'ai_algorithm_set' and session.pending_algorithm_mode:
-                card['algorithm_mode'] = session.pending_algorithm_mode
-                session.pending_algorithm_mode = None
+            if algorithm_mode:
+                card['algorithm_mode'] = algorithm_mode
             if vendor:
                 card['kind'] = 'vendor_control_request'
             session.card = card
@@ -2106,6 +2135,8 @@ class CockpitService:
     def _execute_parallel(self, plan):
         """Preflight both commands before dispatch; retain every partial outcome."""
         from concurrent.futures import ThreadPoolExecutor
+        if len(plan.steps) < 2:
+            return [], (1, 'PARALLEL_PLAN_INVALID', '并发计划至少需要两个步骤')
         prepared, results = [], []
         for index, step in enumerate(plan.steps):
             request = FlightControlActionRequest(step['command_id'], step['idempotency_key'],
@@ -2124,7 +2155,8 @@ class CockpitService:
                     'status': 'rejected', 'error_code': 'PARALLEL_PREFLIGHT_FAILED',
                     'message': '并发预检失败，两项均未下发'} for i, s in enumerate(plan.steps)]
                 return results, (index + 1, 'PARALLEL_PREFLIGHT_FAILED', '并发预检失败')
-        gate = threading.Barrier(2, timeout=2)
+        step_count = len(plan.steps)
+        gate = threading.Barrier(step_count, timeout=2)
         def execute(index):
             step, card = plan.steps[index], prepared[index]
             try:
@@ -2135,8 +2167,8 @@ class CockpitService:
                 return {'step': index + 1, 'action': step['action'], 'parameters': step['parameters'],
                         'status': 'unknown', 'error_code': 'PARALLEL_OUTCOME_UNKNOWN',
                         'message': '结果未知，禁止自动重试，请核对设备回执'}
-        with ThreadPoolExecutor(max_workers=2, thread_name_prefix='flight-parallel') as pool:
-            results = list(pool.map(execute, range(2)))
+        with ThreadPoolExecutor(max_workers=step_count, thread_name_prefix='flight-parallel') as pool:
+            results = list(pool.map(execute, range(step_count)))
         failure = next((item for item in results if item['status'] not in {'accepted', 'duplicate'}), None)
         return results, ((failure['step'], failure['error_code'] or 'PARALLEL_PARTIAL_FAILURE',
             '并发存在失败或未知，其他子项可能已执行，请核对逐项回执') if failure else None)

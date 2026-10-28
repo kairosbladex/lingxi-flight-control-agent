@@ -17,7 +17,7 @@
       "action": "preview_required带准确card；read_state须真实执行并final",
       "clarification": "服务typed clarification",
       "rejected_intent": "服务策略使用clarification，不冒称typed rejected",
-      "no_action": "否定/能力讨论期望clarification；域外无动作期望final"
+      "no_action": "纯否定期望final no_action；能力讨论与条件句期望clarification；域外无动作期望final"
     },
     "label_policy": "继承的expected_kind/action/arguments保持v1原样；service_expected独立冻结，禁止按候选结果改标签。",
     "initial_state": "每条initial_state仅含FlightControlState真字段，其他字段沿用真实dataclass默认并在运行时记录完整前态hash。"
@@ -2173,8 +2173,8 @@
         "breakpoint_index": 2
       },
       "service_expected": {
-        "kind": "clarification",
-        "status": "clarification",
+        "kind": "no_action",
+        "status": "final",
         "action": null,
         "arguments": {}
       }
@@ -2199,8 +2199,8 @@
         "breakpoint_index": 2
       },
       "service_expected": {
-        "kind": "clarification",
-        "status": "clarification",
+        "kind": "no_action",
+        "status": "final",
         "action": null,
         "arguments": {}
       }
@@ -2225,8 +2225,8 @@
         "breakpoint_index": 2
       },
       "service_expected": {
-        "kind": "clarification",
-        "status": "clarification",
+        "kind": "no_action",
+        "status": "final",
         "action": null,
         "arguments": {}
       }
@@ -2251,8 +2251,8 @@
         "breakpoint_index": 2
       },
       "service_expected": {
-        "kind": "clarification",
-        "status": "clarification",
+        "kind": "no_action",
+        "status": "final",
         "action": null,
         "arguments": {}
       }
@@ -2417,9 +2417,11 @@
       "id": "limits_01",
       "category": "out_of_range",
       "input": "向前飞21米",
-      "expected_kind": "clarification",
-      "expected_action": null,
-      "expected_arguments": {},
+      "expected_kind": "action",
+      "expected_action": "move_forward",
+      "expected_arguments": {
+        "distance_m": 21
+      },
       "initial_state": {
         "control_owner": "intent-evaluation-actor",
         "control_request": "none",
@@ -2433,19 +2435,23 @@
         "breakpoint_index": 2
       },
       "service_expected": {
-        "kind": "clarification",
-        "status": "clarification",
-        "action": null,
-        "arguments": {}
+        "kind": "action",
+        "status": "preview_required",
+        "action": "move_forward",
+        "arguments": {
+          "distance_m": 21
+        }
       }
     },
     {
       "id": "limits_02",
       "category": "out_of_range",
       "input": "向后飞负5米",
-      "expected_kind": "clarification",
-      "expected_action": null,
-      "expected_arguments": {},
+      "expected_kind": "action",
+      "expected_action": "move_backward",
+      "expected_arguments": {
+        "distance_m": -5
+      },
       "initial_state": {
         "control_owner": "intent-evaluation-actor",
         "control_request": "none",
@@ -2459,19 +2465,23 @@
         "breakpoint_index": 2
       },
       "service_expected": {
-        "kind": "clarification",
-        "status": "clarification",
-        "action": null,
-        "arguments": {}
+        "kind": "action",
+        "status": "preview_required",
+        "action": "move_backward",
+        "arguments": {
+          "distance_m": -5
+        }
       }
     },
     {
       "id": "limits_03",
       "category": "out_of_range",
       "input": "原地向左转361度",
-      "expected_kind": "clarification",
-      "expected_action": null,
-      "expected_arguments": {},
+      "expected_kind": "action",
+      "expected_action": "turn_left",
+      "expected_arguments": {
+        "angle_deg": 361
+      },
       "initial_state": {
         "control_owner": "intent-evaluation-actor",
         "control_request": "none",
@@ -2485,19 +2495,23 @@
         "breakpoint_index": 2
       },
       "service_expected": {
-        "kind": "clarification",
-        "status": "clarification",
-        "action": null,
-        "arguments": {}
+        "kind": "action",
+        "status": "preview_required",
+        "action": "turn_left",
+        "arguments": {
+          "angle_deg": 361
+        }
       }
     },
     {
       "id": "limits_04",
       "category": "out_of_range",
       "input": "起飞到501米高度",
-      "expected_kind": "clarification",
-      "expected_action": null,
-      "expected_arguments": {},
+      "expected_kind": "action",
+      "expected_action": "takeoff",
+      "expected_arguments": {
+        "altitude_m": 501
+      },
       "initial_state": {
         "control_owner": "intent-evaluation-actor",
         "control_request": "none",
@@ -2511,19 +2525,23 @@
         "breakpoint_index": 2
       },
       "service_expected": {
-        "kind": "clarification",
-        "status": "clarification",
-        "action": null,
-        "arguments": {}
+        "kind": "action",
+        "status": "preview_required",
+        "action": "takeoff",
+        "arguments": {
+          "altitude_m": 501
+        }
       }
     },
     {
       "id": "limits_05",
       "category": "out_of_range",
       "input": "光学变焦设为31倍",
-      "expected_kind": "clarification",
-      "expected_action": null,
-      "expected_arguments": {},
+      "expected_kind": "action",
+      "expected_action": "camera_zoom",
+      "expected_arguments": {
+        "value": 31
+      },
       "initial_state": {
         "control_owner": "intent-evaluation-actor",
         "control_request": "none",
@@ -2537,19 +2555,23 @@
         "breakpoint_index": 2
       },
       "service_expected": {
-        "kind": "clarification",
-        "status": "clarification",
-        "action": null,
-        "arguments": {}
+        "kind": "action",
+        "status": "preview_required",
+        "action": "camera_zoom",
+        "arguments": {
+          "value": 31
+        }
       }
     },
     {
       "id": "limits_06",
       "category": "out_of_range",
       "input": "水平速度调到每秒51米",
-      "expected_kind": "clarification",
-      "expected_action": null,
-      "expected_arguments": {},
+      "expected_kind": "action",
+      "expected_action": "set_move_speed",
+      "expected_arguments": {
+        "value": 51
+      },
       "initial_state": {
         "control_owner": "intent-evaluation-actor",
         "control_request": "none",
@@ -2563,10 +2585,12 @@
         "breakpoint_index": 2
       },
       "service_expected": {
-        "kind": "clarification",
-        "status": "clarification",
-        "action": null,
-        "arguments": {}
+        "kind": "action",
+        "status": "preview_required",
+        "action": "set_move_speed",
+        "arguments": {
+          "value": 51
+        }
       }
     },
     {

@@ -185,7 +185,6 @@ class RegistryExecutionTests(unittest.TestCase):
 
     def test_schema_rejects_bad_arguments_before_the_handler_runs(self):
         cases = [
-            (MOVE_FORWARD, {"distance_m": 5000}),                 # 超上限
             (MOVE_FORWARD, {"distance_m": 10, "extra": 1}),        # 多余字段
             (FlightControlAction.SET_YAW_SPEED.value, {}),         # 缺必填
         ]

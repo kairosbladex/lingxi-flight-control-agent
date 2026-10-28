@@ -47,6 +47,13 @@ class ProductActionsTests(unittest.TestCase):
             self.assertEqual(self.confirm(reply['card']), result)
             self.assertEqual(self.sim.state.to_dict(), after)
 
+    def test_decimal_payload_percentage_is_normalized_before_validation(self):
+        reply = self.send('喊话音量调到55.5%')
+        self.assertEqual(reply['status'], 'preview_required', reply)
+        self.assertEqual(reply['card']['parameters'], {'value': 56})
+        self.assertEqual(reply['card']['adjustments'][0]['effective'], 56)
+        self.assertEqual(self.confirm(reply['card'])['status'], 'accepted')
+
     def test_ai_arrival_departure_keeps_global_and_other_annotation_algorithms(self):
         s = self.sim.state
         s.annotation_algorithms = {'A': ['烟火'], 'B': ['烟火', '车辆']}

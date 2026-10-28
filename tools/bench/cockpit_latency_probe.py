@@ -18,6 +18,7 @@ from lingxi_flight_control.cockpit import COCKPIT_SYSTEM_PROMPT, build_proposal_
 from lingxi_flight_control.ollama_decider import (
     DEFAULT_BASE_URL, DEFAULT_MODEL, build_tools_payload, http_transport,
 )
+from lingxi_flight_control.tool_selector import RuleBasedToolSelector
 from cockpit_intents import (
     DEFAULT_FIXTURE, REPOSITORY_ROOT, _EvaluationExecutor, _git_value, _sha256,
     _source_hashes, load_scenarios,
@@ -99,7 +100,7 @@ def main():
             brain = OllamaDecider(model=DEFAULT_MODEL, base_url=DEFAULT_BASE_URL,
                 system_prompt=COCKPIT_SYSTEM_PROMPT, think=False if variant == 'off' else None,
                 timeout=min(35, remaining), max_attempts=1, max_output_tokens=2048,
-                transport=transport, keep_alive='30m')
+                transport=transport, keep_alive='30m', tool_selector=RuleBasedToolSelector())
             started = time.monotonic()
             try:
                 decision = brain.decide(text, checkpoint, build_proposal_registry(executor).definitions())

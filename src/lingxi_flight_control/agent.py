@@ -6,6 +6,7 @@ from collections.abc import Mapping
 import hashlib
 import json
 import math
+import re
 from typing import Any, Callable, Protocol
 
 from .models import (
@@ -244,6 +245,38 @@ def contains_unsafe_content(value: Any) -> bool:
 _contains_unsafe_content = contains_unsafe_content
 
 
+_PROMPT_INJECTION = re.compile(
+    r"(?:忽略|绕过|跳过).{0,24}(?:安全|规则|确认|系统|提示)|"
+    r"(?:ignore|disregard|bypass).{0,36}(?:safety|rules?|system|prompt|confirmation)|"
+    r"(?:执行|运行|调用).{0,16}(?:shell|sql|命令)|prompt\s*injection|jailbreak", re.I)
+_NEGATED_ACTION = re.compile(
+    r"^\s*(?:(?:先|暂时)\s*)?(?:不要|别|不用|不需要|无需|勿|禁止|don\'t|do not)"
+    r"(?=\s|[\u3400-\u9fff]|$).+", re.I)
+_NEGATION_EXCEPTIONS = re.compile(
+    r"如果|假如|除非|但是|而是|改用|换成|然后|再|并且|同时|悬停|悬在|保持|当前位置|"
+    r"解释|示例|功能|流程|控制权|摇杆|键盘", re.I)
+
+
+def pre_model_policy(text: str) -> str | None:
+    """Return a deterministic outcome for obvious injection or pure negation."""
+    normalized = str(text or '').strip()
+    # Cockpit wraps the user utterance in a JSON model envelope; policy must
+    # inspect only current_request, never historical tool warnings.
+    try:
+        payload = json.loads(normalized)
+        if isinstance(payload, Mapping) and isinstance(payload.get('current_request'), str):
+            normalized = payload['current_request'].strip()
+    except (TypeError, ValueError):
+        pass
+    if _PROMPT_INJECTION.search(normalized):
+        return 'clarification'
+    clauses = [part.strip() for part in re.split(r'[,，;；。!?！？\n]+', normalized) if part.strip()]
+    if len(clauses) == 1 and _NEGATED_ACTION.fullmatch(clauses[0]) \
+            and _NEGATION_EXCEPTIONS.search(clauses[0]) is None:
+        return 'no_action'
+    return None
+
+
 class BoundedAgentLoop:
     """模型决定、白名单校验、受控工具执行和检查点更新的有限循环。"""
 
@@ -329,6 +362,20 @@ class BoundedAgentLoop:
                 return self._stale_context(checkpoint, "checkpoint runtime context is stale")
         if confirmed:
             checkpoint.confirmed = True
+        if not checkpoint.tool_calls and not checkpoint.observations:
+            policy = pre_model_policy(checkpoint.user_input)
+            if policy is not None:
+                checkpoint.step_count += 1
+                checkpoint.status = (LoopStatus.FINAL if policy == 'no_action'
+                                      else LoopStatus.CLARIFICATION)
+                message = ('本次不会执行动作。' if policy == 'no_action'
+                           else '这条消息包含不能作为飞控指令的安全策略或注入内容，请重新明确动作。')
+                checkpoint.messages.append({
+                    'role': 'assistant',
+                    'kind': 'final' if policy == 'no_action' else 'clarify',
+                    'content': message,
+                })
+                return AgentRunResult(checkpoint.status, checkpoint, message=message)
         if self._needs_survey_clarification(checkpoint.user_input):
             checkpoint.status = LoopStatus.CLARIFICATION
             message = "请明确选择正射影像或倾斜摄影的测绘方式。"

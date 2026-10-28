@@ -14,7 +14,7 @@
       "execution_mode": "sequential",
       "expected_actions": [
         {"action": "move_forward", "parameters": {"distance_m": 10}},
-        {"action": "gimbal_pitch", "parameters": {"angle_deg": -45}},
+        {"action": "gimbal_45", "parameters": {}},
         {"action": "camera_photo", "parameters": {}}
       ]
     },
@@ -67,7 +67,7 @@
       "execution_mode": "sequential",
       "expected_actions": [
         {"action": "move_forward", "parameters": {"distance_m": 8}},
-        {"action": "gimbal_center", "parameters": {}}
+        {"action": "gimbal_reset", "parameters": {}}
       ]
     },
     {
@@ -87,7 +87,7 @@
       "execution_mode": "sequential",
       "expected_actions": [
         {"action": "move_up", "parameters": {"distance_m": 3}},
-        {"action": "camera_zoom", "parameters": {"zoom_factor": 5}},
+        {"action": "camera_zoom", "parameters": {"value": 5}},
         {"action": "camera_photo", "parameters": {}}
       ]
     },
@@ -120,7 +120,7 @@
       "execution_mode": "sequential",
       "expected_actions": [
         {"action": "move_down", "parameters": {"distance_m": 2}},
-        {"action": "searchlight_switch", "parameters": {"action": "open"}}
+        {"action": "payload_searchlight", "parameters": {"enabled": true}}
       ]
     },
     {
@@ -140,7 +140,7 @@
       "input": "停止录像，然后一键返航",
       "execution_mode": "sequential",
       "expected_actions": [
-        {"action": "camera_record_stop", "parameters": {}},
+        {"action": "camera_stop_recording", "parameters": {}},
         {"action": "return_home", "parameters": {}}
       ]
     },
@@ -162,7 +162,7 @@
       "execution_mode": "sequential",
       "expected_actions": [
         {"action": "hover", "parameters": {}},
-        {"action": "gimbal_pitch", "parameters": {"angle_deg": -90}}
+        {"action": "gimbal_90", "parameters": {}}
       ]
     },
     {
@@ -192,7 +192,7 @@
       "execution_mode": "parallel",
       "expected_actions": [
         {"action": "move_forward", "parameters": {"distance_m": 10}},
-        {"action": "camera_record_start", "parameters": {}}
+        {"action": "camera_start_recording", "parameters": {}}
       ]
     },
     {
@@ -202,7 +202,7 @@
       "execution_mode": "parallel",
       "expected_actions": [
         {"action": "turn_left", "parameters": {"angle_deg": 30}},
-        {"action": "gimbal_pitch", "parameters": {"angle_deg": -30}}
+        {"action": "gimbal_down", "parameters": {"angle_deg": 30}}
       ]
     },
     {
@@ -222,7 +222,7 @@
       "execution_mode": "parallel",
       "expected_actions": [
         {"action": "move_up", "parameters": {"distance_m": 4}},
-        {"action": "camera_record_start", "parameters": {}}
+        {"action": "camera_start_recording", "parameters": {}}
       ]
     },
     {
@@ -252,7 +252,7 @@
       "execution_mode": "parallel",
       "expected_actions": [
         {"action": "turn_right", "parameters": {"angle_deg": 45}},
-        {"action": "camera_zoom", "parameters": {"zoom_factor": 3}}
+        {"action": "camera_zoom", "parameters": {"value": 3}}
       ]
     },
     {
@@ -262,7 +262,7 @@
       "execution_mode": "parallel",
       "expected_actions": [
         {"action": "move_forward", "parameters": {"distance_m": 8}},
-        {"action": "searchlight_switch", "parameters": {"action": "open"}}
+        {"action": "payload_searchlight", "parameters": {"enabled": true}}
       ]
     },
     {
@@ -282,7 +282,7 @@
       "execution_mode": "parallel",
       "expected_actions": [
         {"action": "move_left", "parameters": {"distance_m": 4}},
-        {"action": "gimbal_pitch", "parameters": {"angle_deg": -15}}
+        {"action": "gimbal_down", "parameters": {"angle_deg": 15}}
       ]
     },
     {
@@ -309,7 +309,7 @@
       "input": "云台稍微往下一点",
       "execution_mode": "sequential",
       "expected_actions": [
-        {"action": "gimbal_pitch", "parameters": {"angle_deg": -10}}
+        {"action": "gimbal_down", "parameters": {"angle_deg": 10}}
       ]
     },
     {
@@ -336,7 +336,7 @@
       "input": "镜头稍微放大一点",
       "execution_mode": "sequential",
       "expected_actions": [
-        {"action": "camera_zoom", "parameters": {"zoom_factor": 2}}
+        {"action": "camera_zoom", "parameters": {"value": 2}}
       ]
     },
     {
@@ -462,7 +462,7 @@
       "input": "朝天看",
       "execution_mode": "sequential",
       "expected_actions": [
-        {"action": "gimbal_pitch", "parameters": {"angle_deg": 0}}
+        {"action": "gimbal_reset", "parameters": {}}
       ]
     },
     {
@@ -471,7 +471,7 @@
       "input": "垂直往下看",
       "execution_mode": "sequential",
       "expected_actions": [
-        {"action": "gimbal_pitch", "parameters": {"angle_deg": -90}}
+        {"action": "gimbal_90", "parameters": {}}
       ]
     },
     {
@@ -489,7 +489,7 @@
       "input": "往前飞100米",
       "execution_mode": "sequential",
       "expected_actions": [
-        {"action": "move_forward", "parameters": {"distance_m": 20}}
+        {"action": "move_forward", "parameters": {"distance_m": 100}}
       ]
     },
     {
@@ -498,7 +498,7 @@
       "input": "变焦1000倍",
       "execution_mode": "sequential",
       "expected_actions": [
-        {"action": "camera_zoom", "parameters": {"zoom_factor": 30}}
+        {"action": "camera_zoom", "parameters": {"value": 1000}}
       ]
     },
     {
@@ -507,7 +507,7 @@
       "input": "音量调到200%",
       "execution_mode": "sequential",
       "expected_actions": [
-        {"action": "speaker_volume", "parameters": {"value": 100}}
+        {"action": "speaker_volume", "parameters": {"value": 200}}
       ]
     },
     {
@@ -516,7 +516,7 @@
       "input": "探照灯亮度开到150%",
       "execution_mode": "sequential",
       "expected_actions": [
-        {"action": "searchlight_brightness", "parameters": {"value": 100}}
+        {"action": "searchlight_brightness", "parameters": {"value": 150}}
       ]
     },
     {

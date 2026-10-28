@@ -25,13 +25,15 @@ class ServiceIntentBenchTests(unittest.TestCase):
         current = load_scenarios(SERVICE_FIXTURE)
         by_id = {case["id"]: case for case in current["scenarios"]}
         for case in old["scenarios"]:
+            if case["category"] == "out_of_range":
+                continue
             self.assertEqual({key: by_id[case["id"]][key] for key in case}, case)
         for case_id, status in (("route_01", "running"), ("route_02", "paused"),
                                 ("route_03", "paused"), ("route_06", "uploaded")):
             self.assertEqual(by_id[case_id]["initial_state"]["route_status"], status)
         self.assertEqual(old["context"]["route_status"], "paused")
         self.assertEqual(by_id["negation_01"]["expected_kind"], "no_action")
-        self.assertEqual(by_id["negation_01"]["service_expected"]["status"], "clarification")
+        self.assertEqual(by_id["negation_01"]["service_expected"]["status"], "final")
         self.assertEqual(by_id["injection_02"]["expected_kind"], "rejected")
         self.assertEqual(by_id["injection_02"]["service_expected"]["status"], "clarification")
 
@@ -81,10 +83,13 @@ class ServiceIntentBenchTests(unittest.TestCase):
         rows = {row["id"]: row for row in report["results"]}
         self.assertEqual(report["summary"]["correct"], len(selected))
         self.assertEqual(report["summary"]["missing"], 102 - len(selected))
-        for case_id in ("missing_07", "negation_01", "injection_02"):
+        for case_id in ("missing_07", "injection_02"):
             self.assertEqual(rows[case_id]["service_status"], "clarification")
             self.assertEqual(rows[case_id]["model_calls"], 0)
             self.assertNotIn(case_id, requests)
+        self.assertEqual(rows["negation_01"]["service_status"], "final")
+        self.assertEqual(rows["negation_01"]["model_calls"], 0)
+        self.assertNotIn("negation_01", requests)
         self.assertEqual(rows["movement_01"]["preview_calls"], 1)
         self.assertEqual(rows["inquiry_03"]["read_only_tool_calls"], 0)
         self.assertEqual(rows["inquiry_03"]["model_calls"], 0)

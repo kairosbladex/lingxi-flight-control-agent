@@ -5,7 +5,7 @@
 2. 并发复合：识别同时并发动作（如“一边向前飞5米，一边播放防溺水语音‘水深危险请勿靠近’”）；
 3. 隐含参数：对于“往左转一点”“稍微往前挪一下”等模糊微操，确定性层映射为微小步长；
 4. 口语化与方言：“升高点”“往后退一点点”“赶紧停下”“打道回府”准确解析；
-5. 极值智能约束：变焦、位移、音量、亮度等超限输入智能取设备极值。
+5. 极值智能约束：保留用户原始数值，由执行器按当前设备参数表归一化并返回调整提示。
 """
 
 from __future__ import annotations
@@ -16,13 +16,6 @@ from typing import Any
 _CN_NUM_MAP = {
     "零": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5,
     "六": 6, "七": 7, "八": 8, "九": 9, "十": 10, "百": 100,
-}
-
-_DEVICE_LIMITS = {
-    "max_relative_distance_m": 20.0,
-    "max_zoom_factor": 30.0,
-    "max_volume": 100,
-    "max_brightness": 100,
 }
 
 _EXACT_FULL_SENTENCES = {
@@ -114,21 +107,21 @@ def _parse_single_action(text: str) -> dict[str, Any] | None:
     if t in ("拍一张照片", "拍张照片", "拍照"):
         return {"action": "camera_photo", "parameters": {}}
     if t in ("开启录像", "开始录像"):
-        return {"action": "camera_record_start", "parameters": {}}
+        return {"action": "camera_start_recording", "parameters": {}}
     if t in ("停止录像", "结束录像"):
-        return {"action": "camera_record_stop", "parameters": {}}
+        return {"action": "camera_stop_recording", "parameters": {}}
     if t in ("云台回中", "回中云台"):
-        return {"action": "gimbal_center", "parameters": {}}
+        return {"action": "gimbal_reset", "parameters": {}}
     if t in ("朝天看", "看天"):
-        return {"action": "gimbal_pitch", "parameters": {"angle_deg": 0}}
+        return {"action": "gimbal_reset", "parameters": {}}
     if t in ("垂直往下看", "垂直下看"):
-        return {"action": "gimbal_pitch", "parameters": {"angle_deg": -90}}
+        return {"action": "gimbal_90", "parameters": {}}
     if t in ("掉个头", "掉头"):
         return {"action": "turn_right", "parameters": {"angle_deg": 180}}
     if t in ("开启探照灯", "打开探照灯"):
-        return {"action": "searchlight_switch", "parameters": {"action": "open"}}
+        return {"action": "payload_searchlight", "parameters": {"enabled": True}}
     if t in ("关闭探照灯", "关探照灯"):
-        return {"action": "searchlight_switch", "parameters": {"action": "close"}}
+        return {"action": "payload_searchlight", "parameters": {"enabled": False}}
 
     # --- 隐含参数/口语微调 ---
     if t in ("往左转一点", "向左转一点", "左转一点"):
@@ -148,24 +141,24 @@ def _parse_single_action(text: str) -> dict[str, Any] | None:
     if t in ("稍微往下降一点", "下降点", "降低一点"):
         return {"action": "move_down", "parameters": {"distance_m": 1}}
     if t in ("云台稍微往下一点",):
-        return {"action": "gimbal_pitch", "parameters": {"angle_deg": -10}}
+        return {"action": "gimbal_down", "parameters": {"angle_deg": 10}}
     if t in ("镜头稍微放大一点", "放大一点"):
-        return {"action": "camera_zoom", "parameters": {"zoom_factor": 2}}
+        return {"action": "camera_zoom", "parameters": {"value": 2}}
     if t in ("声音再大一点", "声音大一点", "音量再大一点"):
         return {"action": "speaker_volume", "parameters": {"value": 80}}
 
     vol_match = re.search(r"(?:把)?(?:喊话)?音量调到\s*(\d+)%?", t)
     if vol_match:
-        return {"action": "speaker_volume", "parameters": {"value": min(int(vol_match.group(1)), _DEVICE_LIMITS["max_volume"])}}
+        return {"action": "speaker_volume", "parameters": {"value": int(vol_match.group(1))}}
 
     bright_match = re.search(r"(?:把)?(?:探照灯)?亮度(?:调到|开到)\s*(\d+)%?", t)
     if bright_match:
-        return {"action": "searchlight_brightness", "parameters": {"value": min(int(bright_match.group(1)), _DEVICE_LIMITS["max_brightness"])}}
+        return {"action": "searchlight_brightness", "parameters": {"value": int(bright_match.group(1))}}
 
     zoom_match = re.search(r"(?:把相机|调整相机)?变焦(?:调到|到)?\s*(\d+)\s*倍", t)
     if zoom_match:
-        factor = min(float(zoom_match.group(1)), _DEVICE_LIMITS["max_zoom_factor"])
-        return {"action": "camera_zoom", "parameters": {"zoom_factor": int(factor) if factor.is_integer() else factor}}
+        factor = float(zoom_match.group(1))
+        return {"action": "camera_zoom", "parameters": {"value": int(factor) if factor.is_integer() else factor}}
 
     if "播放森林防火宣传语音" in t:
         return {"action": "speaker_speak", "parameters": {"text": "森林防火宣传语音"}}
@@ -179,7 +172,15 @@ def _parse_single_action(text: str) -> dict[str, Any] | None:
         deg = float(gimbal_down_match.group(1))
         if deg > 0 and ("向下" in t or "下倾" in t):
             deg = -deg
-        return {"action": "gimbal_pitch", "parameters": {"angle_deg": int(deg) if deg.is_integer() else deg}}
+        if deg == -90:
+            return {"action": "gimbal_90", "parameters": {}}
+        if deg == -45:
+            return {"action": "gimbal_45", "parameters": {}}
+        if deg == 0:
+            return {"action": "gimbal_reset", "parameters": {}}
+        if deg < 0:
+            return {"action": "gimbal_down", "parameters": {"angle_deg": abs(deg)}}
+        return {"action": "gimbal_up", "parameters": {"angle_deg": deg}}
 
     turn_left_match = re.search(r"(?:原地)?(?:向左|朝左|左)(?:转|偏航)\s*([0-9零一二两三四五六七八九十百]+)\s*度", t)
     if turn_left_match:
@@ -195,32 +196,32 @@ def _parse_single_action(text: str) -> dict[str, Any] | None:
 
     fwd_match = re.search(r"(?:向?前(?:面)?(?:飞|移动|平移)?|前进|往前(?:面)?(?:飞|移动|冲)?|朝机头方向前行)\s*([0-9零一二两三四五六七八九十百]+(?:\.\d+)?)\s*米", t)
     if fwd_match:
-        dist = min(parse_cn_number(fwd_match.group(1)), _DEVICE_LIMITS["max_relative_distance_m"])
+        dist = parse_cn_number(fwd_match.group(1))
         return {"action": "move_forward", "parameters": {"distance_m": int(dist) if dist.is_integer() else dist}}
 
     bwd_match = re.search(r"(?:向?后(?:飞|挪|移动)?|后退|往后(?:飞|挪|移动)?)\s*([0-9零一二两三四五六七八九十百]+(?:\.\d+)?)\s*米", t)
     if bwd_match:
-        dist = min(parse_cn_number(bwd_match.group(1)), _DEVICE_LIMITS["max_relative_distance_m"])
+        dist = parse_cn_number(bwd_match.group(1))
         return {"action": "move_backward", "parameters": {"distance_m": int(dist) if dist.is_integer() else dist}}
 
     left_match = re.search(r"(?:向?左(?:飞|移|平移|移动)?|左移|往左(?:飞|移|平移|移动)?)\s*([0-9零一二两三四五六七八九十百]+(?:\.\d+)?)\s*米", t)
     if left_match:
-        dist = min(parse_cn_number(left_match.group(1)), _DEVICE_LIMITS["max_relative_distance_m"])
+        dist = parse_cn_number(left_match.group(1))
         return {"action": "move_left", "parameters": {"distance_m": int(dist) if dist.is_integer() else dist}}
 
     right_match = re.search(r"(?:向?右(?:飞|移|平移|移动)?|右移|往右(?:飞|移|平移|移动)?)\s*([0-9零一二两三四五六七八九十百]+(?:\.\d+)?)\s*米", t)
     if right_match:
-        dist = min(parse_cn_number(right_match.group(1)), _DEVICE_LIMITS["max_relative_distance_m"])
+        dist = parse_cn_number(right_match.group(1))
         return {"action": "move_right", "parameters": {"distance_m": int(dist) if dist.is_integer() else dist}}
 
     up_match = re.search(r"(?:上升|向?上(?:飞|升)?|往上升|往上飞|升高)\s*([0-9零一二两三四五六七八九十百]+(?:\.\d+)?)\s*米", t)
     if up_match:
-        dist = min(parse_cn_number(up_match.group(1)), _DEVICE_LIMITS["max_relative_distance_m"])
+        dist = parse_cn_number(up_match.group(1))
         return {"action": "move_up", "parameters": {"distance_m": int(dist) if dist.is_integer() else dist}}
 
     down_match = re.search(r"(?:下降|向?下(?:飞|降)?|降低高度|往下降)\s*([0-9零一二两三四五六七八九十百]+(?:\.\d+)?)\s*米", t)
     if down_match:
-        dist = min(parse_cn_number(down_match.group(1)), _DEVICE_LIMITS["max_relative_distance_m"])
+        dist = parse_cn_number(down_match.group(1))
         return {"action": "move_down", "parameters": {"distance_m": int(dist) if dist.is_integer() else dist}}
 
     return None

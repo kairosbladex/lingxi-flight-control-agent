@@ -11,10 +11,12 @@ from dataclasses import dataclass, field, replace
 from copy import deepcopy
 from datetime import datetime, timezone
 from enum import Enum
+from functools import wraps
 import hashlib
 import json
 import math
 import re
+import threading
 from typing import TYPE_CHECKING, Any, Callable, Mapping
 from uuid import uuid4
 
@@ -45,10 +47,10 @@ from .mapping_interruption import (
     SimulatorMappingInterruptionGateway, interruption_required,
 )
 from .flight_policy import (
-    ADJUSTABLE, CONTROL_MESSAGE, MAPPING_MESSAGE, PATH_ACTIONS, POLICY_VERSION, MICRO_ACTIONS,
+    ADJUSTABLE, CONTROL_MESSAGE, MAPPING_MESSAGE, MAPPING_NOT_RESUMABLE_MESSAGE,
+    PATH_ACTIONS, POLICY_VERSION, MICRO_ACTIONS,
     TEMPORARY_ACTIONS, INTERRUPTING_ACTIONS, RESUME_ACTIONS, PolicyError,
-    check_flight_policy, check_path, mapping_interruption, normalize_parameters,
-    proposal_parameters,
+    check_flight_policy, check_path, mapping_interruption, normalize_parameters, proposal_parameters,
 )
 
 if TYPE_CHECKING:  # 运行时避免与 executor 成环（executor 依赖本模块的类型）
@@ -56,6 +58,15 @@ if TYPE_CHECKING:  # 运行时避免与 executor 成环（executor 依赖本模�
 
 #: 精确安全短语表，与 SafetyFastPathDecider 共用同一份定义。
 _SAFETY_FAST_PATH = SafetyFastPath()
+
+
+def _synchronized(method):
+    """串行化模拟器对共享状态的读写，避免并发确认产生竞态。"""
+    @wraps(method)
+    def guarded(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return guarded
 
 
 class FlightControlAction(str, Enum):
@@ -283,9 +294,9 @@ class FlightControlState:
     active_annotations: list[str] = field(default_factory=list)
     active_algorithms: list[str] = field(default_factory=list)
     device_limits: dict[str, Any] = field(default_factory=lambda: {
-        **{action: {"min": low, "max": high} for action, (_, low, high) in ADJUSTABLE.items()},
-        "gimbal_pitch_deg": {"min": -90, "max": 90},
-    })
+        action: {"min": low, "max": high} for action, (_, low, high) in ADJUSTABLE.items()
+        if action not in (_MOVES | {"turn_left", "turn_right", "takeoff"})
+    } | {"gimbal_pitch_deg": {"min": -90, "max": 90}})
     parameters: dict[str, float] = field(default_factory=lambda: {
         "move_speed_mps": 5.0,
         "roll_speed_dps": 30.0,
@@ -611,6 +622,7 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
                  path_checker=None, algorithm_gateway=None, annotation_gateway=None,
                  mapping_gateway=None):
         binding.validate()
+        self._lock = threading.RLock()
         # Keep the original MemoryFlightSimulator API available while adding
         # the complete action/state model around the same in-memory boundary.
         super().__init__(_context_for(binding))
@@ -645,6 +657,7 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         context.validate()
         return context
 
+    @_synchronized
     def snapshot(self) -> dict[str, Any]:
         return {
             "execution_mode": self.state.execution_mode,
@@ -652,6 +665,7 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             "state": self.state.to_dict(),
         }
 
+    @_synchronized
     def bind(self, binding: RuntimeBinding) -> None:
         binding.validate()
         if binding == self.binding:
@@ -679,7 +693,7 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
     def _route_precondition_error(self, action: FlightControlAction) -> tuple[str, str] | None:
         if action.value in RESUME_ACTIONS and (self.state.mapping_invalidated
                                               or self.state.route_resume_disabled):
-            return "MAPPING_NOT_RESUMABLE", "原测绘任务已失效，不可恢复航线。"
+            return "MAPPING_NOT_RESUMABLE", MAPPING_NOT_RESUMABLE_MESSAGE
         if action == FlightControlAction.CONTINUE_FROM_BREAKPOINT:
             if not self.state.route_id or self.state.breakpoint_index is None:
                 return "BREAKPOINT_UNAVAILABLE", "没有有效的原始任务断点。"
@@ -712,6 +726,7 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
                 return 'GIMBAL_TARGET_OUT_OF_RANGE', '目标超出模拟云台角度范围，不截断请求角度'
         return None
 
+    @_synchronized
     def preview(self, request: FlightControlActionRequest) -> FlightControlReceipt:
         try:
             parameters, adjustments = normalize_parameters(request.action, request.parameters, self.state.to_dict())
@@ -796,6 +811,7 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             keys += ["longitude", "latitude", "altitude_m", "yaw_deg"]
         return _json_hash({key: state[key] for key in keys})
 
+    @_synchronized
     def apply_task_event(self, event, *, task_batch_id, temporary_task_id=None, annotation_id=None,
                          event_id=None, sequence=None, occurred_at=None, state_version=None,
                          annotation_version=None):
@@ -1050,6 +1066,7 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         return {"required": False, "choice": selected,
                 "route_status": self.state.route_status, "resumable": True}
 
+    @_synchronized
     def confirm(self, confirmation_id: str, *, command_id: str, idempotency_key: str,
                 confirmation_binding: str, context_version: int) -> FlightControlReceipt:
         request = FlightControlActionRequest(command_id, idempotency_key, FlightControlAction.READ_STATE, {}, context_version)
@@ -1140,6 +1157,7 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         self._by_key[idempotency_key] = result
         return result
 
+    @_synchronized
     def cancel(self, confirmation_id: str, *, command_id: str, idempotency_key: str,
                confirmation_binding: str, context_version: int) -> FlightControlReceipt:
         request = FlightControlActionRequest(command_id, idempotency_key, FlightControlAction.READ_STATE, {}, context_version)

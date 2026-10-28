@@ -11,6 +11,7 @@ from lingxi_flight_control.cockpit import COCKPIT_SYSTEM_PROMPT, CockpitService
 from lingxi_flight_control.executor import SimulatorExecutor
 from lingxi_flight_control.full_control import FlightControlState, MemoryFlightControlSimulator, RuntimeBinding
 from lingxi_flight_control.ollama_decider import DEFAULT_OUTPUT_RESERVE_TOKENS, OllamaDecider
+from lingxi_flight_control.tool_selector import RuleBasedToolSelector
 from lingxi_flight_control.session import MemoryCheckpointStore, SessionNotFound
 from tools.bench.cockpit_intents import _BudgetedTransport, _counts, _progress, _selection_ids, _sha256, evaluate_outcomes
 
@@ -190,7 +191,8 @@ def run_service_live(dataset, *, model, base_url, max_samples, max_model_calls, 
         def decider_factory():
             return OllamaDecider(model=model, base_url=base_url, system_prompt=COCKPIT_SYSTEM_PROMPT,
                 temperature=0, timeout=timeout, max_attempts=1, transport=transport,
-                max_output_tokens=DEFAULT_OUTPUT_RESERVE_TOKENS)
+                max_output_tokens=DEFAULT_OUTPUT_RESERVE_TOKENS,
+                tool_selector=RuleBasedToolSelector())
         service = CockpitService(binding, executor, decider_factory, store=store, max_model_steps=3,
                                  timeout_sec=min(65, max_seconds), task_id="synthetic-task")
         session_id = "service-" + case["id"]

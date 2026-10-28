@@ -1,7 +1,7 @@
-"""59 工具选择准确率：检验模型在工具面扩大后是否退化（未来功能迭代的核心风险）。
+"""动作工具选择准确率：检验模型在工具面扩大后是否退化（未来功能迭代的核心风险）。
 
 用法（工作项 5 的检索前后对比，两条命令都跑一遍）：
-    PYTHONPATH=src python3 tools/bench/tool_selection.py qwen3.5:9b              # 全量 59 工具
+    PYTHONPATH=src python3 tools/bench/tool_selection.py qwen3.5:9b              # 全量动作工具
     PYTHONPATH=src python3 tools/bench/tool_selection.py qwen3.5:9b --selector   # 按意图检索候选子集
 
 两条命令的 46 条用例、工具描述与 SYS 完全一致，唯一变量是「是否按意图检索」，
@@ -81,6 +81,19 @@ SPEC = {
  "payload_dynamic":("控制动态载荷开关",["payload","enabled"],[]),
  "read_state":("读取当前飞行状态",[],[]),
 }
+
+# Keep the benchmark aligned with the runtime action registry; the legacy table
+# above remains a fallback when the script is run without PYTHONPATH.
+try:
+    from lingxi_flight_control.full_control import ACTION_SPECS
+    SPEC = {
+        action.value: (spec.description, list(spec.required),
+                       [name for name in spec.parameters if name not in spec.required])
+        for action, spec in ACTION_SPECS.items()
+    }
+except ImportError:
+    pass
+
 
 def build_tools():
     tools=[]

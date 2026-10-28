@@ -81,6 +81,16 @@ class AdversarialInputsTests(unittest.TestCase):
         self.assertEqual(res["value"], 10.0)
         self.assertEqual(len(adj), 0)
 
+    def test_08_decimal_payload_percentages_are_rounded_with_adjustment(self):
+        """载荷百分比小数先取整，避免在动作校验层抛出未捕获 ValueError。"""
+        for action in ("speaker_volume", "searchlight_brightness"):
+            with self.subTest(action=action):
+                result, adjustments = normalize_parameters(
+                    action, {"value": 55.5}, self.state_with_limits)
+                self.assertEqual(result["value"], 56)
+                self.assertEqual(adjustments[0]["requested"], 55.5)
+                self.assertEqual(adjustments[0]["effective"], 56)
+
 
 if __name__ == "__main__":
     unittest.main()

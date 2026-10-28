@@ -1,6 +1,6 @@
 """工具检索层：按用户意图缩小下发给模型的工具面，但**绝不减少能力**。
 
-59 个工具的契约全量下发要占 3213~3525 tokens（实测，见 `docs/model-selection.md`）。
+完整动作契约全量下发要占数千 tokens（实测，见 `docs/model-selection.md`）。
 本模块用确定性规则挑候选子集，把这份固定开销降下来。
 
 设计的第一原则是**失败方向不对称**：多给一个工具只是多花 token；少给一个工具会让
@@ -47,7 +47,7 @@ DOMAIN_KEYWORDS: Mapping[str, tuple[str, ...]] = {
     ),
     "route": (
         "航线", "航点", "断点", "盘旋", "绕点", "上传", "执行航线", "暂停", "恢复航线",
-        "经度", "纬度", "坐标", "半径", "测绘",
+        "经度", "纬度", "坐标", "半径", "测绘", "结束当前任务", "结束全部任务", "结束所有任务",
     ),
     "parameters": ("参数", "速度", "角速度", "默认"),
     "camera": (
@@ -55,7 +55,7 @@ DOMAIN_KEYWORDS: Mapping[str, tuple[str, ...]] = {
         "广角", "可见光", "红外", "放大", "回中", "复位", "俯仰", "向上", "向下",
     ),
     "infrared": ("红外", "测温", "热成像", "温度"),
-    "payload": ("载荷", "喊话", "探照灯", "甲烷", "投放", "挂载", "物资"),
+    "payload": ("载荷", "喊话", "播报", "音量", "亮度", "探照灯", "甲烷", "投放", "挂载", "物资", "AI", "算法"),
     "state": ("状态", "遥测", "读取", "当前", "电量"),
 }
 
@@ -208,7 +208,8 @@ class RuleBasedToolSelector:
         selected: list[str] = []
         for name, description in described:
             haystack = f"{name} {description}"
-            if self._domain_of(name) in domains or any(word in haystack for word in words):
+            if (self._domain_of(name) in domains
+                    or (domains != ('state',) and any(word in haystack for word in words))):
                 selected.append(name)
         # 前置动作：改变状态就得先能拿到控制权。
         for domain in domains:
@@ -226,7 +227,8 @@ class RuleBasedToolSelector:
         ordered = tuple(name for name in names if name in keep)
         if len(ordered) == len(names):
             return SelectionResult(names, "full", tuple(domains), "every tool matched")
-        if len(ordered) < self._min_candidates:
+        state_only_query = domains == ('state',) and 'read_state' in ordered
+        if len(ordered) < self._min_candidates and not state_only_query:
             # 候选面太窄：只碰到了弱关键词，宁可全量。
             return SelectionResult(names, "full", tuple(domains),
                                    "candidate set below min_candidates")

@@ -130,11 +130,15 @@ class PlatformExecutorTests(unittest.TestCase):
         self.assertEqual(self.transport.calls, [])
 
     def test_distance_bounds_capabilities_and_unsafe_fields_are_rejected(self):
-        for params in ({"distance_m": 20.01}, {"distance_m": 0}, {"distance_m": True},
-                       {"distance_m": float("nan")}, {"distance_m": 10, "url": "http://evil"},
-                       {"distance_m": 10, "actor_id": "other"}, {}):
+        for params, expected in (({"distance_m": 20.01}, "preview_required"),
+                                 ({"distance_m": 0}, "preview_required"),
+                                 ({"distance_m": True}, "rejected"),
+                                 ({"distance_m": float("nan")}, "rejected"),
+                                 ({"distance_m": 10, "url": "http://evil"}, "rejected"),
+                                 ({"distance_m": 10, "actor_id": "other"}, "rejected"),
+                                 ({}, "rejected")):
             with self.subTest(parameters=params):
-                self.assertEqual(self.executor().preview(self.request(parameters=params)).to_dict()["status"], "rejected")
+                self.assertEqual(self.executor().preview(self.request(parameters=params)).to_dict()["status"], expected)
         for changes in ({"profile": "D10"}, {"capabilities": {"move_forward": True}},
                         {"capabilities": {"move_forward": True, "UAV_MOVE_DISTANCE": "true"}},
                         {"state": {"online": True}}, {"observed_at": 990.0}):

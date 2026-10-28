@@ -36,6 +36,7 @@ from lingxi_flight_control.ollama_decider import (
     estimate_tokens,
     http_transport,
 )
+from lingxi_flight_control.tool_selector import RuleBasedToolSelector
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -377,7 +378,8 @@ def run_live(dataset, *, model, base_url, max_samples, max_model_calls, max_seco
         registry = build_proposal_registry(executor)
         decider = OllamaDecider(model=model, base_url=base_url, system_prompt=COCKPIT_SYSTEM_PROMPT,
                                temperature=0, timeout=timeout, max_attempts=1, transport=transport,
-                               max_output_tokens=DEFAULT_OUTPUT_RESERVE_TOKENS)
+                               max_output_tokens=DEFAULT_OUTPUT_RESERVE_TOKENS,
+                               tool_selector=RuleBasedToolSelector())
         loop = BoundedAgentLoop(decider, registry, max_steps=3)
         try:
             model_input = json.dumps({"current_request": case["input"], "original_intent": case["input"],

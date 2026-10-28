@@ -374,6 +374,18 @@ class CockpitConflictTests(unittest.TestCase):
         self.assertEqual(self.sim.state.annotation_algorithms['A'], ['烟火'])
         self.assertEqual(self.sim.state.global_algorithms, [])
 
+    def test_rejected_replace_preview_does_not_leak_into_next_ai_request(self):
+        self.send('打开AI识别烟火')
+        self.sim.state.control_owner = None
+        rejected = self.send('仅替换')
+        self.assertEqual(rejected['error_code'], 'CONTROL_NOT_OWNED')
+        self.assertIsNone(self.service._session('ai-conflict').pending_algorithm_mode)
+
+        self.sim.state.control_owner = 'actor'
+        next_reply = self.send('打开AI识别人员')
+        self.assertEqual(next_reply['status'], 'preview_required')
+        self.assertNotIn('algorithm_mode', next_reply['card'])
+
 
 class PlatformBoundaryTests(unittest.TestCase):
     def test_platform_has_no_algorithm_level_lifecycle(self):

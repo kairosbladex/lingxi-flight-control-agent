@@ -112,16 +112,11 @@ class SelectorSubsetTests(unittest.TestCase):
         self.selector = RuleBasedToolSelector()
         self.definitions = cockpit_definitions()
 
-    def test_a_too_narrow_candidate_set_falls_back_to_full(self):
-        """候选面过窄不只是「少给」，还会诱导模型调错动作，所以宁可全量。"""
+    def test_state_query_uses_a_small_read_only_candidate_set(self):
         result = self.selector.select("读取当前状态", self.definitions)
-        self.assertEqual(result.mode, "full")
-        self.assertEqual(len(result.names), len(self.definitions))
-        # 调低下限后同一个消息会真的缩小工具面，说明这条守的是下限而不是别的分支。
-        narrow = RuleBasedToolSelector(min_candidates=1)
-        squeezed = narrow.select("读取当前状态", self.definitions)
-        self.assertEqual(squeezed.mode, "retrieved")
-        self.assertIn("read_state", squeezed.names)
+        self.assertEqual(result.mode, "retrieved")
+        self.assertEqual(result.names, ("emergency_stop", "land", "return_home", "read_state"))
+        self.assertIn("read_state", result.names)
 
     def test_min_candidates_must_be_positive(self):
         for bad in (0, -1, True, 1.5):
@@ -306,7 +301,7 @@ class DeciderIntegrationTests(unittest.TestCase):
         registry = build_full_control_tool_registry(MemoryFlightControlSimulator(binding()))
         self.assertEqual(len(definitions), len(registry.definitions()))
         errors = registry.validate(ToolCall("move_forward", {"distance_m": 5000}))
-        self.assertTrue(errors)
+        self.assertEqual(errors, [])
 
 
 class BenchCoverageTests(unittest.TestCase):

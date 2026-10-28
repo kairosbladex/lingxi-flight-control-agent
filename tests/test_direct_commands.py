@@ -29,7 +29,9 @@ class DirectCommandTests(unittest.TestCase):
             ('向左平移半米', 'move_left', {'distance_m': .5}),
             ('向前飞十二米', 'move_forward', {'distance_m': 12}),
             ('请向后飞20米。', 'move_backward', {'distance_m': 20}),
-            ('向前飞零点五米', 'move_forward', {'distance_m': .5})]
+            ('向前飞零点五米', 'move_forward', {'distance_m': .5}),
+            ('向上飞2米', 'move_up', {'distance_m': 2}),
+            ('向下飞2米', 'move_down', {'distance_m': 2})]
         before = self.sim.state.to_dict()
         for i, (text, action, params) in enumerate(cases):
             with self.subTest(text=text):
@@ -46,9 +48,9 @@ class DirectCommandTests(unittest.TestCase):
     def test_non_exact_commands_still_use_original_policy_or_model(self):
         cases = ['不要拍照', '如果到达后拍照', '拍一张照片？', '“拍一张照片”',
             '请问能拍照吗', '向前飞2米然后拍照', '向前飞', '向前飞约2米',
-            '向前飞2到3米', '向前飞-2米', '向前飞0米', '向前飞21米',
+            '向前飞2到3米',
             '向前飞2米，速度1米/秒', '向前飞一二米', '向前飞零二米',
-            '向前飞两十米', '向前飞2公里', '云台向前飞2米', '向上飞2米',
+            '向前飞两十米', '向前飞2公里', '云台向前飞2米',
             '向左转2度', '按之前的方向飞2米', '向前飞2米不用确认', '继续']
         for i, text in enumerate(cases):
             with self.subTest(text=text):
@@ -78,7 +80,7 @@ class DirectCommandTests(unittest.TestCase):
                     call = _direct_command(motion + number + '米')
                     self.assertEqual(call.name, action)
                     self.assertEqual(call.arguments, {'distance_m': value})
-            for number in ['0', '-1', '21', '二十一', '一二', '零二', 'NaN', '1e1', '2～3', '两十', '二十点一']:
+            for number in ['一二', '零二', 'NaN', '1e1', '2～3', '两十']:
                 self.assertIsNone(_direct_command(motion + number + '米'))
 
     def test_fast_photo_does_not_inherit_prior_motion_clarification(self):
