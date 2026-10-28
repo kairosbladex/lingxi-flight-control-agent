@@ -249,7 +249,7 @@ com.zhuoyi.aiplatform.flightcontrol
   - `services_reply`：相机/云台/`fly_to_point`，`result=0` → `accepted`，非零 → `failed`；
   - `events/fly_to_point_progress`：`wayline_progress/in_progress`、`wayline_ok/completed`、`wayline_failed/failed`、`wayline_cancel/cancelled`，成功/进行中携带非零 result → `conflict`；
   - 拒绝重复键、尾随内容、topic/gateway 不一致、时间越界、缺失或非法 bid/tid、负返回码。
-- 冻结 fixture：[dji-receipts-v1.json](../src/test/resources/flightcontrol/dji-receipts-v1.json) 及相邻 provenance；10 个合成案例，来源为现有 ktd_backend `DJUtil`/`DJMethod`/`DJTopic`/`DeviceCommandReceipt`。
+- 冻结 fixture：Java 外部工作树中的 `src/test/resources/flightcontrol/dji-receipts-v1.json` 及相邻 provenance；10 个合成案例，来源为现有 ktd_backend `DJUtil`/`DJMethod`/`DJTopic`/`DeviceCommandReceipt`。本仓不保存该文件副本。
 - 验证：
   - `./mvnw -B verify`：**41/41**，构建通过；`git diff --check` 通过；
   - J3 新增 8 项：encoder 4、parser 2、命令/回执往返 2；
