@@ -1,0 +1,20 @@
+{
+  "schema_version": "cockpit-intent-fixture-provenance/v1",
+  "created_at": "2026-10-29",
+  "source_kind": "synthetic_agent_authored_contract",
+  "source_document": "灵犀平台自然语言智能控制功能设计规范V1.4.docx（本机桌面，未入库）",
+  "source_document_sha256": "e4e42b712e3249d1fc09d0968445525c0702808e894290d49df2b70301108c78",
+  "derived_sections": ["2.2.1", "2.2.3", "2.2.4", "2.2.5", "4.3.1", "4.3.2", "4.3.3", "表6 系统不支持"],
+  "human_reviewed": false,
+  "real_flight_truth": false,
+  "fixture": "fixtures/v14-dictionary-intents-v1.json",
+  "fixture_sha256": "a0ee929fb7665355a10b511b1bdf3b2cb3c3957ee5a6dc207eec0ffcb0e00c6d",
+  "scenario_count": 31,
+  "labels_frozen_before_candidate_run": true,
+  "known_label_assumptions": [
+    "v14_flight_03：自动航线中'悬停'期望 route_pause（依据 2.2.4 与系统提示词），而非 hover 工具。",
+    "v14_flight_06：评测上下文无静态标注库，'1号水塔'期望追问。",
+    "v14_payload_09：算法名逐字冻结为'烟火'。",
+    "策略拦截类按 v2 服务契约记为 clarification。"
+  ]
+}
