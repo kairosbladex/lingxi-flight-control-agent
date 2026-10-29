@@ -26,7 +26,7 @@ next_action: 先登记外部联调前置条件，再单独申请并验证真实�
 - 当前未跟踪评测产物记录了 58 个样本、93 个动作和 62 个参数的合成离线契约匹配；其 `code_sha` 为 `f359b27`，工作树为 dirty，且明确未调用 Ollama、未连接平台或设备，因此不能当作当前 HEAD 的发布门禁。
 - 2026-10-29 真实 `qwen3.5:9b` 服务链路评测：v2 冻结集 89/102 正确，V1.4 词典补充集原始 22/31，危险动作提议 0；航线中/无控制权微操会模型超时、拿不到规范拦截话术，见 [V1.4 真实模型意图评测](../evidence/v14-live-intent-eval-20261029.md)。
 - 2026-10-29 FLIGHT-V14-POLICY-GATE（分支 `bugfix/v14-deterministic-policy-gate`）：前门禁保持不变；后续补齐模型误提 `control_acquire` 的无控制权兜底，并核验 Ktd/卓翼平台快照字段。离线全量 1389 项通过；真实补充集重跑 31/31、危险提议 0，三条真实探针均返回 `rejected/CONTROL_NOT_OWNED` 规范话术，见 [验收记录](../ACCEPTANCE_FLIGHT-V14-POLICY-GATE.md)。
-- 2026-10-29 V1.4 产品裁决落地（分支 `bugfix/v14-policy-alignment`）：非测绘航线中坐标飞行/环绕按 P1 拦截，测绘场景保留 `MAPPING_MESSAGE` 确认卡，点飞行围栏话术和临时任务 120 秒按裁决更新；离线 1391 项通过，真实平台/模型未验证，见 [验收记录](../ACCEPTANCE_FLIGHT-V14-POLICY-ALIGNMENT.md)。
+- 2026-10-29 V1.4 产品裁决落地（分支 `bugfix/v14-policy-alignment`）：非测绘航线中坐标飞行/环绕按 P1 拦截，测绘场景保留 `MAPPING_MESSAGE` 确认卡，点飞行围栏话术和临时任务 120 秒按裁决更新；离线 1395 项通过；平台缺测绘原子作废契约时预览即拒；2026-10-30 真实 qwen3.5:9b 补充集 31/31、4 条航线中探针均符合裁决，危险提议 0；真实平台/设备未验证，见 [验收记录](../ACCEPTANCE_FLIGHT-V14-POLICY-ALIGNMENT.md)。
 - 2026-10-29 飞行中命名目标（分支 `feature/v14-flight-named-target`）：可选静态标注 resolver、唯一/歧义/线面体拒绝、坐标 grounding 与确认时版本复核已接入；冻结集合与 service 评测入口已建立，离线 1413 项通过；2026-10-30 真实 qwen3.5:9b：v2 冻结集 92/102、补充集 31/31、命名目标 v2 集 14/19（0 判错、5 超时，根因为标注高度入模型、control_acquire 描述矛盾与全量工具下发），危险提议 0；resolver 默认关闭，三点处理前不建议开启；真实地图/设备未验证，见 [验收记录](../ACCEPTANCE_FLIGHT-V14-NAMED-TARGET.md)。
 - 真实平台联调前置条件已整理为 Java 快照、控制权租约、逐动作权限、`route_status`、回执、围栏、设备和书面授权等外部条件，见 [平台联调前置条件](../evidence/platform-integration-prereq-20261027.md)。
 

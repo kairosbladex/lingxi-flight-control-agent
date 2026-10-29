@@ -1,0 +1,134 @@
+{
+  "model": "qwen3.5:9b",
+  "base_url_sha256": "7730e928dfe8644027f02a6a6113fdc206e3128c8f55b7f5dc44bc4274ed5195",
+  "prompt_version": "cockpit-prompt-v1.2",
+  "scope": "preview_only_no_confirmation",
+  "rows": [
+    {
+      "task_type": "inspection",
+      "route_status": "running",
+      "input": "去东经118，北纬34，高50",
+      "status": "rejected",
+      "error_code": "ROUTE_PAUSE_REQUIRED",
+      "message": "当前正在执行自动航线，请先说‘暂停航线’或‘悬停’再操作。",
+      "card_action": null,
+      "card_warnings": null,
+      "confirmations": 0,
+      "model_calls": [
+        {
+          "tool_calls": [
+            [
+              "point_flight",
+              {
+                "longitude": 118,
+                "latitude": 34,
+                "altitude_m": 50
+              }
+            ]
+          ],
+          "done_reason": "stop",
+          "eval_count": 203,
+          "prompt_eval_count": 5224,
+          "elapsed_ms": 14561
+        }
+      ],
+      "elapsed_ms": 14571
+    },
+    {
+      "task_type": "inspection",
+      "route_status": "running",
+      "input": "围绕东经118.1，北纬34.1绕一圈，半径30米",
+      "status": "rejected",
+      "error_code": "ROUTE_PAUSE_REQUIRED",
+      "message": "当前正在执行自动航线，请先说‘暂停航线’或‘悬停’再操作。",
+      "card_action": null,
+      "card_warnings": null,
+      "confirmations": 0,
+      "model_calls": [
+        {
+          "tool_calls": [
+            [
+              "point_orbit",
+              {
+                "longitude": 118.1,
+                "latitude": 34.1,
+                "radius_m": 30
+              }
+            ]
+          ],
+          "done_reason": "stop",
+          "eval_count": 237,
+          "prompt_eval_count": 2471,
+          "elapsed_ms": 12172
+        }
+      ],
+      "elapsed_ms": 12179
+    },
+    {
+      "task_type": "mapping",
+      "route_status": "running",
+      "input": "去东经118，北纬34，高50",
+      "status": "preview_required",
+      "error_code": null,
+      "message": "请核对动作与参数，确认后仅执行这一项。电子围栏接口不可用（PATH_CHECKER_UNAVAILABLE），已按 V1.4 2.2.2 跳过该项检查并继续业务流程；这不代表路径安全或设备避障已验证。中断将导致测绘成果失效，是否确认继续？确认后关闭自动拼图，原测绘任务不可恢复。",
+      "card_action": "point_flight",
+      "card_warnings": [
+        "电子围栏接口不可用（PATH_CHECKER_UNAVAILABLE），已按 V1.4 2.2.2 跳过该项检查并继续业务流程；这不代表路径安全或设备避障已验证。",
+        "中断将导致测绘成果失效，是否确认继续？确认后关闭自动拼图，原测绘任务不可恢复。"
+      ],
+      "confirmations": 0,
+      "model_calls": [
+        {
+          "tool_calls": [
+            [
+              "point_flight",
+              {
+                "longitude": 118,
+                "latitude": 34,
+                "altitude_m": 50
+              }
+            ]
+          ],
+          "done_reason": "stop",
+          "eval_count": 211,
+          "prompt_eval_count": 5224,
+          "elapsed_ms": 14834
+        }
+      ],
+      "elapsed_ms": 14846
+    },
+    {
+      "task_type": "mapping",
+      "route_status": "running",
+      "input": "围绕东经118.1，北纬34.1绕一圈，半径30米",
+      "status": "preview_required",
+      "error_code": null,
+      "message": "请核对动作与参数，确认后仅执行这一项。电子围栏接口不可用（PATH_CHECKER_UNAVAILABLE），已按 V1.4 2.2.2 跳过该项检查并继续业务流程；这不代表路径安全或设备避障已验证。中断将导致测绘成果失效，是否确认继续？确认后关闭自动拼图，原测绘任务不可恢复。",
+      "card_action": "point_orbit",
+      "card_warnings": [
+        "电子围栏接口不可用（PATH_CHECKER_UNAVAILABLE），已按 V1.4 2.2.2 跳过该项检查并继续业务流程；这不代表路径安全或设备避障已验证。",
+        "中断将导致测绘成果失效，是否确认继续？确认后关闭自动拼图，原测绘任务不可恢复。"
+      ],
+      "confirmations": 0,
+      "model_calls": [
+        {
+          "tool_calls": [
+            [
+              "point_orbit",
+              {
+                "longitude": 118.1,
+                "latitude": 34.1,
+                "radius_m": 30
+              }
+            ]
+          ],
+          "done_reason": "stop",
+          "eval_count": 252,
+          "prompt_eval_count": 2471,
+          "elapsed_ms": 12436
+        }
+      ],
+      "elapsed_ms": 12444
+    }
+  ]
+}

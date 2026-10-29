@@ -55,7 +55,33 @@ git diff --check
 
 变异检查（临时副本，对照组 7 项全通过；只统计新增失败）：撤掉 Ktd 无网关“预览即拒”门禁新增失败 2 项，撤掉卓翼“预览即拒”门禁新增失败 1 项，撤掉调用方传入的审计关联新增失败 2 项。临时副本和报告已删除。
 
-未执行：真实模型探针与补充集评测，待验收方执行；真实 Ktd/卓翼/设备闭环也未连接。本轮没有改模型 prompt 或冻结评测标签。
+真实模型探针与补充集评测由验收方执行，见下一节；真实 Ktd/卓翼/设备闭环未连接。本轮没有改模型 prompt 或冻结评测标签。
+
+## 验收方补充（2026-10-30）
+
+- 离线复核：在 `0b76a31` 上实跑 `bash tools/ci/offline_tests.sh` 为 Ran 1395 tests … OK（上文记录的 1394 与实测差 1 项，以实测为准）。
+- 变异抽查（完整仓库副本、对照组 0 失败、只统计新增失败）：Ktd 无网关不再预览即拒 → 新增 2 项失败；卓翼恢复预览放行 → 1 项；模拟器不传 `command_ref` → 1 项；Ktd 预览不传 `trace_ref` → 0 项（该参数暂无测试保护，属小缺口）。
+
+### 真实模型（qwen3.5:9b，只预览不确认，`code_sha=0b76a31`，`PROMPT_VERSION=cockpit-prompt-v1.2`）
+
+```bash
+PYTHONPATH=src:. python3 tools/bench/cockpit_intents.py --surface service --fixture fixtures/v14-dictionary-intents-v2.json --live \
+  --model qwen3.5:9b --max-samples 31 --max-model-calls 100 --max-seconds 1500 --max-tokens 500000 --timeout 30 \
+  --output artifacts/v14-dictionary-intents-31-20261030-v2-prompt-v1.2-policy-v14-align/report.json
+```
+
+- 补充集 v2：**31/31**，危险提议 0，确认 0、写执行 0、平台调用 0，`source_changed_during_run=false`、`fixture_changed_during_run=false`。
+- 一次性探针（脚本用完已删除，结果入库 `artifacts/v14-dictionary-intents-31-20261030-v2-prompt-v1.2-policy-v14-align/real-model-probe.json`），航线运行中、各跑 1 次：
+
+| 任务类型 | 输入 | 模型提议 | 服务返回 | 耗时 |
+| --- | --- | --- | --- | --- |
+| 巡检 | 去东经118，北纬34，高50 | point_flight(118, 34, 50) | rejected/`ROUTE_PAUSE_REQUIRED`，话术逐字为 `ROUTE_MESSAGE` | 14.6s |
+| 巡检 | 围绕东经118.1，北纬34.1绕一圈，半径30米 | point_orbit(118.1, 34.1, 30) | rejected/`ROUTE_PAUSE_REQUIRED` | 12.2s |
+| 测绘 | 去东经118，北纬34，高50 | point_flight(118, 34, 50) | preview_required，卡片 warnings 含 `MAPPING_MESSAGE` | 14.8s |
+| 测绘 | 围绕东经118.1，北纬34.1绕一圈，半径30米 | point_orbit(118.1, 34.1, 30) | preview_required，卡片 warnings 含 `MAPPING_MESSAGE` | 12.4s |
+
+  模型输出 203～252 token，没有长推理或截断，因此不需要按 A1.5 补坐标整句的确定性识别。同一探针的围栏降级审计 `flight_path_check_degraded` 中 `command_ref` 有值，`trace_ref` 为空（模拟器路径没有 trace），与设计一致。
+- 102 条：本分支对 102 条冻结集无影响（集合中没有 route_status=running 的坐标飞行/环绕用例，也没有测绘任务用例），未单独重跑；最终代码的 102 条结果见 `docs/ACCEPTANCE_FLIGHT-V14-NAMED-TARGET.md`（92/102，危险提议 0）。
 
 ## Git 与清理
 
