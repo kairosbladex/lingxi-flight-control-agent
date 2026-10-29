@@ -11,7 +11,8 @@ from lingxi_flight_control import (
 from lingxi_flight_control.cockpit import CockpitService
 from lingxi_flight_control.flight_policy import CONTROL_MESSAGE, MAPPING_MESSAGE, ROUTE_MESSAGE
 from lingxi_flight_control.target_resolver import (
-    TargetCandidate, TargetGeometry, TargetResolverError,
+    TARGET_NOT_FOUND, TARGET_RESOLVER_UNAVAILABLE, TargetCandidate, TargetGeometry,
+    TargetResolverError,
 )
 
 
@@ -91,6 +92,15 @@ class NamedTargetServiceTests(unittest.TestCase):
         self.assertIn('经度113.201', reply['message'])
         self.assertEqual(self.brain_calls, [])
 
+    def test_multi_target_is_rejected_only_in_single_action_mode(self):
+        resolver = RecordingResolver([point(name='A塔')])
+        service = self.make_service(resolver, ModelDecision(DecisionKind.FINAL, message='不应调用'))
+        reply = self.message(service, '去A塔，再去B塔')
+        self.assertEqual((reply['status'], reply['error_code']),
+                         ('rejected', 'MULTI_TARGET_UNSUPPORTED'))
+        self.assertEqual(resolver.calls, [])
+        self.assertEqual(self.brain_calls, [])
+
     def test_line_and_volume_are_rejected_before_model(self):
         for candidate, text, message in (
                 (TargetCandidate('line-1', 'B河道', TargetGeometry.LINE, 113.3, 23.2, 12, 'v1', 'fixture', 'project-1'),
@@ -105,12 +115,44 @@ class NamedTargetServiceTests(unittest.TestCase):
                 self.assertIn(message, reply['message'])
                 self.assertEqual(self.brain_calls, [])
 
-    def test_missing_target_and_resolver_failure_do_not_let_model_guess(self):
-        for resolver in (RecordingResolver([]), RecordingResolver(error=RuntimeError('private detail'))):
-            service = self.make_service(resolver, ModelDecision(DecisionKind.FINAL, message='不应调用'))
-            reply = self.message(service, '去不存在的塔，高50米')
-            self.assertEqual(reply['status'], 'clarification')
-            self.assertEqual(self.brain_calls, [])
+    def test_not_found_falls_back_to_the_existing_model_path(self):
+        resolver = RecordingResolver([])
+        service = self.make_service(resolver, ModelDecision(DecisionKind.CLARIFY, message='请提供坐标'))
+        named = self.message(service, '去不存在的塔，高50米')
+        named_calls = len(self.brain_calls)
+
+        fallback = self.make_service(None, ModelDecision(DecisionKind.CLARIFY, message='请提供坐标'))
+        old = self.message(fallback, '去不存在的塔，高50米')
+        self.assertEqual(named['status'], old['status'])
+        self.assertEqual(named.get('error_code'), old.get('error_code'))
+        self.assertEqual(named_calls, 1)
+        self.assertEqual(len(self.brain_calls), 1)
+        self.assertEqual(len(resolver.calls), 1)
+
+    def test_resolver_unavailable_still_clarifies_without_model_guess(self):
+        resolver = RecordingResolver(error=RuntimeError('private detail'))
+        service = self.make_service(resolver, ModelDecision(DecisionKind.FINAL, message='不应调用'))
+        reply = self.message(service, '去不存在的塔，高50米')
+        self.assertEqual((reply['status'], reply['error_code']),
+                         ('clarification', TARGET_RESOLVER_UNAVAILABLE))
+        self.assertEqual(self.brain_calls, [])
+
+    def test_non_target_phrases_match_resolver_disabled_path(self):
+        phrases = ('去拍张照', '绕过前面的障碍物', '绕过障碍物', '去1号水塔拍照', '去吧',
+                   '飞到上面去', '前往下一个航点')
+        for text in phrases:
+            with self.subTest(text=text):
+                resolver = RecordingResolver([point(name='1号水塔')])
+                named = self.make_service(resolver, ModelDecision(DecisionKind.CLARIFY, message='请重新说明'))
+                named_reply = self.message(named, text)
+                named_calls = len(self.brain_calls)
+                fallback = self.make_service(None, ModelDecision(DecisionKind.CLARIFY, message='请重新说明'))
+                fallback_reply = self.message(fallback, text)
+                self.assertEqual(named_reply['status'], fallback_reply['status'])
+                self.assertEqual(named_reply.get('error_code'), fallback_reply.get('error_code'))
+                self.assertEqual(named_calls, 1)
+                self.assertEqual(len(self.brain_calls), 1)
+                self.assertEqual(resolver.calls, [])
 
     def test_model_coordinates_must_match_resolved_target(self):
         resolver = RecordingResolver([point()])
@@ -154,6 +196,34 @@ class NamedTargetServiceTests(unittest.TestCase):
         self.assertEqual((confirmed.payload['status'], confirmed.payload['error_code']),
                          ('rejected', 'TARGET_VERSION_CHANGED'))
         self.assertIsNone(self.simulator.state.last_action)
+
+    def test_confirm_revalidation_distinguishes_service_unavailable_and_deleted_target(self):
+        for error, expected_code, expected_message in (
+                (TargetResolverError(TARGET_RESOLVER_UNAVAILABLE), TARGET_RESOLVER_UNAVAILABLE,
+                 '暂时无法核验静态标注，未执行。'),
+                (TargetResolverError(TARGET_NOT_FOUND), TARGET_NOT_FOUND,
+                 '静态标注已删除或无法找到，未执行。')):
+            with self.subTest(expected_code=expected_code):
+                target = point()
+                resolver = RecordingResolver([target])
+                service = self.make_service(
+                    resolver,
+                    ModelDecision(DecisionKind.TOOL_CALL,
+                                  tool_call=ToolCall('point_orbit', {
+                                      'longitude': 113.201, 'latitude': 23.101, 'radius_m': 30})))
+                reply = self.message(service, '围绕唯一水塔绕一圈，半径30米')
+                card = reply['card']
+                resolver.error = error
+                payload = {key: card[key] for key in (
+                    'confirmation_id', 'confirmation_binding', 'command_id', 'idempotency_key',
+                    'context_version')}
+                confirmed = service.handle('POST', '/api/flight-control/agent/confirm',
+                                           json.dumps(payload),
+                                           {'X-Agent-Session': 'named-target-tab'})
+                self.assertEqual((confirmed.payload['status'], confirmed.payload['error_code']),
+                                 ('rejected', expected_code))
+                self.assertEqual(confirmed.payload['message'], expected_message)
+                self.assertIsNone(self.simulator.state.last_action)
 
     def test_negative_and_conditional_sentences_do_not_call_resolver(self):
         resolver = RecordingResolver([point()])
@@ -205,6 +275,30 @@ class NamedTargetServiceTests(unittest.TestCase):
         reply = self.message(service, '去唯一水塔')
         self.assertEqual(reply['status'], 'clarification')
         self.assertNotIn('resolved_target', brain_inputs[0])
+
+    def test_resolver_disabled_input_matches_v12_shape_for_unresolved_text(self):
+        first = []
+
+        class FirstBrain:
+            def decide(self, text, checkpoint, tools):
+                first.append(text)
+                return ModelDecision(DecisionKind.CLARIFY, message='请提供坐标')
+
+        service = CockpitService(self.binding, self.simulator, lambda: FirstBrain(), clock=lambda: 1000.0)
+        self.message(service, '去拍张照')
+
+        second = []
+
+        class SecondBrain:
+            def decide(self, text, checkpoint, tools):
+                second.append(text)
+                return ModelDecision(DecisionKind.CLARIFY, message='请提供坐标')
+
+        resolver = RecordingResolver([point(name='1号水塔')])
+        service = CockpitService(self.binding, self.simulator, lambda: SecondBrain(),
+                                 target_resolver=resolver, clock=lambda: 1000.0)
+        self.message(service, '去拍张照')
+        self.assertEqual(first, second)
 
 
 if __name__ == '__main__':

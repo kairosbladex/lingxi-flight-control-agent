@@ -67,7 +67,8 @@ from .target_resolver import (
 )
 
 # 模型可见文本（系统提示词 + 提议工具描述）的版本号；任何一处变更都必须升版，
-# 并写入评测 run 记录与确认卡，便于回放归因。v1.2 即此前评测产物目录名里的基线，内容未变。
+# 并写入评测 run 记录与确认卡，便于回放归因。v1.3 相对 v1.2 的唯一差异是 resolver
+# 开启时本轮输入增加 ``resolved_target``；resolver 关闭时模型可见内容与 v1.2 逐字一致。
 PROMPT_VERSION = "cockpit-prompt-v1.3"
 
 COCKPIT_SYSTEM_PROMPT = """你是灵犀无人机飞控助手。你使用大模型理解自然语言，只提出下一项动作。
@@ -340,9 +341,28 @@ _TARGET_FLIGHT = re.compile(
     r'^(?:请|帮我)?(?:去|飞到|飞往|前往)\s*(?P<target>[^，,。；;!?！？]+?)'
     r'(?:\s*[，,].*)?[。.!！]?$')
 _TARGET_ORBIT = re.compile(
-    r'^(?:请|帮我)?(?:围绕|环绕|绕)\s*(?P<target>[^，,。；;!?！？]+?)'
+    r'^(?:请|帮我)?(?:围绕|环绕|绕(?!过|开|行))\s*(?P<target>[^，,。；;!?！？]+?)'
     r'(?:\s*[，,].*)?[。.!！]?$')
 _TARGET_ONLY_POINT_MESSAGE = '飞行中只支持单点指点飞行或环绕，请选择点标注。'
+_TARGET_NAME_ACTIONS = re.compile(r'拍照|拍摄|拍|看|录制|录像|录|转|飞|升|降|上升|下降')
+_TARGET_NAME_DIRECTIONS = re.compile(
+    r'上面|下面|前面|后面|上方|下方|前方|后方|左面|右面|左边|右边|左侧|右侧|'
+    r'上一个|下一个|航点|返航点|返航|悬停点|去$')
+_TARGET_NAME_MODAL = frozenset({'吧', '呢', '呀', '啊', '了', '吗'})
+
+
+def _valid_target_name(name):
+    """只接受至少两个字符的名词短语，避免把动作、方位和语气词当标注名。"""
+    if not isinstance(name, str):
+        return False
+    name = name.strip()
+    if len(name) <= 1 or name in _TARGET_NAME_MODAL:
+        return False
+    if _TARGET_NAME_ACTIONS.search(name) or _TARGET_NAME_DIRECTIONS.search(name):
+        return False
+    return True
+
+
 def _target_mention(text):
     """只抽取明确的单目标飞行句式；坐标、否定、条件和询问不触发解析。"""
     if (_TARGET_COORDINATE_WORDS.search(text)
@@ -353,7 +373,9 @@ def _target_mention(text):
         intent = ('point_orbit' if re.match(r'^(?:请|帮我)?(?:围绕|环绕|绕)', text)
                   else 'point_flight' if re.match(r'^(?:请|帮我)?(?:去|飞到|飞往|前往)', text)
                   else None)
-        if intent is not None:
+        first_clause = re.split(r'(?:再|然后|接着|同时)', text, maxsplit=1)[0]
+        first_name = re.sub(r'^(?:请|帮我)?(?:去|飞到|飞往|前往|围绕|环绕|绕)\s*', '', first_clause)
+        if intent is not None and _valid_target_name(first_name):
             return {'intent': intent, 'name': text, 'multi': True}
     for intent, pattern in (('point_orbit', _TARGET_ORBIT), ('point_flight', _TARGET_FLIGHT)):
         match = pattern.fullmatch(text.strip())
@@ -362,7 +384,7 @@ def _target_mention(text):
         name = re.sub(r'\s*(?:绕一圈|环绕一圈|一圈)\s*$', '', match.group('target'))
         name = re.sub(r'\s*(?:飞行)?高(?:度)?\s*[负-]?[\d一二两三四五六七八九十百千点]+\s*(?:米|m)?\s*$', '', name)
         name = name.strip()
-        if name:
+        if _valid_target_name(name):
             return {'intent': intent, 'name': name}
     return None
 
@@ -1753,10 +1775,13 @@ class CockpitService:
             return mention, None, self._base(status='rejected', error_code=gate[0],
                                              message=gate[1], interpretation_source='deterministic-policy-gate',
                                              state=state)
-        if mention.get('multi'):
+        if mention.get('multi') and not self._plan_enabled:
             status, code, message = self._target_error(mention, TargetResolverError(MULTI_TARGET_UNSUPPORTED))
             return mention, None, self._base(status=status, error_code=code, message=message,
                                              interpretation_source='target-resolver', state=state)
+        if mention.get('multi'):
+            # 计划模式保留复合句给既有规划链路；本轮不在规划链路里做命名目标 grounding。
+            return None, None, None
         query = TargetQuery(
             project_id=self.binding.project_id,
             actor_id=self.binding.actor_id,
@@ -1765,6 +1790,9 @@ class CockpitService:
         try:
             resolved = resolve_target(self._target_resolver, query)
         except TargetResolverError as error:
+            if error.code == TARGET_NOT_FOUND:
+                # 查不到名称时按 resolver 关闭的旧路径继续，让既有门禁和模型决定如何澄清。
+                return mention, None, None
             status, code, message = self._target_error(mention, error)
             return mention, None, self._base(status=status, error_code=code, message=message,
                                              interpretation_source='target-resolver', state=state)
@@ -1782,8 +1810,12 @@ class CockpitService:
             intent=card['action'], target_id=target['target_id'])
         try:
             current = resolve_target(self._target_resolver, query)
-        except TargetResolverError:
-            return TARGET_VERSION_CHANGED
+        except TargetResolverError as error:
+            if error.code in {TARGET_RESOLVER_UNAVAILABLE, TARGET_NOT_FOUND}:
+                return error.code
+            if error.code == TARGET_VERSION_CHANGED:
+                return TARGET_VERSION_CHANGED
+            return error.code
         parameters = card.get('parameters') or {}
         if (current.version != target.get('version')
                 or current.longitude != parameters.get('longitude')
@@ -2209,8 +2241,13 @@ class CockpitService:
                 if target_error is not None:
                     self._invalidate(session)
                     self._persist_session_state(session_id, session)
+                    target_message = {
+                        TARGET_VERSION_CHANGED: '静态标注版本或坐标已变化，请重新预览后确认。',
+                        TARGET_RESOLVER_UNAVAILABLE: '暂时无法核验静态标注，未执行。',
+                        TARGET_NOT_FOUND: '静态标注已删除或无法找到，未执行。',
+                    }.get(target_error, '静态标注复核失败，未执行。')
                     return self._base(status='rejected', error_code=target_error,
-                                      message='静态标注版本或坐标已变化，请重新预览后确认。',
+                                      message=target_message,
                                       state=self._state())
             method = self.executor.cancel if cancel else self.executor.confirm
             receipt = method(**payload).to_dict()

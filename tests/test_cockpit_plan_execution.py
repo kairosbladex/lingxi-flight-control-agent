@@ -94,11 +94,35 @@ class CockpitPlanExecutionTests(unittest.TestCase):
         self.assertGreater(self.simulator.state.longitude, 113)
         self.assertEqual(self.simulator.state.camera['photo_count'], 1)
         self.assertEqual(self.fallback.inputs, [])
-
         after = self.simulator.state.to_dict()
         self.assertEqual(self.confirm(card), receipt)
         self.assertEqual(self.simulator.state.to_dict(), after)
         self.assertEqual(self.simulator.state.camera['photo_count'], 1)
+
+    def test_named_multi_target_is_left_to_plan_mode(self):
+        resolver_calls = []
+
+        class Resolver:
+            def resolve(self, query):
+                resolver_calls.append(query)
+                return []
+
+        self.plan(final('请在计划模式下明确目标坐标。'))
+        service = CockpitService(
+            self.binding, self.simulator, lambda: self.fallback,
+            clock=lambda: self.clock[0], enable_plan_execution=True,
+            plan_decider_factory=lambda: self.planner, max_plan_steps=5,
+            target_resolver=Resolver())
+        response = service.handle(
+            'POST', '/api/flight-control/agent/messages',
+            json.dumps({'text': '去A塔，再去B塔', 'request_id': 'plan-target-1',
+                        'context_version': 1}),
+            {'X-Agent-Session': 'tab-plan-target'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.payload['status'], 'final')
+        self.assertNotEqual(response.payload.get('error_code'), 'MULTI_TARGET_UNSUPPORTED')
+        self.assertEqual(resolver_calls, [])
+        self.assertEqual(len(self.planner.inputs), 1)
 
     def test_plan_stops_at_first_failed_step_and_does_not_run_the_rest(self):
         self.plan(action('move_forward', distance_m=10), action('route_pause'), final())
