@@ -167,7 +167,7 @@ Ran 1389 tests ... OK
 git diff --check
 ```
 
-新增用例覆盖三种自然语言乱提 `control_acquire`、已持有/未知控制权、模型调用期间状态变化、明确申请控制权，以及 Ktd authoritative/legacy/不可用和卓翼 `route_status=running`。legacy 用例显式使用 `legacy_read_api=True`，并断言 `available=true`、`authorization_quality=legacy-read-api`、`control_owner=other`；新增 legacy 模型误提 `control_acquire` 用例仍返回原 clarification。变异检查：临时移除 `_proposal` 兜底分支后，23 项中 4 项失败（3 个普通乱提输入 + 1 个 legacy 误提输入）；分别移除 `_policy_gate_rejection` 与 `_proposal` 中的 `authorization_quality == 'authoritative'` 条件后，各有 1 项测试失败，随后恢复实现。完整离线测试为 1389 项通过。
+新增用例覆盖三种自然语言乱提 `control_acquire`、已持有/未知控制权、模型调用期间状态变化、明确申请控制权，以及 Ktd authoritative/legacy/不可用和卓翼 `route_status=running`。legacy 用例显式使用 `legacy_read_api=True`，并断言 `available=true`、`authorization_quality=legacy-read-api`、`control_owner=other`；新增 legacy 模型误提 `control_acquire` 用例仍返回原 clarification。变异检查：临时移除 `_proposal` 兜底分支后，23 项中 3 项失败（对应三个普通乱提输入；legacy 误提用例本就期望兜底不生效，故不失败）；分别移除 `_policy_gate_rejection` 与 `_proposal` 中的 `authorization_quality == 'authoritative'` 条件后，各有 1 项测试失败，随后恢复实现。完整离线测试为 1389 项通过。
 
 ### 真实模型与范围
 
