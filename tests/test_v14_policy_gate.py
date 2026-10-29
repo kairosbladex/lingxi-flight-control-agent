@@ -178,6 +178,22 @@ class PolicyGateTests(unittest.TestCase):
         self.assertEqual(reply['status'], 'clarification')
         self.assertNotEqual(reply.get('error_code'), 'CONTROL_NOT_OWNED')
 
+    def test_model_proposal_uses_state_read_after_model_call(self):
+        self.build(owned=False, route_status='paused')
+        self.responses = [tool('control_acquire', mode='apply', reason='模型自行申请')]
+
+        def transport(_url, _payload, _timeout):
+            self.simulator.state.control_owner = 'actor-1'
+            self.calls.append('model')
+            return self.responses.pop(0)
+
+        self.service._factory = lambda: OllamaDecider(
+            model='synthetic-gate', transport=transport, max_attempts=1)
+        reply = self.message('往左边挪10米')
+        self.assertEqual(reply['status'], 'clarification')
+        self.assertEqual(reply['message'], '本次没有明确请求这项控制权操作，请重新说明动作；我不会替你申请或释放控制权。')
+        self.assertEqual(self.calls, ['model'])
+
 
 class PlatformGateTests(unittest.TestCase):
     """平台快照门禁只消费可证明的权威控制权与航线状态。"""

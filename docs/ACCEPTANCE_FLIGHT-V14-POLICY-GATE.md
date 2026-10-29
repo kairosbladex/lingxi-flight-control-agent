@@ -161,13 +161,13 @@ v1 标签计分剩下的 7 条不符全是标签格式问题：flight_03、paylo
 
 ```text
 PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_v14_policy_gate.py' -v
-Ran 21 tests ... OK
+Ran 22 tests ... OK
 bash tools/ci/offline_tests.sh
-Ran 1387 tests ... OK
+Ran 1388 tests ... OK
 git diff --check
 ```
 
-新增用例覆盖三种自然语言乱提 `control_acquire`、已持有/未知控制权、明确申请控制权，以及 Ktd authoritative/legacy/不可用和卓翼 `route_status=running`。变异检查：临时移除 `_proposal` 兜底分支后，21 项中 3 项失败（对应三个乱提输入），随后恢复实现。
+新增用例覆盖三种自然语言乱提 `control_acquire`、已持有/未知控制权、模型调用期间状态变化、明确申请控制权，以及 Ktd authoritative/legacy/不可用和卓翼 `route_status=running`。变异检查：临时移除 `_proposal` 兜底分支后，22 项中 3 项失败（对应三个乱提输入），随后恢复实现。
 
 ### 真实模型与范围
 
