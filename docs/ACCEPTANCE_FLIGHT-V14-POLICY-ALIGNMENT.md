@@ -55,4 +55,4 @@ git diff --check
 
 - 本分支只包含本部分相关源码、测试和本验收记录；`.workbuddy-ai/`、`artifacts/evals-dataset-v14-20261028-v1-prompt-v1.2-offline/`、`lingxi_agent_src_*` 等既有未跟踪文件未暂存、未删除。
 - `/tmp` 未保留任务脚本或规范文本；没有启动常驻进程、容器或真实模型服务。
-- 本记录对应代码提交 SHA 在提交完成后回填；远端推送后用 `git ls-remote origin bugfix/v14-policy-alignment` 核对。
+- 本记录对应代码提交 SHA：`3705936d27720f3bee84d7767299965da0d28fcf`；远端推送后用 `git ls-remote origin bugfix/v14-policy-alignment` 核对。
