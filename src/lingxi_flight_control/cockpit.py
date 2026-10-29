@@ -1770,6 +1770,9 @@ class CockpitService:
         mention = _target_mention(text)
         if mention is None:
             return None, None, None
+        if mention.get('multi') and self._plan_enabled:
+            # 计划模式保留复合句给既有规划链路；本轮不在规划链路里做命名目标 grounding。
+            return None, None, None
         gate = self._target_policy_gate(mention, state)
         if gate is not None:
             return mention, None, self._base(status='rejected', error_code=gate[0],
@@ -1779,9 +1782,6 @@ class CockpitService:
             status, code, message = self._target_error(mention, TargetResolverError(MULTI_TARGET_UNSUPPORTED))
             return mention, None, self._base(status=status, error_code=code, message=message,
                                              interpretation_source='target-resolver', state=state)
-        if mention.get('multi'):
-            # 计划模式保留复合句给既有规划链路；本轮不在规划链路里做命名目标 grounding。
-            return None, None, None
         query = TargetQuery(
             project_id=self.binding.project_id,
             actor_id=self.binding.actor_id,
