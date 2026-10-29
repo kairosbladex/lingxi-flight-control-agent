@@ -196,4 +196,4 @@ PYTHONPATH=src:. python3 tools/bench/cockpit_intents.py --surface service \
 
 ### Git 状态
 
-本节与实现、测试首个提交为 `b9d61fe`（`fix: 补齐控制权提议兜底与平台门禁核验`）；真实证据产物在该提交工作树上生成，未纳入 Git。后续仅提交本验收记录更新；不合入 `test`/`dev-wxl`，不推 GitHub。回滚方式为 revert 本分支提交；探针脚本目录已清理，Ollama 由默认 `keep_alive` 管理，未发送卸载请求。
+本节与实现、测试首个提交为 `b9d61fe`（`fix: 补齐控制权提议兜底与平台门禁核验`）；真实证据产物随后以相关文档提交保存到本分支。不合入 `test`/`dev-wxl`，不推 GitHub。回滚方式为 revert 本分支提交；探针脚本目录已清理，Ollama 由默认 `keep_alive` 管理，未发送卸载请求。

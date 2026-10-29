@@ -1,0 +1,78 @@
+{
+  "model": "qwen3.5:9b",
+  "base_url_sha256": "7730e928dfe8644027f02a6a6113fdc206e3128c8f55b7f5dc44bc4274ed5195",
+  "rows": [
+    {
+      "input": "往左边挪10米",
+      "status_code": 200,
+      "status": "rejected",
+      "error_code": "CONTROL_NOT_OWNED",
+      "message": "您尚未获取无人机控制权，请先申请后再下发指令。",
+      "interpretation_source": "model-proposal-policy-gate",
+      "model_tool_calls": [
+        [
+          {
+            "id": "call_56cnsnyu",
+            "function": {
+              "index": 0,
+              "name": "control_acquire",
+              "arguments": {
+                "mode": "obtain",
+                "reason": "执行水平平移动作"
+              }
+            }
+          }
+        ]
+      ],
+      "elapsed_ms": 16892.515
+    },
+    {
+      "input": "云台向下30度",
+      "status_code": 200,
+      "status": "rejected",
+      "error_code": "CONTROL_NOT_OWNED",
+      "message": "您尚未获取无人机控制权，请先申请后再下发指令。",
+      "interpretation_source": "model-proposal-policy-gate",
+      "model_tool_calls": [
+        [
+          {
+            "id": "call_esox1soa",
+            "function": {
+              "index": 0,
+              "name": "control_acquire",
+              "arguments": {
+                "mode": "apply",
+                "reason": "用户请求调整云台俯仰角"
+              }
+            }
+          }
+        ]
+      ],
+      "elapsed_ms": 8872.69
+    },
+    {
+      "input": "向左侧移动十米",
+      "status_code": 200,
+      "status": "rejected",
+      "error_code": "CONTROL_NOT_OWNED",
+      "message": "您尚未获取无人机控制权，请先申请后再下发指令。",
+      "interpretation_source": "model-proposal-policy-gate",
+      "model_tool_calls": [
+        [
+          {
+            "id": "call_ucmgbpsr",
+            "function": {
+              "index": 0,
+              "name": "control_acquire",
+              "arguments": {
+                "mode": "apply",
+                "reason": "用户请求向左侧移动十米"
+              }
+            }
+          }
+        ]
+      ],
+      "elapsed_ms": 11806.69
+    }
+  ]
+}
