@@ -60,4 +60,4 @@ PYTHONPATH=src:. python3 tools/bench/cockpit_intents.py --surface service --fixt
 - 既有 `.workbuddy-ai/`、评测目录、`lingxi_agent_src_*` 未跟踪文件未暂存、未删除。
 - 本轮只写入仓库源码、测试、冻结夹具和验收文档；`/tmp/lingxi-service-report.json`、`/tmp/lingxi-named-report.json` 是临时离线报告，未入库。
 - 没有启动常驻进程、容器或远端模型；没有真实设备副作用。
-- 代码提交 SHA 在提交完成后回填；远端推送后用 `git ls-remote origin feature/v14-flight-named-target` 核对。
+- 代码提交 SHA：`a80b226e6f389e7be7ee9d5ca08ddd3fbe479304`；远端推送后用 `git ls-remote origin feature/v14-flight-named-target` 核对。
