@@ -42,6 +42,10 @@ V1.4 的正文规则章节（2.2.x / 4.x）与 4.4 表6「测试用例库」对�
    - 规范只给「上限」话术：「当前云台俯仰角度上限为X度，已为您调整。」
    - 向下取极值时命中的是俯仰**下限**；本仓以俯仰方向的绝对限值填入 X（**解释性假设**），
      向下场景的措辞是否成立需产品裁决。
+8. 航线中悬停的确认卡说明（FLIGHT-V14-POLICY-GATE）
+   - 2.2.4 只规定执行语义：自动航线中悬停等价暂停航线并保留断点，没有给出确认卡原文。
+   - 当前：``ROUTE_HOVER_NOTICE`` 为实现补充话术，仅在 route_status=running 的 hover 卡片追加；
+     手动模式不追加。规范如后续给出原文，以规范为准替换此常量。
 """
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
@@ -58,6 +62,8 @@ ROUTE_MESSAGE = "当前正在执行自动航线，请先说‘暂停航线’或
 HOVER_MESSAGE = "当前无人机尚未悬停，请先说‘悬停’后再操作。"
 MAPPING_MESSAGE = "中断将导致测绘成果失效，是否确认继续？确认后关闭自动拼图，原测绘任务不可恢复。"
 MAPPING_NOT_RESUMABLE_MESSAGE = "原测绘任务已被中断，成果失效，不可恢复航线。"
+#: 航线中悬停的确认卡补充说明（规范未给原文，见模块 docstring 第 8 条）。
+ROUTE_HOVER_NOTICE = "当前正在执行自动航线，悬停将暂停航线并保存断点，可说‘恢复航线’继续。"
 MOVES = frozenset({"move_forward", "move_backward", "move_left", "move_right", "move_up", "move_down"})
 MICRO_ACTIONS = MOVES | {"turn_left", "turn_right"}
 TEMPORARY_ACTIONS = frozenset({"point_flight", "point_orbit"})

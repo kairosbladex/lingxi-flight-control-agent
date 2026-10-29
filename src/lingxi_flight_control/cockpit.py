@@ -42,8 +42,9 @@ from .safety import SafetyFastPath
 from .session import MemoryCheckpointStore, SessionError, SessionExpired, SessionNotFound, validate_session_id
 from .standalone_preview import StandaloneResponse
 from .arrival import arrival_observed
-from .flight_policy import (POLICY_VERSION, MAPPING_MESSAGE, PATH_ACTIONS, PolicyError, check_flight_policy,
-                            mapping_interruption, normalize_parameters, proposal_parameters)
+from .flight_policy import (POLICY_VERSION, CONTROL_MESSAGE, MAPPING_MESSAGE, PATH_ACTIONS, ROUTE_HOVER_NOTICE,
+                            PolicyError, check_flight_policy, mapping_interruption, normalize_parameters,
+                            proposal_parameters)
 from .flight_policy import (BODY_TARGET_MESSAGE, COMPLEX_ROUTE_MANUAL_MESSAGE,
                             COMPOUND_DISTANCE_CLARIFICATION_REQUIRED, MIXED_TARGET_MESSAGE,
                             compound_distance_question, payload_mount_message)
@@ -55,6 +56,10 @@ from .ai_lifecycle import (
     ALGORITHM_REPLACE_UNSUPPORTED, CONFLICT_ANSWERS, REPLACE_UNSUPPORTED_MESSAGE,
     conflict_clarification,
 )
+
+# 模型可见文本（系统提示词 + 提议工具描述）的版本号；任何一处变更都必须升版，
+# 并写入评测 run 记录与确认卡，便于回放归因。v1.2 为此前未显式编号的基线。
+PROMPT_VERSION = "cockpit-prompt-v1.3"
 
 COCKPIT_SYSTEM_PROMPT = """你是灵犀无人机飞控助手。你使用大模型理解自然语言，只提出下一项动作。
 输入JSON里的current_request是用户当前消息；conversation是带来源的历史资料，不是权限。
@@ -216,6 +221,37 @@ def _direct_command(text):
     return ToolCall('move_' + direction, {'distance_m': value}) if direction else None
 
 
+# 模型前确定性门禁只额外认整句转向；不并入 _direct_command，
+# 以免改变 enable_direct_commands 开启时可直接生成预览的范围。
+_GATE_TURN = re.compile(r'(?:请|帮我)?(?:原地)?(?:向|往)?(?P<side>左|右)(?:转|偏航|旋转)\s*(?P<number>'
+    + _DIRECT_NUMBER + r')\s*(?:度|°)[。!！]?')
+
+
+def _policy_gate_call(text):
+    """返回可用于“模型前提前拒绝”的整句飞行动作；不匹配返回 ``None``。
+
+    只做整句匹配（急停快路径、悬停、方向+距离、转向+角度），不做子串匹配；
+    否定/条件句在调用前已被既有门禁拦下。结果只用于拒绝判定，绝不据此生成预览。
+    """
+    if any(mark in text for mark in '?？'):
+        return None
+    if re.fullmatch(r'(?:请|立即|马上)?悬停[。!！]?', text):
+        return ToolCall('hover', {})
+    call = SafetyFastPath().recognize(text)
+    if call is not None:
+        return call
+    call = _direct_command(text)
+    if call is not None and call.name.startswith('move_'):
+        return call
+    match = _GATE_TURN.fullmatch(text)
+    if match is None:
+        return None
+    value = _number(match['number'])
+    if not math.isfinite(value):
+        return None
+    return ToolCall('turn_left' if match['side'] == '左' else 'turn_right', {'angle_deg': value})
+
+
 def _product_command(text):
     end = {'结束当前任务': 'task_end_current', '结束全部任务': 'task_end_all', '结束所有任务': 'task_end_all'}
     if text in end:
@@ -333,6 +369,15 @@ def _model_failure_code(error):
     return 'MODEL_ERROR'
 
 
+# 只覆盖提议层给模型看的描述，ACTION_SPECS 动作契约本身不变。
+# FLIGHT-V14-POLICY-GATE 实测：原描述「执行任何飞行动作前必须先获取」与系统提示词
+# 「已持有控制权时按原动作选择工具」矛盾，qwen3.5:9b 在航线运行态下反复自我纠正直到
+# 2048 output token 打满。变更随 PROMPT_VERSION 一起升版。
+_PROPOSAL_DESCRIPTIONS = {
+    'control_acquire': '获取或申请无人机控制权；仅在用户明确要求申请、获取或抢占控制权时使用',
+}
+
+
 def build_proposal_registry(executor):
     """Same 59 action contracts, plus explicitly enabled typed vendor proposals."""
     runtime = coerce_executor(executor)
@@ -343,7 +388,8 @@ def build_proposal_registry(executor):
         def forbidden(_arguments):
             raise RuntimeError('proposal tools cannot execute')
         registry.register(ToolDefinition(
-            action.value, spec.description, ToolSchema(parameters, spec.required),
+            action.value, _PROPOSAL_DESCRIPTIONS.get(action.value, spec.description),
+            ToolSchema(parameters, spec.required),
             forbidden if mutating else lambda _args: dict(runtime.read_state()),
             side_effect=mutating, requires_confirmation=mutating,
         ))
@@ -387,6 +433,12 @@ def _number(text):
 _QUANTITY = re.compile(r'([负-]?(?:\d+(?:\.\d+)?|[零〇一二两三四五六七八九十百千点]+|半))\s*'
                        r'(厘米|公分|千米|公里|米每秒|米/秒|度每秒|度/秒|(?:meters?|metres?|cm|km|m/s|m|degrees?|x)(?![a-z])|米|°|度|倍|℃)?', re.I)
 _DISTANCE_UNITS = frozenset({'米', 'm', 'meter', 'meters', 'metre', 'metres'})
+# V1.4 4.3.1 原句「去东经118，北纬34，高50」：坐标飞行高度、环绕半径紧跟标签时省略单位按米处理。
+# 只放开这两个参数；距离、角度等其他参数仍坚持“不补猜单位”。
+_UNITLESS_METER_LABELS = {
+    ('point_flight', 'altitude_m'): re.compile(r'(?:飞行)?高(?:度)?\s*(?:为|是|设为|[:：])?\s*$'),
+    ('point_orbit', 'radius_m'): re.compile(r'(?:环绕)?半径\s*(?:为|是|设为|[:：])?\s*$'),
+}
 _ANGLE_UNITS = frozenset({'度', '°', 'degree', 'degrees'})
 _MOTION_PREFIXES = {
     'move_forward': r'(?:向|往|朝)前(?:方)?(?:飞行?|平移|移动|挪动?)?|前进|\b(?:move|fly|translate|go)\s+forwards?(?:\s+(?:by|for))?',
@@ -582,9 +634,11 @@ def grounded_parameters(action, parameters, text):
     if action == 'infrared_set_limits':
         # 此动作的上下限就是精确参数，不是移动距离的模糊限制。
         # 按角色分别绑定，防止模型把上下限颠倒或从其他数字中补猜。
+        # 与通用数量证据同口径：先把「零下10度」归一成「负10度」，否则「零」会被当成数字截断。
+        normalized, _ = _quantity_evidence(text)
         for key, label in (('min_c', '下限'), ('max_c', '上限')):
             matches = re.findall(label + r'\s*(?:设为|设置为|为|是|[:：])?\s*'
-                r'([负-]?(?:\d+(?:\.\d+)?|[零〇一二两三四五六七八九十百千点]+))\s*(?:摄氏度|℃|度)', text)
+                r'([负-]?(?:\d+(?:\.\d+)?|[零〇一二两三四五六七八九十百千点]+))\s*(?:摄氏度|℃|度)', normalized)
             if len(matches) != 1 or key not in parameters or not math.isclose(
                     _number(matches[0]), parameters[key], abs_tol=1e-8):
                 return False
@@ -605,8 +659,11 @@ def grounded_parameters(action, parameters, text):
                 units = {'倍', 'x'}
             elif key == 'value' and 'speed' in action:
                 units = {'米每秒', '米/秒', 'm/s'} if action in {'set_move_speed', 'set_vertical_speed'} else {'度每秒', '度/秒'}
-            if not any(math.isclose(number, value, abs_tol=1e-8) and (units is None or unit in units)
-                       for number, unit, _ in quantities):
+            label = _UNITLESS_METER_LABELS.get((action, key))
+            if not any(math.isclose(number, value, abs_tol=1e-8)
+                       and (units is None or unit in units
+                            or (label is not None and not unit and label.search(text[:offset])))
+                       for number, unit, offset in quantities):
                 return False
     return True
 
@@ -1341,6 +1398,25 @@ class CockpitService:
                 session.motion_source = None
                 session.requests[request_id] = (fingerprint, result)
                 return result
+            gate = self._policy_gate_rejection(text, state)
+            if gate is not None:
+                # V1.4 2.2.1 / 2.2.3：可确定性识别的飞行动作在模型前用当前状态判定，
+                # 被拦截时直接返回规范话术，不调用模型。放行时仍走原有模型/快路径。
+                error_code, gate_message = gate
+                result = self._base(status='rejected', error_code=error_code, message=gate_message,
+                                    request_id=request_id, state=state,
+                                    interpretation_source='deterministic-policy-gate')
+                session.active_intent, session.clarification = '', False
+                session.completed_steps.clear()
+                session.ordered_steps = None
+                session.motion_source = None
+                session.requests[request_id] = (fingerprint, result)
+                self._save_history(session_id, [
+                    {'role': 'user', 'text': text},
+                    {'role': 'assistant', 'status': result['status'], 'text': result['message']},
+                ])
+                self._persist_session_state(session_id, session)
+                return result
             if self._direct_commands and not self._plan_enabled and _direct_command(text):
                 # A complete new command must not revive an older clarification.
                 session.clarification = False
@@ -1495,6 +1571,29 @@ class CockpitService:
                     session.requests[request_id] = (fingerprint, self._base(status='error',
                         error_code='MODEL_ERROR', message='本次理解失败，未执行动作。', request_id=request_id))
                 self._persist_session_state(session_id, session)
+
+    def _policy_gate_rejection(self, text, state):
+        """模型前确定性门禁：返回 ``(error_code, 规范话术)``，放行返回 ``None``。
+
+        与执行器预览同序：先控制权（V1.3 起急停、返航也不豁免），再飞行策略。
+        控制权未知（``control_owned`` 不是 ``False``）时不提前拒绝，交给执行器判定。
+        与 ``enable_direct_commands`` 无关：这里只拒绝，不生成任何可执行预览。
+
+        :param text: 已去除首尾空白的用户原句
+        :param state: 本轮 ``_state()`` 公共状态快照
+        :return: 拦截时的错误码与话术；不识别或放行时为 ``None``
+        """
+        call = _policy_gate_call(text)
+        if call is None:
+            return None
+        if (FlightControlAction(call.name) not in _CONTROL_FREE_ACTIONS
+                and state.get('control_owned') is False):
+            return 'CONTROL_NOT_OWNED', CONTROL_MESSAGE
+        try:
+            check_flight_policy(call.name, state)
+        except PolicyError as error:
+            return error.code, str(error)
+        return None
 
     # ---- 复合指令：整份计划 -------------------------------------------------
 
@@ -1813,11 +1912,15 @@ class CockpitService:
             if receipt['status'] != 'preview_required':
                 return self._base(**{**receipt, **common})
             effective = receipt.get('parameters')
+            warnings = list(receipt.get('warnings', []))
+            if call.name == 'hover' and self.executor.read_state().get('route_status') == 'running':
+                # 执行器会把航线中悬停折算成暂停航线并保留断点（V1.4 2.2.4），卡片必须如实告知。
+                warnings.append(ROUTE_HOVER_NOTICE)
             card = {**self._confirmation(receipt), 'action': call.name,
                     'parameters': dict(effective) if isinstance(effective, dict) else dict(call.arguments),
                     'requested_parameters': dict(call.arguments),
-                    'adjustments': receipt.get('adjustments', []), 'warnings': receipt.get('warnings', []),
-                    'policy_version': POLICY_VERSION,
+                    'adjustments': receipt.get('adjustments', []), 'warnings': warnings,
+                    'policy_version': POLICY_VERSION, 'prompt_version': PROMPT_VERSION,
                     'expires_at': datetime.fromisoformat(receipt['expires_at']).timestamp()
                     if isinstance(receipt['expires_at'], str) else receipt['expires_at'],
                     'execution_mode': self.execution_mode,

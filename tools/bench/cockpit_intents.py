@@ -489,7 +489,7 @@ def main(argv=None):
                                    max_samples=args.max_samples, max_model_calls=args.max_model_calls,
                                    max_seconds=args.max_seconds, max_tokens=args.max_tokens, timeout=args.timeout,
                                    only_ids=selection_ids)
-    from lingxi_flight_control.cockpit import COCKPIT_SYSTEM_PROMPT
+    from lingxi_flight_control.cockpit import COCKPIT_SYSTEM_PROMPT, PROMPT_VERSION
 
     if args.surface == "service":
         from tools.bench.cockpit_service_intents import evaluate_service_outcomes
@@ -506,7 +506,7 @@ def main(argv=None):
         "scope": "bounded_loop_proposals_and_input_guard_before_service_policy",
         "selection_ids": selection_ids,
         "model": args.model, "endpoint_sha256": _sha256(args.base_url),
-        "prompt_sha256": _sha256(COCKPIT_SYSTEM_PROMPT),
+        "prompt_version": PROMPT_VERSION, "prompt_sha256": _sha256(COCKPIT_SYSTEM_PROMPT),
         "tool_schema_sha256": _sha256(build_tools_payload(_schema_registry().definitions())),
         "model_options": {"temperature": 0, "num_ctx": 32768, "output_reserve": 2048,
                           "num_predict": DEFAULT_OUTPUT_RESERVE_TOKENS,

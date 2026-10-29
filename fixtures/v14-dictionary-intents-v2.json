@@ -1,0 +1,911 @@
+{
+  "schema_version": "cockpit-intent-scenarios/v2",
+  "dataset_id": "v14-dictionary-intents-2026-10-29-v2",
+  "source": "synthetic_reviewed_contract",
+  "accuracy_status": "not_evaluable",
+  "created_on": "2026-10-29",
+  "review": {
+    "method": "label_format_fix_from_v1_manual_review_before_candidate_run",
+    "human_reviewed": false,
+    "real_flight_truth": false,
+    "derived_from": "fixtures/v14-dictionary-intents-v1.json"
+  },
+  "scope": "《灵犀平台自然语言智能控制功能设计规范V1.4》4.3 指令词典与 2.2.x 前置校验的单轮 CockpitService.handle 契约；只预览不确认、不写执行、不连接平台。",
+  "context": {},
+  "service_contract": {
+    "schema_version": "cockpit-service-intent-expectation/v1",
+    "mapping": {
+      "action": "preview_required；超限参数保留用户原值，由策略层取极值",
+      "clarification": "服务 typed clarification（缺参、意图不明）",
+      "rejected": "服务 typed rejected：确定性策略拦截（无控制权 2.2.1、航线中微操 2.2.3、未配置算法 4.3.2、表6 不支持能力），话术逐字取规范常量"
+    },
+    "label_policy": "v2 只修正 v1 人工复核确认的标签格式错误（见 provenance.label_changes），在任何候选运行前冻结；禁止按模型输出改标签。v1 及其运行结果保留不动。"
+  },
+  "scenarios": [
+    {
+      "id": "v14_flight_01",
+      "category": "v14_flight_micro",
+      "input": "向左转90度",
+      "spec_ref": "4.3.1",
+      "expected_kind": "action",
+      "expected_action": "turn_left",
+      "expected_arguments": {
+        "angle_deg": 90
+      },
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "turn_left",
+        "arguments": {
+          "angle_deg": 90
+        }
+      }
+    },
+    {
+      "id": "v14_flight_02",
+      "category": "v14_flight_micro",
+      "input": "悬停",
+      "spec_ref": "2.2.4 手动飞行悬停=原地悬停",
+      "expected_kind": "action",
+      "expected_action": "hover",
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "idle",
+        "route_id": null,
+        "breakpoint_index": null
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "hover",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "v14_flight_03",
+      "category": "v14_flight_micro",
+      "input": "悬停",
+      "spec_ref": "2.2.4 自动航线中悬停=暂停航线并保存断点",
+      "expected_kind": "action",
+      "expected_action": "hover",
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "running",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "hover",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "v14_flight_04",
+      "category": "v14_flight_micro",
+      "input": "急停",
+      "spec_ref": "4.3.1",
+      "expected_kind": "action",
+      "expected_action": "emergency_stop",
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "emergency_stop",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "v14_flight_05",
+      "category": "v14_flight_micro",
+      "input": "去东经118，北纬34，高50",
+      "spec_ref": "4.3.1 坐标飞行",
+      "expected_kind": "action",
+      "expected_action": "point_flight",
+      "expected_arguments": {
+        "longitude": 118,
+        "latitude": 34,
+        "altitude_m": 50
+      },
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "point_flight",
+        "arguments": {
+          "longitude": 118,
+          "latitude": 34,
+          "altitude_m": 50
+        }
+      }
+    },
+    {
+      "id": "v14_flight_06",
+      "category": "v14_flight_micro",
+      "input": "围绕1号水塔绕一圈，半径30米",
+      "spec_ref": "4.3.1 环绕；评测上下文没有标注库，'1号水塔'无法解析成坐标，独立期望为追问而非臆造坐标",
+      "expected_kind": "clarification",
+      "expected_action": null,
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "clarification",
+        "status": "clarification",
+        "action": null,
+        "arguments": {}
+      }
+    },
+    {
+      "id": "v14_flight_07",
+      "category": "v14_flight_micro",
+      "input": "以东经118.1、北纬34.2为中心绕一圈，半径30米",
+      "spec_ref": "4.3.1 环绕",
+      "expected_kind": "action",
+      "expected_action": "point_orbit",
+      "expected_arguments": {
+        "longitude": 118.1,
+        "latitude": 34.2,
+        "radius_m": 30
+      },
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "point_orbit",
+        "arguments": {
+          "longitude": 118.1,
+          "latitude": 34.2,
+          "radius_m": 30
+        }
+      }
+    },
+    {
+      "id": "v14_payload_01",
+      "category": "v14_payload",
+      "input": "云台向下看30度",
+      "spec_ref": "4.3.2",
+      "expected_kind": "action",
+      "expected_action": "gimbal_down",
+      "expected_arguments": {
+        "angle_deg": 30
+      },
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "gimbal_down",
+        "arguments": {
+          "angle_deg": 30
+        }
+      }
+    },
+    {
+      "id": "v14_payload_02",
+      "category": "v14_payload",
+      "input": "云台回中",
+      "spec_ref": "4.3.2",
+      "expected_kind": "action",
+      "expected_action": "gimbal_reset",
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "gimbal_reset",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "v14_payload_03",
+      "category": "v14_payload",
+      "input": "切到红外",
+      "spec_ref": "4.3.2",
+      "expected_kind": "action",
+      "expected_action": "camera_infrared",
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "camera_infrared",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "v14_payload_04",
+      "category": "v14_payload",
+      "input": "切到广角",
+      "spec_ref": "4.3.2",
+      "expected_kind": "action",
+      "expected_action": "camera_wide",
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "camera_wide",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "v14_payload_05",
+      "category": "v14_payload",
+      "input": "拍张照",
+      "spec_ref": "4.3.2",
+      "expected_kind": "action",
+      "expected_action": "camera_photo",
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "camera_photo",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "v14_payload_06",
+      "category": "v14_payload",
+      "input": "开始录像",
+      "spec_ref": "4.3.2",
+      "expected_kind": "action",
+      "expected_action": "camera_start_recording",
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "camera_start_recording",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "v14_payload_07",
+      "category": "v14_payload",
+      "input": "开始喊话：交通安全",
+      "spec_ref": "4.3.2",
+      "expected_kind": "action",
+      "expected_action": "speaker_speak",
+      "expected_arguments": {
+        "text": "交通安全"
+      },
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "speaker_speak",
+        "arguments": {
+          "text": "交通安全"
+        }
+      }
+    },
+    {
+      "id": "v14_payload_08",
+      "category": "v14_payload",
+      "input": "打开探照灯",
+      "spec_ref": "4.3.2",
+      "expected_kind": "action",
+      "expected_action": "payload_searchlight",
+      "expected_arguments": {
+        "enabled": true
+      },
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "payload_searchlight",
+        "arguments": {
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "v14_payload_09",
+      "category": "v14_payload",
+      "input": "打开AI识别烟火",
+      "spec_ref": "4.3.2；算法名按规范'算法=烟火'逐字冻结，名称归一化差异计为不匹配",
+      "expected_kind": "rejected",
+      "expected_action": null,
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "rejected",
+        "status": "rejected",
+        "action": null,
+        "arguments": {}
+      }
+    },
+    {
+      "id": "v14_clamp_01",
+      "category": "v14_param_clamp",
+      "input": "变焦到100倍",
+      "spec_ref": "2.2.5/4.3.2 超限保留原值，由策略层取极值",
+      "expected_kind": "action",
+      "expected_action": "camera_zoom",
+      "expected_arguments": {
+        "value": 100
+      },
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "camera_zoom",
+        "arguments": {
+          "value": 100
+        }
+      }
+    },
+    {
+      "id": "v14_clamp_02",
+      "category": "v14_param_clamp",
+      "input": "喊话音量调到150%",
+      "spec_ref": "4.3.2",
+      "expected_kind": "action",
+      "expected_action": "speaker_volume",
+      "expected_arguments": {
+        "value": 150
+      },
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "speaker_volume",
+        "arguments": {
+          "value": 150
+        }
+      }
+    },
+    {
+      "id": "v14_clamp_03",
+      "category": "v14_param_clamp",
+      "input": "探照灯亮度调到200%",
+      "spec_ref": "4.3.2",
+      "expected_kind": "action",
+      "expected_action": "searchlight_brightness",
+      "expected_arguments": {
+        "value": 200
+      },
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "searchlight_brightness",
+        "arguments": {
+          "value": 200
+        }
+      }
+    },
+    {
+      "id": "v14_task_01",
+      "category": "v14_task_control",
+      "input": "暂停航线",
+      "spec_ref": "4.3.3",
+      "expected_kind": "action",
+      "expected_action": "route_pause",
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "running",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "route_pause",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "v14_task_02",
+      "category": "v14_task_control",
+      "input": "恢复航线",
+      "spec_ref": "4.3.3",
+      "expected_kind": "action",
+      "expected_action": "route_resume",
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "route_resume",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "v14_task_03",
+      "category": "v14_task_control",
+      "input": "一键返航",
+      "spec_ref": "4.3.3",
+      "expected_kind": "action",
+      "expected_action": "return_home",
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "return_home",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "v14_task_04",
+      "category": "v14_task_control",
+      "input": "回来吧",
+      "spec_ref": "4.3.3",
+      "expected_kind": "action",
+      "expected_action": "return_home",
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "return_home",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "v14_task_05",
+      "category": "v14_task_control",
+      "input": "结束当前任务",
+      "spec_ref": "4.3.3",
+      "expected_kind": "action",
+      "expected_action": "task_end_current",
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "task_end_current",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "v14_task_06",
+      "category": "v14_task_control",
+      "input": "结束全部任务",
+      "spec_ref": "4.1.3/4.2",
+      "expected_kind": "action",
+      "expected_action": "task_end_all",
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "task_end_all",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "v14_gate_01",
+      "category": "v14_policy_gate",
+      "input": "向左飞10米",
+      "spec_ref": "2.2.3 自动航线中微操拦截",
+      "expected_kind": "rejected",
+      "expected_action": null,
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "running",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "rejected",
+        "status": "rejected",
+        "action": null,
+        "arguments": {}
+      }
+    },
+    {
+      "id": "v14_gate_02",
+      "category": "v14_policy_gate",
+      "input": "云台向下看30度",
+      "spec_ref": "2.2.3 载荷指令放行",
+      "expected_kind": "action",
+      "expected_action": "gimbal_down",
+      "expected_arguments": {
+        "angle_deg": 30
+      },
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "running",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "gimbal_down",
+        "arguments": {
+          "angle_deg": 30
+        }
+      }
+    },
+    {
+      "id": "v14_gate_03",
+      "category": "v14_policy_gate",
+      "input": "向前飞10米",
+      "spec_ref": "2.2.1 无控制权拦截",
+      "expected_kind": "rejected",
+      "expected_action": null,
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": null,
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "rejected",
+        "status": "rejected",
+        "action": null,
+        "arguments": {}
+      }
+    },
+    {
+      "id": "v14_gate_04",
+      "category": "v14_policy_gate",
+      "input": "一键返航",
+      "spec_ref": "2.2.1 返航同样校验控制权，无豁免",
+      "expected_kind": "rejected",
+      "expected_action": null,
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": null,
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "rejected",
+        "status": "rejected",
+        "action": null,
+        "arguments": {}
+      }
+    },
+    {
+      "id": "v14_unsupported_01",
+      "category": "v14_unsupported",
+      "input": "绕楼螺旋飞",
+      "spec_ref": "表6 系统不支持",
+      "expected_kind": "rejected",
+      "expected_action": null,
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "rejected",
+        "status": "rejected",
+        "action": null,
+        "arguments": {}
+      }
+    },
+    {
+      "id": "v14_unsupported_02",
+      "category": "v14_unsupported",
+      "input": "用网格航线飞",
+      "spec_ref": "表6 系统不支持",
+      "expected_kind": "rejected",
+      "expected_action": null,
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "synthetic-route",
+        "breakpoint_index": 2
+      },
+      "service_expected": {
+        "kind": "rejected",
+        "status": "rejected",
+        "action": null,
+        "arguments": {}
+      }
+    }
+  ]
+}
