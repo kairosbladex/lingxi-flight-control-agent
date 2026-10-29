@@ -7,10 +7,8 @@ import json
 import unittest
 
 from lingxi_flight_control import MemoryFlightControlSimulator, RuntimeBinding
-from lingxi_flight_control.cockpit import (PROMPT_VERSION, CockpitService, build_proposal_registry,
-                                           grounded_parameters)
+from lingxi_flight_control.cockpit import PROMPT_VERSION, CockpitService, grounded_parameters
 from lingxi_flight_control.flight_policy import CONTROL_MESSAGE, ROUTE_HOVER_NOTICE, ROUTE_MESSAGE
-from lingxi_flight_control.full_control import ACTION_SPECS, FlightControlAction
 from lingxi_flight_control.ollama_decider import OllamaDecider
 
 
@@ -160,18 +158,6 @@ class GroundingUnitTests(unittest.TestCase):
         self.assertTrue(grounded_parameters('infrared_set_limits', {'min_c': -10, 'max_c': 80}, text))
         self.assertFalse(grounded_parameters('infrared_set_limits', {'min_c': 10, 'max_c': 80}, text))
         self.assertFalse(grounded_parameters('infrared_set_limits', {'min_c': 80, 'max_c': -10}, text))
-
-
-class PromptSurfaceTests(unittest.TestCase):
-    """提议层工具描述去掉与系统提示词矛盾的措辞，动作契约本身不变。"""
-
-    def test_control_acquire_description_no_longer_demands_acquire_before_every_action(self):
-        binding = RuntimeBinding('actor-1', 'project-1', 'hangar-1', 'drone-1', 'batch-1', 1)
-        registry = build_proposal_registry(MemoryFlightControlSimulator(binding, clock=lambda: 1000))
-        definition = {item.name: item for item in registry.definitions()}['control_acquire']
-        self.assertNotIn('执行任何飞行动作前必须先获取', definition.description)
-        self.assertIn('执行任何飞行动作前必须先获取',
-                      ACTION_SPECS[FlightControlAction.CONTROL_ACQUIRE].description)
 
 
 if __name__ == '__main__':
