@@ -4,12 +4,18 @@
 “模型调用 0 次”以传输层计数为准，不以返回文本推断。
 """
 import json
+import tempfile
 import unittest
+from pathlib import Path
 
 from lingxi_flight_control import MemoryFlightControlSimulator, RuntimeBinding
 from lingxi_flight_control.cockpit import PROMPT_VERSION, CockpitService, grounded_parameters
 from lingxi_flight_control.flight_policy import CONTROL_MESSAGE, ROUTE_HOVER_NOTICE, ROUTE_MESSAGE
 from lingxi_flight_control.ollama_decider import OllamaDecider
+from lingxi_flight_control.ktd_platform import (
+    KtdPlatformError, KtdSnapshot, KtdPlatformExecutor, SqliteCommandJournal,
+)
+from lingxi_flight_control.zhuoyi_platform import STATE_SCHEMA, ZhuoyiPlatformExecutor
 
 
 def tool(name, **arguments):
@@ -49,13 +55,13 @@ class PolicyGateTests(unittest.TestCase):
         self.assertFalse(response.payload['dispatched'])
         return response.payload
 
-    def assert_gate_rejected(self, reply, code, message):
+    def assert_gate_rejected(self, reply, code, message, *, calls=0):
         self.assertEqual(reply['status'], 'rejected')
         self.assertEqual(reply['error_code'], code)
         self.assertEqual(reply['message'], message)
-        self.assertEqual(reply['interpretation_source'], 'deterministic-policy-gate')
+        self.assertIn(reply['interpretation_source'], ('deterministic-policy-gate', 'model-proposal-policy-gate'))
         self.assertNotIn('card', reply)
-        self.assertEqual(self.calls, [])
+        self.assertEqual(len(self.calls), calls)
 
     def test_micro_motion_during_route_is_rejected_without_model(self):
         for direct in (False, True):
@@ -133,6 +139,140 @@ class PolicyGateTests(unittest.TestCase):
         reply = self.message('去东经118，北纬34，高50')
         self.assertEqual(reply['status'], 'preview_required')
         self.assertEqual(reply['card']['requested_parameters'], {'longitude': 118, 'latitude': 34, 'altitude_m': 50})
+
+    def test_model_control_acquire_fallback_uses_policy_message_without_card(self):
+        for text in ('往左边挪10米', '云台向下30度', '向左侧移动十米'):
+            with self.subTest(text=text):
+                self.build(owned=False, route_status='paused')
+                before = self.simulator.state.to_dict()
+                self.responses = [tool('control_acquire', mode='apply', reason='模型自行申请')]
+                reply = self.message(text)
+                self.assert_gate_rejected(reply, 'CONTROL_NOT_OWNED', CONTROL_MESSAGE, calls=1)
+                self.assertEqual(reply['interpretation_source'], 'model-proposal-policy-gate')
+                self.assertEqual(self.simulator.state.to_dict(), before)
+                self.assertEqual(self.simulator.state.control_owner, None)
+
+    def test_model_control_acquire_fallback_keeps_existing_clarification_when_owned(self):
+        self.build(owned=True, route_status='paused')
+        self.responses = [tool('control_acquire', mode='apply', reason='模型自行申请')]
+        reply = self.message('往左边挪10米')
+        self.assertEqual(reply['status'], 'clarification')
+        self.assertEqual(reply['message'], '本次没有明确请求这项控制权操作，请重新说明动作；我不会替你申请或释放控制权。')
+        self.assertNotIn('card', reply)
+
+    def test_explicit_control_request_still_previews_acquire(self):
+        self.build(owned=False, route_status='paused')
+        self.responses = [tool('control_acquire', mode='apply', reason='灵犀 Agent 申请无人机控制权')]
+        reply = self.message('申请控制权')
+        self.assertEqual(reply['status'], 'preview_required')
+        self.assertEqual(reply['card']['action'], 'control_acquire')
+
+    def test_unknown_control_owner_does_not_claim_not_owned(self):
+        self.build(owned=False, route_status='paused')
+        original = self.service.executor.read_state
+        self.service.executor.read_state = lambda: {
+            key: value for key, value in original().items() if key != 'control_owner'
+        }
+        self.responses = [tool('control_acquire', mode='apply', reason='模型自行申请')]
+        reply = self.message('往左边挪10米')
+        self.assertEqual(reply['status'], 'clarification')
+        self.assertNotEqual(reply.get('error_code'), 'CONTROL_NOT_OWNED')
+
+
+class PlatformGateTests(unittest.TestCase):
+    """平台快照门禁只消费可证明的权威控制权与航线状态。"""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.binding = RuntimeBinding('actor-1', 'project-1', 'hangar-1', 'drone-1', 'batch-1', 1)
+        self.calls = 0
+
+    def decider_factory(self):
+        self.calls += 1
+        return OllamaDecider(model='synthetic-gate', transport=lambda *_: tool('move_forward', distance_m=10),
+                             max_attempts=1)
+
+    def service(self, executor):
+        return CockpitService(self.binding, executor, self.decider_factory,
+                              gateway_token='synthetic-gateway', clock=lambda: 1000, task_id='task-1')
+
+    @staticmethod
+    def headers(session):
+        return {'X-Agent-Gateway': 'synthetic-gateway', 'X-Agent-Actor': 'actor-1',
+                'X-Agent-Session': session}
+
+    def ktd(self, *, owner='other', route_status='paused', unavailable=False, quality='authoritative'):
+        now = 1000.0
+        snapshot = KtdSnapshot(
+            actor_id='actor-1', project_id='project-1', hangar_id='hangar-1', drone_id='drone-1',
+            site_id='site-1', task_id='task-1', context_version=1, version=7, observed_at=now,
+            control_owner=owner, profile='DJI_HANGAR', permissions=frozenset({'read_state', 'move_forward'}),
+            capabilities={'move_forward': True}, control_lease_expires_at=now + 60,
+            state={'online': True, 'airborne': True, 'route_status': route_status},
+            authorization_quality=quality)
+        provider = (lambda: (_ for _ in ()).throw(KtdPlatformError('AUTHORITATIVE_STATE_UNAVAILABLE'))
+                    if unavailable else snapshot)
+        return KtdPlatformExecutor(
+            self.binding, site_id='site-1', task_id='task-1', transport=object(),
+            snapshot_provider=provider,
+            journal=SqliteCommandJournal(str(Path(self.temp.name) / 'commands.sqlite3')),
+            enabled=False, clock=lambda: now)
+
+    def test_ktd_other_owner_is_rejected_before_model(self):
+        reply = self.service(self.ktd(owner='other')).handle(
+            'POST', '/api/flight-control/agent/messages',
+            json.dumps({'text': '向前飞10米', 'request_id': 'ktd-owner', 'context_version': 1}),
+            self.headers('ktd-owner'))
+        self.assertEqual((reply.payload['status'], reply.payload['error_code']), ('rejected', 'CONTROL_NOT_OWNED'))
+        self.assertEqual(self.calls, 0)
+
+    def test_ktd_legacy_owner_is_left_to_executor(self):
+        reply = self.service(self.ktd(owner='other', quality='legacy-read-api')).handle(
+            'POST', '/api/flight-control/agent/messages',
+            json.dumps({'text': '向前飞10米', 'request_id': 'ktd-legacy', 'context_version': 1}),
+            self.headers('ktd-legacy'))
+        self.assertNotEqual(reply.payload.get('error_code'), 'CONTROL_NOT_OWNED')
+        self.assertEqual(self.calls, 1)
+
+    def test_ktd_running_route_is_rejected_before_model(self):
+        reply = self.service(self.ktd(owner='actor-1', route_status='running')).handle(
+            'POST', '/api/flight-control/agent/messages',
+            json.dumps({'text': '向左飞10米', 'request_id': 'ktd-route', 'context_version': 1}),
+            self.headers('ktd-route'))
+        self.assertEqual((reply.payload['status'], reply.payload['error_code']), ('rejected', 'ROUTE_PAUSE_REQUIRED'))
+        self.assertEqual(self.calls, 0)
+
+    def test_ktd_unavailable_state_is_not_misreported_as_not_owned(self):
+        reply = self.service(self.ktd(unavailable=True)).handle(
+            'POST', '/api/flight-control/agent/messages',
+            json.dumps({'text': '向前飞10米', 'request_id': 'ktd-unavailable', 'context_version': 1}),
+            self.headers('ktd-unavailable'))
+        self.assertNotEqual(reply.payload.get('error_code'), 'CONTROL_NOT_OWNED')
+        self.assertEqual(self.calls, 1)
+
+    def test_zhuoyi_running_route_is_rejected_before_model(self):
+        state = {
+            'schema_version': STATE_SCHEMA, 'snapshot_version': 'f' * 64,
+            'project_id': 'project-1', 'site_id': 'site-1', 'hangar_id': 'hangar-1',
+            'drone_id': 'drone-1', 'task_id': 'task-1', 'profile': 'DJI_HANGAR',
+            'online': True, 'airborne': True, 'route_status': 'running', 'route_id': 'route-1',
+            'task_type': 'inspection', 'mapping_invalidated': False, 'route_resume_disabled': False,
+            'task_status': 'flying', 'low_battery_return': False,
+            'control_owner_employee_id': 'actor-1', 'permissions': ['move_forward'],
+            'action_availability': {'move_forward': {'available': True, 'reasons': []}},
+        }
+        def transport(method, url, body, headers, timeout):
+            return 200, state
+        executor = ZhuoyiPlatformExecutor(self.binding, base_url='http://127.0.0.1:18091',
+                                          gateway_token='gateway', site_id='site-1', task_id='task-1',
+                                          transport=transport, clock=lambda: 1000)
+        reply = self.service(executor).handle(
+            'POST', '/api/flight-control/agent/messages',
+            json.dumps({'text': '向左飞10米', 'request_id': 'zhuoyi-route', 'context_version': 1}),
+            self.headers('zhuoyi-route'))
+        self.assertEqual((reply.payload['status'], reply.payload['error_code']), ('rejected', 'ROUTE_PAUSE_REQUIRED'))
+        self.assertEqual(self.calls, 0)
 
 
 class GroundingUnitTests(unittest.TestCase):

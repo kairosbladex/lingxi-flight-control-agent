@@ -137,3 +137,44 @@ v1 标签计分剩下的 7 条不符全是标签格式问题：flight_03、paylo
 - 分支 `bugfix/v14-deterministic-policy-gate`：eff2858（实现、测试、v2 标签）→ 7779b38（撤回描述改动）→ 本文档提交。
 - 推送目标 `origin`（内网 GitLab），远端 SHA 见本次交付回复；不推 github，不合入 test/dev-wxl。
 - 回滚方式：revert 本分支提交即可。门禁只增加提前拒绝路径，不改执行器、契约或数据。
+
+## 后续：control_acquire 兜底与平台门禁核验
+
+### 根因与改动
+
+模型前门禁只覆盖整句短指令；“往左边挪10米”“云台向下30度”等说法仍会进入模型。模型可能把系统提示词中的“需要先申请”误解为替用户申请 `control_acquire`，随后被 `_control_request_agrees` 拦成 clarification，用户拿不到规范 2.2.1 话术。
+
+`CockpitService._proposal` 现在使用提议处理时重新读取的 `_state()`：当模型提议 `control_acquire`、用户未明确请求控制权、且当前快照在权威来源下明确 `control_owned is False` 时，返回 typed `rejected`、`error_code=CONTROL_NOT_OWNED` 和 `flight_policy.CONTROL_MESSAGE`，不生成卡片、不改变模拟器状态，并标记 `interpretation_source=model-proposal-policy-gate`。已持有、控制权未知、legacy 快照或 `control_release` 仍保留原 clarification。`handle` 使用 `setdefault` 保留该归因字段；明确“申请控制权”仍走原预览路径。
+
+### 平台字段核验
+
+| 执行器/来源 | `control_owner` | `route_status` | `task_type` | `mapping_invalidated` | `route_resume_disabled` | `task_status` | `low_battery_return` | 缺失时门禁行为 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `SimulatorExecutor` / `MemoryFlightControlSimulator` | 有，来自内存状态；`_public_state` 转为 `control_owned` | 有 | 有 | 有 | 有 | 有 | 有 | owner 缺失/未知不提前拒绝；策略字段缺失时 `check_flight_policy` 只执行能证明的规则 |
+| `KtdPlatformExecutor` authoritative | 有，来自 `KtdSnapshot.control_owner`；同时输出 `authorization_quality=authoritative` | 有，来自 `_STATE_FIELDS` | 有则从快照策略字段透传 | 有则透传 | 当前 `_STATE_FIELDS`/投影没有该字段 | 当前投影没有该字段（只保留 `task_state` 等原字段） | 有则透传 | 快照不可用返回 `available:false`，不含 owner；unknown 不冒称未持有；缺策略字段不猜测 |
+| `KtdPlatformExecutor` `legacy-read-api` | 有但可能由旧只读接口合成/过期，`authorization_quality=legacy-read-api` | 旧接口通常缺失或不完整 | 通常缺失 | 通常缺失 | 缺失 | 缺失 | 缺失 | 控制权不用于模型前提前拒绝，交给执行器原有校验；其余字段缺失不补默认值 |
+| 卓翼 `ZhuoyiPlatformExecutor` | 有，`control_owner_employee_id` 映射为 owner，并输出 `control_owned` | 有 | 当前 `read_state` 不投影 | 当前 `read_state` 不投影 | 当前 `read_state` 不投影 | 当前 `read_state` 不投影 | 当前 `read_state` 不投影 | 快照不可用只返回 `available:false`；owner 未知不提前拒绝，策略只能使用已投影字段 |
+
+结论：`authorization_quality` 不是 `authoritative` 时，`control_owner` 不能证明当前租约。legacy 快照的读取时间由本次请求填充、租约为合成值，提前拒绝会误拒本应交给执行器复核的动作。因此本次只在 authoritative 快照下启用控制权前门禁；模拟器与卓翼没有质量字段，仍按其现有明确 owner 字段工作。未修改平台适配器的对外字段契约。
+
+### 离线证据
+
+```text
+PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_v14_policy_gate.py' -v
+Ran 21 tests ... OK
+bash tools/ci/offline_tests.sh
+Ran 1387 tests ... OK
+git diff --check
+```
+
+新增用例覆盖三种自然语言乱提 `control_acquire`、已持有/未知控制权、明确申请控制权，以及 Ktd authoritative/legacy/不可用和卓翼 `route_status=running`。变异检查：临时移除 `_proposal` 兜底分支后，21 项中 3 项失败（对应三个乱提输入），随后恢复实现。
+
+### 真实模型与范围
+
+真实模型命令、补充集产物和三条一次性探针结果在本节提交后补录；仅使用 `qwen3.5:9b` 预览链路，不确认、不接真实平台或设备。102 条 v2 的 `initial_state.control_owner=null` 用例为 `control_01`、`control_03`、`multiple_03`；本次改动只影响模型误提 `control_acquire` 的提议后路径，是否重跑 102 条以实际 live 证据决定。
+
+未做：系统提示词、工具描述、动作契约、话术常量、执行器默认配置、平台写接口和真实设备验证；未改 `task_status`/`route_resume_disabled` 等平台适配器投影字段。
+
+### Git 状态
+
+本节与实现、测试一起提交到 `bugfix/v14-deterministic-policy-gate`；不合入 `test`/`dev-wxl`，不推 GitHub。交付时补充最终 `code_sha`、远端 `origin` SHA、真实模型产物路径和临时脚本清理结果。

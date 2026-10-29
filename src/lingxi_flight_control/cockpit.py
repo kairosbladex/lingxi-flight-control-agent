@@ -1545,7 +1545,8 @@ class CockpitService:
                     response = self._proposal(result, grounding_text, request_id, session,
                                               model_failure_code=model_failure_code,
                                               parameter_reply=parameter_reply)
-                    response['interpretation_source'] = ('product-v1.3-exact' if product_call else 'exact-command-v1' if direct_call else
+                    response.setdefault('interpretation_source',
+                        'product-v1.3-exact' if product_call else 'exact-command-v1' if direct_call else
                         'safety-fast-path' if safety_call else 'model')
                     session.clarification = response['status'] == 'clarification'
                     history += [{'role': 'user', 'text': text}, {'role': 'assistant', 'status': response['status'], 'text': response['message']}]
@@ -1566,7 +1567,7 @@ class CockpitService:
         """模型前确定性门禁：返回 ``(error_code, 规范话术)``，放行返回 ``None``。
 
         与执行器预览同序：先控制权（V1.3 起急停、返航也不豁免），再飞行策略。
-        控制权未知（``control_owned`` 不是 ``False``）时不提前拒绝，交给执行器判定。
+        控制权未知或快照明确为非权威来源时不据此提前拒绝，交给执行器判定。
         与 ``enable_direct_commands`` 无关：这里只拒绝，不生成任何可执行预览。
 
         :param text: 已去除首尾空白的用户原句
@@ -1577,7 +1578,9 @@ class CockpitService:
         if call is None:
             return None
         if (FlightControlAction(call.name) not in _CONTROL_FREE_ACTIONS
-                and state.get('control_owned') is False):
+                and state.get('control_owned') is False
+                and state.get('authorization_quality', 'authoritative') == 'authoritative'):
+            # legacy 的读取时间和合成租约无法证明控制权仍有效；模拟器/卓翼不带该质量字段。
             return 'CONTROL_NOT_OWNED', CONTROL_MESSAGE
         try:
             check_flight_policy(call.name, state)
@@ -1856,6 +1859,11 @@ class CockpitService:
                 return self._base(status='clarification',
                     message='请单独明确要申请厂商飞控航权、进入DRC还是退出DRC；不会替换平台控制权或键鼠操作。', **common)
             if not _control_request_agrees(call.name, grounding_text):
+                # 模型可能擅自把动作改为申请控制权；按提议时的新快照返回规范话术，不生成申请卡。
+                if (call.name == 'control_acquire' and common['state'].get('control_owned') is False
+                        and common['state'].get('authorization_quality', 'authoritative') == 'authoritative'):
+                    return self._base(status='rejected', error_code='CONTROL_NOT_OWNED',
+                        message=CONTROL_MESSAGE, interpretation_source='model-proposal-policy-gate', **common)
                 return self._base(status='clarification',
                     message='本次没有明确请求这项控制权操作，请重新说明动作；我不会替你申请或释放控制权。', **common)
             _, forbidden = _separate_motion_constraints(grounding_text)
