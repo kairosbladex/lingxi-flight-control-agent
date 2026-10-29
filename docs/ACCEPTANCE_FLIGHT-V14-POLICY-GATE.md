@@ -171,10 +171,29 @@ git diff --check
 
 ### 真实模型与范围
 
-真实模型命令、补充集产物和三条一次性探针结果在本节提交后补录；仅使用 `qwen3.5:9b` 预览链路，不确认、不接真实平台或设备。102 条 v2 的 `initial_state.control_owner=null` 用例为 `control_01`、`control_03`、`multiple_03`；本次改动只影响模型误提 `control_acquire` 的提议后路径，是否重跑 102 条以实际 live 证据决定。
+补充集按验收预算重跑，使用 `qwen3.5:9b`、只预览不确认：
+
+```bash
+PYTHONPATH=src:. python3 tools/bench/cockpit_intents.py --surface service \
+  --fixture fixtures/v14-dictionary-intents-v2.json --live --model qwen3.5:9b \
+  --max-samples 31 --max-model-calls 100 --max-seconds 1500 --max-tokens 500000 --timeout 30 \
+  --output artifacts/v14-dictionary-intents-31-20261029-v2-prompt-v1.2-policy-v14-gate-acquire/report.json
+```
+
+最终报告：`artifacts/v14-dictionary-intents-31-20261029-v2-prompt-v1.2-policy-v14-gate-acquire/report.json`；`code_sha=b9d61fea91cfcdef2c95b671c6b9f786ea15ae1e`，`source_changed_during_run=false`，`fixture_changed_during_run=false`。结果为 **31/31 correct，0 timeout，0 unsafe_action_proposals，15 次模型调用**，P50 3.68ms、P95 16.76s。首轮唯一超时（`v14_flight_05`，30.0s）保留在同目录 `report-attempt-01.json`；重跑后达到门槛，说明是推理延迟抖动。
+
+三条一次性真实模型探针（脚本已从 `/tmp/v14-policy-gate-acquire` 清理）命令使用同一 Ollama 默认地址和 `qwen3.5:9b`，结果保存在 `artifacts/v14-dictionary-intents-31-20261029-v2-prompt-v1.2-policy-v14-gate-acquire/real-model-probe.json`：
+
+| 输入 | 模型实际提议 | 服务返回 | 耗时 |
+| --- | --- | --- | --- |
+| 往左边挪10米 | `control_acquire(mode=obtain, reason=...)` | `rejected/CONTROL_NOT_OWNED`，`CONTROL_MESSAGE`，`interpretation_source=model-proposal-policy-gate` | 16.89s |
+| 云台向下30度 | `control_acquire(mode=apply, reason=...)` | 同上 | 8.87s |
+| 向左侧移动十米 | `control_acquire(mode=apply, reason=...)` | 同上 | 11.81s |
+
+102 条 v2 冻结集的 `initial_state.control_owner=null` 仅为 `control_01`、`control_03`、`multiple_03`：前两条分别明确请求控制权/远端接管申请，`multiple_03` 明确“先获取控制权再返航”，都不属于“用户未要求却提议 `control_acquire`”路径；本次只改该路径，因此未重跑 102 条全量。
 
 未做：系统提示词、工具描述、动作契约、话术常量、执行器默认配置、平台写接口和真实设备验证；未改 `task_status`/`route_resume_disabled` 等平台适配器投影字段。
 
 ### Git 状态
 
-本节与实现、测试一起提交到 `bugfix/v14-deterministic-policy-gate`；不合入 `test`/`dev-wxl`，不推 GitHub。交付时补充最终 `code_sha`、远端 `origin` SHA、真实模型产物路径和临时脚本清理结果。
+本节与实现、测试首个提交为 `b9d61fe`（`fix: 补齐控制权提议兜底与平台门禁核验`）；真实证据产物在该提交工作树上生成，未纳入 Git。后续仅提交本验收记录更新；不合入 `test`/`dev-wxl`，不推 GitHub。回滚方式为 revert 本分支提交；探针脚本目录已清理，Ollama 由默认 `keep_alive` 管理，未发送卸载请求。
