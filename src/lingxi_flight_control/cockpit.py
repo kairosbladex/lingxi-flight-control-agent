@@ -60,7 +60,8 @@ from .ai_lifecycle import (
 from .target_resolver import (
     FLIGHT_INTENTS, MIXED_TARGET_UNSUPPORTED, MULTI_TARGET_UNSUPPORTED,
     TARGET_ALTITUDE_REQUIRED, TARGET_AMBIGUOUS, TARGET_BINDING_MISMATCH,
-    TARGET_NOT_FOUND, TARGET_RESOLVER_UNAVAILABLE, TARGET_VERSION_UNAVAILABLE,
+    TARGET_NOT_FOUND, TARGET_RESOLVER_UNAVAILABLE, TARGET_VERSION_CHANGED,
+    TARGET_VERSION_UNAVAILABLE,
     UNSUPPORTED_TARGET_GEOMETRY, TargetGeometry, TargetQuery, TargetResolverError,
     ResolvedTarget, resolve_target,
 )
@@ -342,9 +343,6 @@ _TARGET_ORBIT = re.compile(
     r'^(?:请|帮我)?(?:围绕|环绕|绕)\s*(?P<target>[^，,。；;!?！？]+?)'
     r'(?:\s*[，,].*)?[。.!！]?$')
 _TARGET_ONLY_POINT_MESSAGE = '飞行中只支持单点指点飞行或环绕，请选择点标注。'
-_TARGET_VERSION_CHANGED = 'TARGET_VERSION_CHANGED'
-
-
 def _target_mention(text):
     """只抽取明确的单目标飞行句式；坐标、否定、条件和询问不触发解析。"""
     if (_TARGET_COORDINATE_WORDS.search(text)
@@ -1785,12 +1783,12 @@ class CockpitService:
         try:
             current = resolve_target(self._target_resolver, query)
         except TargetResolverError:
-            return _TARGET_VERSION_CHANGED
+            return TARGET_VERSION_CHANGED
         parameters = card.get('parameters') or {}
         if (current.version != target.get('version')
                 or current.longitude != parameters.get('longitude')
                 or current.latitude != parameters.get('latitude')):
-            return _TARGET_VERSION_CHANGED
+            return TARGET_VERSION_CHANGED
         return None
 
     # ---- 复合指令：整份计划 -------------------------------------------------
