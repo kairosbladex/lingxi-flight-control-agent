@@ -206,7 +206,8 @@ class PlatformGateTests(unittest.TestCase):
 
     def decider_factory(self):
         self.calls += 1
-        return OllamaDecider(model='synthetic-gate', transport=lambda *_: tool('move_forward', distance_m=10),
+        response = getattr(self, 'model_response', tool('move_forward', distance_m=10))
+        return OllamaDecider(model='synthetic-gate', transport=lambda *_: response,
                              max_attempts=1)
 
     def service(self, executor):
@@ -218,7 +219,8 @@ class PlatformGateTests(unittest.TestCase):
         return {'X-Agent-Gateway': 'synthetic-gateway', 'X-Agent-Actor': 'actor-1',
                 'X-Agent-Session': session}
 
-    def ktd(self, *, owner='other', route_status='paused', unavailable=False, quality='authoritative'):
+    def ktd(self, *, owner='other', route_status='paused', unavailable=False,
+            quality='authoritative', legacy_read_api=False):
         now = 1000.0
         snapshot = KtdSnapshot(
             actor_id='actor-1', project_id='project-1', hangar_id='hangar-1', drone_id='drone-1',
@@ -233,7 +235,7 @@ class PlatformGateTests(unittest.TestCase):
             self.binding, site_id='site-1', task_id='task-1', transport=object(),
             snapshot_provider=provider,
             journal=SqliteCommandJournal(str(Path(self.temp.name) / 'commands.sqlite3')),
-            enabled=False, clock=lambda: now)
+            enabled=False, clock=lambda: now, legacy_read_api=legacy_read_api)
 
     def test_ktd_other_owner_is_rejected_before_model(self):
         reply = self.service(self.ktd(owner='other')).handle(
@@ -244,11 +246,33 @@ class PlatformGateTests(unittest.TestCase):
         self.assertEqual(self.calls, 0)
 
     def test_ktd_legacy_owner_is_left_to_executor(self):
-        reply = self.service(self.ktd(owner='other', quality='legacy-read-api')).handle(
+        executor = self.ktd(owner='other', quality='legacy-read-api', legacy_read_api=True)
+        state = executor.read_state()
+        self.assertTrue(state['available'])
+        self.assertEqual(state['authorization_quality'], 'legacy-read-api')
+        self.assertEqual(state['control_owner'], 'other')
+        reply = self.service(executor).handle(
             'POST', '/api/flight-control/agent/messages',
             json.dumps({'text': '向前飞10米', 'request_id': 'ktd-legacy', 'context_version': 1}),
             self.headers('ktd-legacy'))
         self.assertNotEqual(reply.payload.get('error_code'), 'CONTROL_NOT_OWNED')
+        self.assertEqual(self.calls, 1)
+
+    def test_ktd_legacy_model_acquire_keeps_clarification(self):
+        executor = self.ktd(owner='other', quality='legacy-read-api', legacy_read_api=True)
+        state = executor.read_state()
+        self.assertTrue(state['available'])
+        self.assertEqual(state['authorization_quality'], 'legacy-read-api')
+        self.assertEqual(state['control_owner'], 'other')
+        self.model_response = tool('control_acquire', mode='apply', reason='模型自行申请')
+        reply = self.service(executor).handle(
+            'POST', '/api/flight-control/agent/messages',
+            json.dumps({'text': '往左边挪10米', 'request_id': 'ktd-legacy-acquire', 'context_version': 1}),
+            self.headers('ktd-legacy-acquire'))
+        self.assertEqual(reply.payload['status'], 'clarification')
+        self.assertEqual(reply.payload['message'], '本次没有明确请求这项控制权操作，请重新说明动作；我不会替你申请或释放控制权。')
+        self.assertNotEqual(reply.payload.get('error_code'), 'CONTROL_NOT_OWNED')
+        self.assertNotIn('card', reply.payload)
         self.assertEqual(self.calls, 1)
 
     def test_ktd_running_route_is_rejected_before_model(self):

@@ -153,7 +153,7 @@ v1 标签计分剩下的 7 条不符全是标签格式问题：flight_03、paylo
 | `SimulatorExecutor` / `MemoryFlightControlSimulator` | 有，来自内存状态；`_public_state` 转为 `control_owned` | 有 | 有 | 有 | 有 | 有 | 有 | owner 缺失/未知不提前拒绝；策略字段缺失时 `check_flight_policy` 只执行能证明的规则 |
 | `KtdPlatformExecutor` authoritative | 有，来自 `KtdSnapshot.control_owner`；同时输出 `authorization_quality=authoritative` | 有，来自 `_STATE_FIELDS` | 有则从快照策略字段透传 | 有则透传 | 当前 `_STATE_FIELDS`/投影没有该字段 | 当前投影没有该字段（只保留 `task_state` 等原字段） | 有则透传 | 快照不可用返回 `available:false`，不含 owner；unknown 不冒称未持有；缺策略字段不猜测 |
 | `KtdPlatformExecutor` `legacy-read-api` | 有但可能由旧只读接口合成/过期，`authorization_quality=legacy-read-api` | 旧接口通常缺失或不完整 | 通常缺失 | 通常缺失 | 缺失 | 缺失 | 缺失 | 控制权不用于模型前提前拒绝，交给执行器原有校验；其余字段缺失不补默认值 |
-| 卓翼 `ZhuoyiPlatformExecutor` | 有，`control_owner_employee_id` 映射为 owner，并输出 `control_owned` | 有 | 当前 `read_state` 不投影 | 当前 `read_state` 不投影 | 当前 `read_state` 不投影 | 当前 `read_state` 不投影 | 当前 `read_state` 不投影 | 快照不可用只返回 `available:false`；owner 未知不提前拒绝，策略只能使用已投影字段 |
+| 卓翼 `ZhuoyiPlatformExecutor` | 有，`control_owner_employee_id` 映射为 owner，并输出 `control_owned` | 有 | 有则透传 | 有则透传 | 当前 `read_state` 不投影 | 当前 `read_state` 不投影 | 有则透传 | 快照不可用只返回 `available:false`；owner 未知不提前拒绝，策略只能使用已投影字段 |
 
 结论：`authorization_quality` 不是 `authoritative` 时，`control_owner` 不能证明当前租约。legacy 快照的读取时间由本次请求填充、租约为合成值，提前拒绝会误拒本应交给执行器复核的动作。因此本次只在 authoritative 快照下启用控制权前门禁；模拟器与卓翼没有质量字段，仍按其现有明确 owner 字段工作。未修改平台适配器的对外字段契约。
 
@@ -161,13 +161,13 @@ v1 标签计分剩下的 7 条不符全是标签格式问题：flight_03、paylo
 
 ```text
 PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_v14_policy_gate.py' -v
-Ran 22 tests ... OK
+Ran 23 tests ... OK
 bash tools/ci/offline_tests.sh
-Ran 1388 tests ... OK
+Ran 1389 tests ... OK
 git diff --check
 ```
 
-新增用例覆盖三种自然语言乱提 `control_acquire`、已持有/未知控制权、模型调用期间状态变化、明确申请控制权，以及 Ktd authoritative/legacy/不可用和卓翼 `route_status=running`。变异检查：临时移除 `_proposal` 兜底分支后，22 项中 3 项失败（对应三个乱提输入），随后恢复实现。
+新增用例覆盖三种自然语言乱提 `control_acquire`、已持有/未知控制权、模型调用期间状态变化、明确申请控制权，以及 Ktd authoritative/legacy/不可用和卓翼 `route_status=running`。legacy 用例显式使用 `legacy_read_api=True`，并断言 `available=true`、`authorization_quality=legacy-read-api`、`control_owner=other`；新增 legacy 模型误提 `control_acquire` 用例仍返回原 clarification。变异检查：临时移除 `_proposal` 兜底分支后，23 项中 4 项失败（3 个普通乱提输入 + 1 个 legacy 误提输入）；分别移除 `_policy_gate_rejection` 与 `_proposal` 中的 `authorization_quality == 'authoritative'` 条件后，各有 1 项测试失败，随后恢复实现。完整离线测试为 1389 项通过。
 
 ### 真实模型与范围
 
