@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Local simulator UI service; enabling a physical backend is an integration task."""
 import argparse
+from pathlib import Path
 
 from lingxi_flight_control import (
     MemoryFlightControlSimulator,
@@ -10,6 +11,7 @@ from lingxi_flight_control import (
 )
 from lingxi_flight_control.cockpit import COCKPIT_SYSTEM_PROMPT, CockpitService
 from lingxi_flight_control.ollama_decider import DEFAULT_BASE_URL, DEFAULT_MODEL
+from lingxi_flight_control.target_resolver import FixtureTargetResolver
 from lingxi_flight_control.plan import plan_clarify_detector, plan_system_prompt
 from lingxi_flight_control.standalone_preview import build_standalone_server
 
@@ -21,8 +23,13 @@ def main():
     parser.add_argument('--base-url', default=DEFAULT_BASE_URL)
     parser.add_argument('--enable-plan-execution', action='store_true',
                         help='启用复合指令：模型规划整份计划，用户一次确认后按顺序执行（仅模拟器）')
+    parser.add_argument('--target-fixture', type=Path,
+                        help='启用只读合成静态标注解析（仅本地验证），传入 v14-target-candidates JSON')
     args = parser.parse_args()
-    binding = RuntimeBinding('local-operator', 'demo-project', 'demo-hangar', 'demo-drone', 'demo-batch', 1)
+    target_resolver = (FixtureTargetResolver.from_json(args.target_fixture)
+                       if args.target_fixture is not None else None)
+    project_id = getattr(target_resolver, 'project_id', None) or 'demo-project'
+    binding = RuntimeBinding('local-operator', project_id, 'demo-hangar', 'demo-drone', 'demo-batch', 1)
     simulator = MemoryFlightControlSimulator(binding)
     simulator.state.longitude, simulator.state.latitude = 113, 23
     simulator.state.heading_deg = 90
@@ -39,7 +46,8 @@ def main():
         binding, simulator, decider_factory(COCKPIT_SYSTEM_PROMPT), timeout_sec=65,
         enable_plan_execution=args.enable_plan_execution,
         plan_decider_factory=(decider_factory(plan_system_prompt(5), plan=True)
-                              if args.enable_plan_execution else None))
+                              if args.enable_plan_execution else None),
+        target_resolver=target_resolver)
     server = build_standalone_server(service, '127.0.0.1', args.port, allowed_origin='http://127.0.0.1:5173')
     mode = '整份计划一次确认' if args.enable_plan_execution else '每个动作需确认'
     print(f'飞控服务 http://127.0.0.1:{server.server_port} · simulator · {mode}', flush=True)

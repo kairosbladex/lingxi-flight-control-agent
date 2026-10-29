@@ -1,0 +1,91 @@
+{
+  "schema": "lingxi-v14-named-target-candidates/v1",
+  "synthetic": true,
+  "note": "本夹具只用于命名目标离线验证，不是地图服务真实返回。",
+  "project_id": "project-1",
+  "binding": {
+    "siteId": "site-1",
+    "hangarId": "hangar-1",
+    "droneId": "drone-1",
+    "taskId": "task-1"
+  },
+  "candidates": [
+    {
+      "target_id": "ann-water-tower-1",
+      "name": "1号水塔",
+      "geometry_type": "point",
+      "longitude": 113.201,
+      "latitude": 23.101,
+      "altitude_m": 45.0,
+      "version": "5f2c1d3e4b5a69788796a5b4c3d2e1f00112233445566778899aabbccddeeff0",
+      "source": "static-annotation",
+      "project_id": "project-1"
+    },
+    {
+      "target_id": "ann-unique-tower",
+      "name": "唯一水塔",
+      "geometry_type": "point",
+      "longitude": 113.201,
+      "latitude": 23.101,
+      "altitude_m": 45.0,
+      "version": "cf2c1d3e4b5a69788796a5b4c3d2e1f00112233445566778899aabbccddeeff7",
+      "source": "static-annotation",
+      "project_id": "project-1"
+    },
+    {
+      "target_id": "ann-water-tower-2",
+      "name": "1号水塔",
+      "geometry_type": "point",
+      "longitude": 113.209,
+      "latitude": 23.109,
+      "altitude_m": 48.0,
+      "version": "6f2c1d3e4b5a69788796a5b4c3d2e1f00112233445566778899aabbccddeeff1",
+      "source": "static-annotation",
+      "project_id": "project-1"
+    },
+    {
+      "target_id": "ann-river-1",
+      "name": "B河道",
+      "geometry_type": "line",
+      "longitude": 113.3,
+      "latitude": 23.2,
+      "altitude_m": 12.0,
+      "version": "7f2c1d3e4b5a69788796a5b4c3d2e1f00112233445566778899aabbccddeeff2",
+      "source": "static-annotation",
+      "project_id": "project-1"
+    },
+    {
+      "target_id": "ann-building-1",
+      "name": "立体大楼",
+      "geometry_type": "volume",
+      "longitude": 113.5,
+      "latitude": 23.4,
+      "altitude_m": 60.0,
+      "version": "9f2c1d3e4b5a69788796a5b4c3d2e1f00112233445566778899aabbccddeeff4",
+      "source": "static-annotation",
+      "project_id": "project-1"
+    },
+    {
+      "target_id": "ann-no-height-1",
+      "name": "无高度点位",
+      "geometry_type": "point",
+      "longitude": 113.7,
+      "latitude": 23.6,
+      "altitude_m": null,
+      "version": "bf2c1d3e4b5a69788796a5b4c3d2e1f00112233445566778899aabbccddeeff6",
+      "source": "static-annotation",
+      "project_id": "project-1"
+    },
+    {
+      "target_id": "ann-no-version-1",
+      "name": "无版本点位",
+      "geometry_type": "point",
+      "longitude": 113.8,
+      "latitude": 23.7,
+      "altitude_m": 40.0,
+      "version": null,
+      "source": "static-annotation",
+      "project_id": "project-1"
+    }
+  ]
+}

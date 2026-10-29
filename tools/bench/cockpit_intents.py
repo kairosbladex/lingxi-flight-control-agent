@@ -451,6 +451,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--surface", choices=("proposal", "service"), default="proposal")
     parser.add_argument("--fixture", type=Path)
+    parser.add_argument("--target-fixture", type=Path,
+                        help="service surface 使用的只读静态标注候选夹具")
     parser.add_argument("--output", type=Path, help="save UTF-8 JSON report; default is stdout")
     parser.add_argument("--only-ids", help="comma-separated scenario ids; all other samples remain missing")
     parser.add_argument("--live", action="store_true", help="opt in to model calls; never executes actions")
@@ -470,6 +472,17 @@ def main(argv=None):
     expected_schema = SERVICE_SCHEMA_VERSION if args.surface == "service" else SCHEMA_VERSION
     if dataset["schema_version"] != expected_schema:
         parser.error("fixture schema does not match the selected evaluation surface")
+    target_resolver = None
+    target_fixture_sha256 = None
+    if args.target_fixture is not None:
+        if args.surface != "service":
+            parser.error("--target-fixture requires --surface service")
+        from lingxi_flight_control.target_resolver import FixtureTargetResolver
+        try:
+            target_resolver = FixtureTargetResolver.from_json(args.target_fixture)
+            target_fixture_sha256 = hashlib.sha256(args.target_fixture.read_bytes()).hexdigest()
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            parser.error(f"invalid target fixture: {error}")
     try:
         selection_ids = _selection_ids(dataset, args.only_ids)
     except ValueError as error:
@@ -485,10 +498,13 @@ def main(argv=None):
         if args.surface == "service":
             from tools.bench.cockpit_service_intents import run_service_live
             runner = run_service_live
-        outcomes, usage = runner(dataset, model=args.model, base_url=args.base_url,
-                                   max_samples=args.max_samples, max_model_calls=args.max_model_calls,
-                                   max_seconds=args.max_seconds, max_tokens=args.max_tokens, timeout=args.timeout,
-                                   only_ids=selection_ids)
+        runner_args = dict(model=args.model, base_url=args.base_url,
+                           max_samples=args.max_samples, max_model_calls=args.max_model_calls,
+                           max_seconds=args.max_seconds, max_tokens=args.max_tokens, timeout=args.timeout,
+                           only_ids=selection_ids)
+        if args.surface == "service":
+            runner_args["target_resolver"] = target_resolver
+        outcomes, usage = runner(dataset, **runner_args)
     from lingxi_flight_control.cockpit import COCKPIT_SYSTEM_PROMPT, PROMPT_VERSION
 
     if args.surface == "service":
@@ -515,6 +531,11 @@ def main(argv=None):
                     "max_seconds": args.max_seconds, "max_tokens": args.max_tokens, "request_timeout": args.timeout},
         "usage": usage,
     }
+    if args.surface == "service":
+        report["run"].update(
+            target_resolver_source=str(args.target_fixture) if args.target_fixture else None,
+            target_resolver_fixture_sha256=target_fixture_sha256,
+        )
     if args.surface == "service":
         report["run"].update(surface="service", mode="live_service_previews" if args.live else "offline_service_coverage_only",
             scope="CockpitService.handle_model_policy_and_real_simulator_preview_without_confirmation")

@@ -17,9 +17,11 @@
 from __future__ import annotations
 
 import math
+import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Protocol, runtime_checkable
 
@@ -162,6 +164,41 @@ class TargetResolver(Protocol):
 
     def resolve(self, query: TargetQuery) -> Sequence[TargetCandidate]:
         ...
+
+
+class FixtureTargetResolver:
+    """只读合成标注解析器；用于本地离线验证，不连接真实地图服务。"""
+
+    def __init__(self, candidates: Sequence[TargetCandidate]):
+        self._candidates = tuple(candidates)
+        self.project_id = (self._candidates[0].project_id if self._candidates else None)
+
+    @classmethod
+    def from_json(cls, path: str | Path) -> "FixtureTargetResolver":
+        """从冻结 JSON 夹具加载候选；非法夹具直接失败，不猜测字段。"""
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        raw_candidates = payload.get("candidates") if isinstance(payload, Mapping) else None
+        if not isinstance(raw_candidates, Sequence) or isinstance(raw_candidates, (str, bytes)):
+            raise ValueError("target fixture candidates are required")
+        candidates = []
+        for item in raw_candidates:
+            if not isinstance(item, Mapping):
+                raise ValueError("target fixture candidate must be an object")
+            candidates.append(TargetCandidate(
+                target_id=item.get("target_id"), name=item.get("name"),
+                geometry_type=_geometry(item.get("geometry_type")),
+                longitude=item.get("longitude"), latitude=item.get("latitude"),
+                altitude_m=item.get("altitude_m"), version=item.get("version"),
+                source=item.get("source"), project_id=item.get("project_id")))
+        return cls(candidates)
+
+    def resolve(self, query: TargetQuery) -> Sequence[TargetCandidate]:
+        """按名称或 ID 精确过滤候选；不做模糊匹配或相似度排序。"""
+        query.validate()
+        return tuple(candidate for candidate in self._candidates
+                     if candidate.project_id == query.project_id
+                     and (query.target_id is None or candidate.target_id == query.target_id)
+                     and (query.name is None or candidate.name == query.name))
 
 
 def _geometry(value: Any) -> TargetGeometry:

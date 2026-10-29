@@ -19,6 +19,7 @@ from tools.bench.cockpit_intents import _BudgetedTransport, _counts, _progress, 
 SERVICE_CONTRACT = "cockpit-service-intent-expectation/v1"
 INITIAL_FIELDS = frozenset({"control_owner", "control_request", "altitude_m", "heading_deg", "longitude", "latitude",
                             "task_status", "route_status", "route_id", "breakpoint_index"})
+OPTIONAL_INITIAL_FIELDS = frozenset({"task_type"})
 ACTOR = "intent-evaluation-actor"
 
 
@@ -28,7 +29,9 @@ def validate_service_scenarios(dataset):
     real_fields = {field.name for field in fields(FlightControlState)}
     for case in dataset["scenarios"]:
         initial = case.get("initial_state")
-        if not isinstance(initial, dict) or set(initial) != INITIAL_FIELDS or set(initial) - real_fields:
+        if (not isinstance(initial, dict)
+                or set(initial) not in {INITIAL_FIELDS, INITIAL_FIELDS | OPTIONAL_INITIAL_FIELDS}
+                or set(initial) - real_fields):
             raise ValueError("each service scenario needs explicit real simulator state")
         for name, low, high in (("altitude_m", -500, 10000), ("heading_deg", -360, 360),
                                 ("longitude", -180, 180), ("latitude", -90, 90)):
@@ -42,6 +45,9 @@ def validate_service_scenarios(dataset):
                 or (initial["route_id"] is not None and (not isinstance(initial["route_id"], str) or not initial["route_id"].strip()))
                 or (initial["breakpoint_index"] is not None and (type(initial["breakpoint_index"]) is not int or initial["breakpoint_index"] < 0))):
             raise ValueError("invalid simulator initial state")
+        if "task_type" in initial and (not isinstance(initial["task_type"], str)
+                                       or not initial["task_type"].strip()):
+            raise ValueError("invalid simulator task_type")
         expected = case.get("service_expected")
         if not isinstance(expected, dict) or set(expected) != {"kind", "status", "action", "arguments"}:
             raise ValueError("missing independent service expectation")
@@ -166,7 +172,7 @@ def _service_progress(case, candidate):
 
 
 def run_service_live(dataset, *, model, base_url, max_samples, max_model_calls, max_seconds, max_tokens, timeout,
-                     only_ids=None):
+                     only_ids=None, target_resolver=None):
     """Opt-in model HTTP only; the rest is the unmodified public cockpit chain."""
     validate_service_scenarios(dataset)
     selected = set(_selection_ids(dataset, only_ids))
@@ -188,7 +194,8 @@ def run_service_live(dataset, *, model, base_url, max_samples, max_model_calls, 
         started = time.monotonic()
         calls_before, prompt_before, output_before = transport.calls, transport.prompt_tokens, transport.output_tokens
         unknown_before = transport.unknown_usage_calls
-        binding = RuntimeBinding(ACTOR, "synthetic-project", "synthetic-hangar", "synthetic-drone", "synthetic-batch", 1)
+        project_id = getattr(target_resolver, "project_id", None) or "synthetic-project"
+        binding = RuntimeBinding(ACTOR, project_id, "synthetic-hangar", "synthetic-drone", "synthetic-batch", 1)
         simulator = _PreviewOnlySimulator(binding)
         for name, value in case["initial_state"].items():
             setattr(simulator.state, name, deepcopy(value))
@@ -200,7 +207,8 @@ def run_service_live(dataset, *, model, base_url, max_samples, max_model_calls, 
                 max_output_tokens=DEFAULT_OUTPUT_RESERVE_TOKENS,
                 tool_selector=RuleBasedToolSelector())
         service = CockpitService(binding, executor, decider_factory, store=store, max_model_steps=3,
-                                 timeout_sec=min(65, max_seconds), task_id="synthetic-task")
+                                 timeout_sec=min(65, max_seconds), task_id="synthetic-task",
+                                 target_resolver=target_resolver)
         session_id = "service-" + case["id"]
         response = service.handle("POST", "/api/flight-control/agent/messages", json.dumps({
             "text": case["input"], "request_id": "request-" + case["id"], "context_version": 1}),
