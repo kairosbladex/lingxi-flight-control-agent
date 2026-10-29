@@ -646,6 +646,9 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         # V1.4 4.1.2：测绘中断是一个原子业务操作，确认后才执行，失败即不下发。
         self._mapping_gateway = mapping_gateway or SimulatorMappingInterruptionGateway(
             lambda: self.state, clock=self._clock)
+        self._mapping_gateway_available = (
+            callable(getattr(self._mapping_gateway, "interrupt", None))
+            and getattr(self._mapping_gateway, "execution_mode", "unavailable") != "unavailable")
 
     def runtime_context(self) -> ExecutionContext:
         """始终由当前绑定派生。
@@ -762,6 +765,12 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
         if action not in _CONTROL_FREE_ACTIONS and self.state.control_owner != self.binding.actor_id:
             return _status_receipt(FlightControlStatus.REJECTED, request, self.binding, self.state,
                                    error_code="CONTROL_NOT_OWNED", message=CONTROL_MESSAGE)
+        if (mapping_interruption(action.value, self.state.to_dict())
+                and not self._mapping_gateway_available):
+            return _status_receipt(
+                FlightControlStatus.REJECTED, request, self.binding, self.state,
+                error_code=MAPPING_INTERRUPTION_UNAVAILABLE,
+                message=MAPPING_MESSAGE + "平台尚未提供作废测绘任务的原子契约，本次不下发。")
         try:
             check_flight_policy(action.value, self.state.to_dict())
             if action == FlightControlAction.AI_ALGORITHM_SET and parameters['algorithm'] not in self.state.configured_algorithms:
@@ -769,7 +778,8 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             # 模拟器允许协作式 provider（离线 fake），但每条回执都带
             # execution_mode=simulator，不代表真实平台或设备已执行围栏检查。
             warning = check_path(self._path_checker, self.binding, action.value, parameters,
-                                 self.state.to_dict(), allow_cooperative=True)
+                                 self.state.to_dict(), allow_cooperative=True,
+                                 command_ref=request.command_id)
         except PolicyError as error:
             return _status_receipt(FlightControlStatus.REJECTED, request, self.binding, self.state,
                                    error_code=error.code, message=str(error))
@@ -1118,7 +1128,7 @@ class MemoryFlightControlSimulator(MemoryFlightSimulator):
             # 同 preview：模拟器允许协作式 provider，回执 execution_mode=simulator。
             warning = check_path(self._path_checker, self.binding, action.value,
                                  request.parameters, self.state.to_dict(),
-                                 allow_cooperative=True)
+                                 allow_cooperative=True, command_ref=request.command_id)
         except PolicyError as policy_error:
             self._pending.pop(confirmation_id, None)
             return _status_receipt(FlightControlStatus.REJECTED, request, self.binding, self.state,

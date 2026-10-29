@@ -46,7 +46,8 @@ class KtdPathChecker:
         """只有传输层真的接收单次预算时才声明硬超时；否则不得进入平台装配。"""
         return self._timeout_keyword is not None
 
-    def __call__(self, binding, action, parameters, state):
+    def __call__(self, binding, action, parameters, state, *, command_ref=None,
+                 trace_ref=None):
         started = self._clock()
         result = self._check(binding, action, parameters, state)
         elapsed = max(0.0, self._clock() - started)
@@ -56,7 +57,7 @@ class KtdPathChecker:
                                segments=result.segments, vertical_field=result.vertical_field)
         result = PathCheck(result.status, result.reason, result.segments, result.segment_index,
                            result.vertical_field, int(elapsed * 1000))
-        self._audit(binding, action, result, state)
+        self._audit(binding, action, result, command_ref=command_ref, trace_ref=trace_ref)
         return result
 
     def _check(self, binding, action, parameters, state):
@@ -93,15 +94,14 @@ class KtdPathChecker:
         return self.transport.check_path(binding, points,
                                          **{self._timeout_keyword: self.deadline_sec})
 
-    def _audit(self, binding, action, result, state):
+    def _audit(self, binding, action, result, *, command_ref=None, trace_ref=None):
         # 只记录类型、计数和摘要，不记录经纬度、半径或平台响应原文。
-        state = state if isinstance(state, dict) else {}
         emit("flight_path_check", action=str(action), status=result.status,
              reason=result.reason or None, segments=result.segments,
              segment_index=result.segment_index, vertical_field=result.vertical_field or None,
              elapsed_ms=result.elapsed_ms, deadline_ms=int(self.deadline_sec * 1000),
-             trace_ref=digest(state.get("trace_id")),
-             command_ref=digest(state.get("command_id")),
+             trace_ref=digest(trace_ref),
+             command_ref=digest(command_ref),
              drone_ref=digest(getattr(binding, "drone_id", None)))
 
 
