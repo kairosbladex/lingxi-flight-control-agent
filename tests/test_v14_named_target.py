@@ -154,6 +154,29 @@ class NamedTargetServiceTests(unittest.TestCase):
                 self.assertEqual(len(self.brain_calls), 1)
                 self.assertEqual(resolver.calls, [])
 
+    def test_power_station_names_with_action_characters_inside_are_resolved(self):
+        cases = (
+            ('去1号升压站，高50米', '1号升压站', 'point_flight',
+             {'longitude': 113.31, 'latitude': 23.21, 'altitude_m': 50}),
+            ('围绕2号降压站绕一圈，半径30米', '2号降压站', 'point_orbit',
+             {'longitude': 113.31, 'latitude': 23.21, 'radius_m': 30}),
+            ('去转运站，高40米', '转运站', 'point_flight',
+             {'longitude': 113.31, 'latitude': 23.21, 'altitude_m': 40}),
+            ('绕飞来峰绕一圈，半径50米', '飞来峰', 'point_orbit',
+             {'longitude': 113.31, 'latitude': 23.21, 'radius_m': 50}),
+        )
+        for text, name, action, arguments in cases:
+            with self.subTest(text=text):
+                resolver = RecordingResolver([point(target_id='station-1', name=name,
+                                                    longitude=113.31, latitude=23.21)])
+                service = self.make_service(
+                    resolver, ModelDecision(DecisionKind.TOOL_CALL, tool_call=ToolCall(action, arguments)))
+                reply = self.message(service, text)
+                self.assertEqual([query.name for query in resolver.calls], [name])
+                self.assertEqual(reply['status'], 'preview_required')
+                self.assertEqual(reply['card']['target']['target_id'], 'station-1')
+                self.assertEqual(reply['card']['requested_parameters'], arguments)
+
     def test_model_coordinates_must_match_resolved_target(self):
         resolver = RecordingResolver([point()])
         service = self.make_service(

@@ -344,21 +344,35 @@ _TARGET_ORBIT = re.compile(
     r'^(?:请|帮我)?(?:围绕|环绕|绕(?!过|开|行))\s*(?P<target>[^，,。；;!?！？]+?)'
     r'(?:\s*[，,].*)?[。.!！]?$')
 _TARGET_ONLY_POINT_MESSAGE = '飞行中只支持单点指点飞行或环绕，请选择点标注。'
-_TARGET_NAME_ACTIONS = re.compile(r'拍照|拍摄|拍|看|录制|录像|录|转|飞|升|降|上升|下降')
-_TARGET_NAME_DIRECTIONS = re.compile(
-    r'上面|下面|前面|后面|上方|下方|前方|后方|左面|右面|左边|右边|左侧|右侧|'
-    r'上一个|下一个|航点|返航点|返航|悬停点|去$')
+# 动作短语只在名称首尾才排除：首部如“拍张照”“看看云台”是动作句，尾部如“1号水塔拍照”是
+# 目标+载荷复合句（本轮不支持拆分）。只认多字动作短语，不认单字：“升压站”“降压站”
+# “转运站”“飞来峰”这类常见标注名以单字动词开头，单字规则会误判（FLIGHT-V14-NAMED-TARGET 验收发现）。
+_TARGET_NAME_LEADING_ACTIONS = re.compile(
+    r'^(?:拍照|拍张|拍一张|拍摄|看看|看一下|看下|录像|录制|转向|转动|转头|飞行|飞过|上升|下降|升高|降低)')
+_TARGET_NAME_TRAILING_ACTIONS = re.compile(r'(?:拍照|拍摄|拍一?张照?|录像|录制|看看|看一下)$')
+# 相对方位只在名称开头时表示“相对位置”而不是标注名；航点、返航属于航线概念，出现即排除。
+_TARGET_NAME_LEADING_DIRECTIONS = re.compile(
+    r'^(?:上面|下面|前面|后面|上方|下方|前方|后方|左面|右面|左边|右边|左侧|右侧|上一个|下一个)')
+_TARGET_NAME_ROUTE_WORDS = re.compile(r'航点|返航|悬停点|去$')
 _TARGET_NAME_MODAL = frozenset({'吧', '呢', '呀', '啊', '了', '吗'})
 
 
 def _valid_target_name(name):
-    """只接受至少两个字符的名词短语，避免把动作、方位和语气词当标注名。"""
+    """判断抽取出的文本能否作为标注名查询。
+
+    只排除明显不是标注名的情况（语气词、单字、首尾动作、开头方位、航线概念）。
+    这里宁可放行：查不到标注时会退回 resolver 关闭时的原流程，不会误拒指令。
+
+    :param name: 从“去/围绕 X”句式中抽取出的原始名称
+    :return: 可以作为名称查询时为 ``True``
+    """
     if not isinstance(name, str):
         return False
     name = name.strip()
     if len(name) <= 1 or name in _TARGET_NAME_MODAL:
         return False
-    if _TARGET_NAME_ACTIONS.search(name) or _TARGET_NAME_DIRECTIONS.search(name):
+    if (_TARGET_NAME_LEADING_ACTIONS.search(name) or _TARGET_NAME_TRAILING_ACTIONS.search(name)
+            or _TARGET_NAME_LEADING_DIRECTIONS.search(name) or _TARGET_NAME_ROUTE_WORDS.search(name)):
         return False
     return True
 

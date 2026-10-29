@@ -1,0 +1,589 @@
+{
+  "schema_version": "cockpit-intent-scenarios/v2",
+  "dataset_id": "v14-named-target-intents-2026-10-30-v2",
+  "source": "synthetic_reviewed_contract",
+  "accuracy_status": "not_evaluable",
+  "created_on": "2026-10-30",
+  "review": {
+    "method": "frozen_before_candidate_run",
+    "human_reviewed": false,
+    "real_flight_truth": false,
+    "derived_from": "fixtures/v14-named-target-intents-v1.json"
+  },
+  "scope": "命名静态标注到飞行中单点指点/环绕的离线服务预览；只提议、不确认、不连接真实地图或设备。",
+  "context": {},
+  "service_contract": {
+    "schema_version": "cockpit-service-intent-expectation/v1",
+    "mapping": {
+      "action": "preview_required带准确card",
+      "clarification": "服务typed clarification",
+      "rejected": "确定性策略拒绝",
+      "no_action": "纯否定final no_action"
+    },
+    "label_policy": "标签在模型候选运行前冻结，不按输出改写。",
+    "initial_state": "字段沿用FlightControlState；task_type用于测绘例外。"
+  },
+  "scenarios": [
+    {
+      "id": "named_01_orbit_unique",
+      "category": "named_target",
+      "input": "围绕唯一水塔绕一圈，半径30米",
+      "expected_kind": "action",
+      "expected_action": "point_orbit",
+      "expected_arguments": {
+        "longitude": 113.201,
+        "latitude": 23.101,
+        "radius_m": 30
+      },
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "named-target-route",
+        "breakpoint_index": 2,
+        "task_type": "inspection"
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "point_orbit",
+        "arguments": {
+          "longitude": 113.201,
+          "latitude": 23.101,
+          "radius_m": 30
+        }
+      }
+    },
+    {
+      "id": "named_02_flight_unique_height",
+      "category": "named_target",
+      "input": "去唯一水塔，高50米",
+      "expected_kind": "action",
+      "expected_action": "point_flight",
+      "expected_arguments": {
+        "longitude": 113.201,
+        "latitude": 23.101,
+        "altitude_m": 50
+      },
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "named-target-route",
+        "breakpoint_index": 2,
+        "task_type": "inspection"
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "point_flight",
+        "arguments": {
+          "longitude": 113.201,
+          "latitude": 23.101,
+          "altitude_m": 50
+        }
+      }
+    },
+    {
+      "id": "named_03_flight_missing_height",
+      "category": "named_target",
+      "input": "去唯一水塔",
+      "expected_kind": "clarification",
+      "expected_action": null,
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "named-target-route",
+        "breakpoint_index": 2,
+        "task_type": "inspection"
+      },
+      "service_expected": {
+        "kind": "clarification",
+        "status": "clarification",
+        "action": null,
+        "arguments": {}
+      }
+    },
+    {
+      "id": "named_04_ambiguous",
+      "category": "named_target",
+      "input": "围绕1号水塔绕一圈，半径30米",
+      "expected_kind": "clarification",
+      "expected_action": null,
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "named-target-route",
+        "breakpoint_index": 2,
+        "task_type": "inspection"
+      },
+      "service_expected": {
+        "kind": "clarification",
+        "status": "clarification",
+        "action": null,
+        "arguments": {}
+      }
+    },
+    {
+      "id": "named_05_line",
+      "category": "named_target",
+      "input": "去B河道",
+      "expected_kind": "rejected",
+      "expected_action": null,
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "named-target-route",
+        "breakpoint_index": 2,
+        "task_type": "inspection"
+      },
+      "service_expected": {
+        "kind": "rejected",
+        "status": "rejected",
+        "action": null,
+        "arguments": {}
+      }
+    },
+    {
+      "id": "named_06_volume",
+      "category": "named_target",
+      "input": "去立体大楼",
+      "expected_kind": "rejected",
+      "expected_action": null,
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "named-target-route",
+        "breakpoint_index": 2,
+        "task_type": "inspection"
+      },
+      "service_expected": {
+        "kind": "rejected",
+        "status": "rejected",
+        "action": null,
+        "arguments": {}
+      }
+    },
+    {
+      "id": "named_07_not_found",
+      "category": "named_target",
+      "input": "去不存在的塔，高50米",
+      "expected_kind": "clarification",
+      "expected_action": null,
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "named-target-route",
+        "breakpoint_index": 2,
+        "task_type": "inspection"
+      },
+      "service_expected": {
+        "kind": "clarification",
+        "status": "clarification",
+        "action": null,
+        "arguments": {}
+      }
+    },
+    {
+      "id": "named_08_negative",
+      "category": "named_target",
+      "input": "不要去唯一水塔",
+      "expected_kind": "no_action",
+      "expected_action": null,
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "named-target-route",
+        "breakpoint_index": 2,
+        "task_type": "inspection"
+      },
+      "service_expected": {
+        "kind": "no_action",
+        "status": "final",
+        "action": null,
+        "arguments": {}
+      }
+    },
+    {
+      "id": "named_09_conditional",
+      "category": "named_target",
+      "input": "如果有风就去唯一水塔",
+      "expected_kind": "clarification",
+      "expected_action": null,
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "named-target-route",
+        "breakpoint_index": 2,
+        "task_type": "inspection"
+      },
+      "service_expected": {
+        "kind": "clarification",
+        "status": "clarification",
+        "action": null,
+        "arguments": {}
+      }
+    },
+    {
+      "id": "named_10_route_running",
+      "category": "named_target",
+      "input": "围绕唯一水塔绕一圈，半径30米",
+      "expected_kind": "rejected",
+      "expected_action": null,
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "running",
+        "route_id": "named-target-route",
+        "breakpoint_index": 2,
+        "task_type": "inspection"
+      },
+      "service_expected": {
+        "kind": "rejected",
+        "status": "rejected",
+        "action": null,
+        "arguments": {}
+      }
+    },
+    {
+      "id": "named_11_mapping_running",
+      "category": "named_target",
+      "input": "围绕唯一水塔绕一圈，半径30米",
+      "expected_kind": "action",
+      "expected_action": "point_orbit",
+      "expected_arguments": {
+        "longitude": 113.201,
+        "latitude": 23.101,
+        "radius_m": 30
+      },
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "running",
+        "route_id": "named-target-route",
+        "breakpoint_index": 2,
+        "task_type": "mapping"
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "point_orbit",
+        "arguments": {
+          "longitude": 113.201,
+          "latitude": 23.101,
+          "radius_m": 30
+        }
+      }
+    },
+    {
+      "id": "named_12_no_control",
+      "category": "named_target",
+      "input": "去唯一水塔，高50米",
+      "expected_kind": "rejected",
+      "expected_action": null,
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": null,
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "named-target-route",
+        "breakpoint_index": 2,
+        "task_type": "inspection"
+      },
+      "service_expected": {
+        "kind": "rejected",
+        "status": "rejected",
+        "action": null,
+        "arguments": {}
+      }
+    },
+    {
+      "id": "named_13_coordinate_bypass",
+      "category": "named_target",
+      "input": "去东经118，北纬34，高50",
+      "expected_kind": "action",
+      "expected_action": "point_flight",
+      "expected_arguments": {
+        "longitude": 118,
+        "latitude": 34,
+        "altitude_m": 50
+      },
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "named-target-route",
+        "breakpoint_index": 2,
+        "task_type": "inspection"
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "point_flight",
+        "arguments": {
+          "longitude": 118,
+          "latitude": 34,
+          "altitude_m": 50
+        }
+      }
+    },
+    {
+      "id": "named_14_booster_flight",
+      "category": "named_target_realistic_name",
+      "input": "去1号升压站，高50米",
+      "expected_kind": "action",
+      "expected_action": "point_flight",
+      "expected_arguments": {
+        "longitude": 113.311,
+        "latitude": 23.211,
+        "altitude_m": 50
+      },
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "named-target-route",
+        "breakpoint_index": 2,
+        "task_type": "inspection"
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "point_flight",
+        "arguments": {
+          "longitude": 113.311,
+          "latitude": 23.211,
+          "altitude_m": 50
+        }
+      }
+    },
+    {
+      "id": "named_15_stepdown_orbit",
+      "category": "named_target_realistic_name",
+      "input": "围绕2号降压站绕一圈，半径30米",
+      "expected_kind": "action",
+      "expected_action": "point_orbit",
+      "expected_arguments": {
+        "longitude": 113.322,
+        "latitude": 23.222,
+        "radius_m": 30
+      },
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "named-target-route",
+        "breakpoint_index": 2,
+        "task_type": "inspection"
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "point_orbit",
+        "arguments": {
+          "longitude": 113.322,
+          "latitude": 23.222,
+          "radius_m": 30
+        }
+      }
+    },
+    {
+      "id": "named_16_transfer_missing_height",
+      "category": "named_target_realistic_name",
+      "input": "去转运站",
+      "expected_kind": "clarification",
+      "expected_action": null,
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "named-target-route",
+        "breakpoint_index": 2,
+        "task_type": "inspection"
+      },
+      "service_expected": {
+        "kind": "clarification",
+        "status": "clarification",
+        "action": null,
+        "arguments": {}
+      }
+    },
+    {
+      "id": "named_17_photo_phrase",
+      "category": "named_target_realistic_name",
+      "input": "去拍张照",
+      "expected_kind": "action",
+      "expected_action": "camera_photo",
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "named-target-route",
+        "breakpoint_index": 2,
+        "task_type": "inspection"
+      },
+      "service_expected": {
+        "kind": "action",
+        "status": "preview_required",
+        "action": "camera_photo",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "named_18_bypass_obstacle",
+      "category": "named_target_realistic_name",
+      "input": "绕过前面的障碍物",
+      "expected_kind": "clarification",
+      "expected_action": null,
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "named-target-route",
+        "breakpoint_index": 2,
+        "task_type": "inspection"
+      },
+      "service_expected": {
+        "kind": "clarification",
+        "status": "clarification",
+        "action": null,
+        "arguments": {}
+      }
+    },
+    {
+      "id": "named_19_relative_tower",
+      "category": "named_target_realistic_name",
+      "input": "去前面的水塔",
+      "expected_kind": "clarification",
+      "expected_action": null,
+      "expected_arguments": {},
+      "initial_state": {
+        "control_owner": "intent-evaluation-actor",
+        "control_request": "none",
+        "altitude_m": 60,
+        "heading_deg": 0,
+        "longitude": 113,
+        "latitude": 23,
+        "task_status": "flying",
+        "route_status": "paused",
+        "route_id": "named-target-route",
+        "breakpoint_index": 2,
+        "task_type": "inspection"
+      },
+      "service_expected": {
+        "kind": "clarification",
+        "status": "clarification",
+        "action": null,
+        "arguments": {}
+      }
+    }
+  ]
+}
