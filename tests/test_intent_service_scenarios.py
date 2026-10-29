@@ -106,6 +106,26 @@ class ServiceIntentBenchTests(unittest.TestCase):
         self.assertEqual(usage["confirmations"], 0)
         self.assertEqual(usage["mutating_tool_calls"], 0)
 
+    def test_out_of_range_scores_requested_value_and_keeps_policy_clamp(self):
+        """V1.4 2.2.5：模型给出用户原值，参数层取极值；评分看原值，生效值与调整记录单独保留。"""
+        def model_http(_url, _payload, _timeout):
+            message = {"role": "assistant", "content": "",
+                       "tool_calls": [{"function": {"name": "camera_zoom", "arguments": {"value": 31}}}]}
+            return {"message": message, "done_reason": "stop", "prompt_eval_count": 50, "eval_count": 10}
+
+        with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()), \
+                patch("tools.bench.cockpit_intents.http_transport", side_effect=model_http):
+            output = Path(directory) / "report.json"
+            self.assertEqual(main(["--surface", "service", "--live", "--only-ids", "limits_05",
+                                   "--max-samples", "1", "--max-model-calls", "3", "--max-seconds", "30",
+                                   "--max-tokens", "100000", "--output", str(output)]), 0)
+            report = json.loads(output.read_text(encoding="utf-8"))
+        row = next(row for row in report["results"] if row["id"] == "limits_05")
+        self.assertEqual(row["outcome"], "correct")
+        self.assertEqual(row["observed_arguments"], {"value": 31})
+        self.assertEqual(row["effective_arguments"], {"value": 30})
+        self.assertEqual([(item["requested"], item["effective"]) for item in row["adjustments"]], [(31, 30)])
+
     def test_service_failure_keeps_denominator_and_unknown_usage(self):
         from tools.bench.cockpit_service_intents import evaluate_service_outcomes, run_service_live
         dataset = load_scenarios(SERVICE_FIXTURE)

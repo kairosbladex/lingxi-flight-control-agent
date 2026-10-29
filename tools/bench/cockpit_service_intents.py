@@ -78,7 +78,8 @@ def evaluate_service_outcomes(dataset, outcomes):
         if row["outcome"] == "correct" and candidate.get("service_status") != case["service_expected"]["status"]:
             row.update(outcome="incorrect", reason="service_status_mismatch")
         for name in ("preview_calls", "read_only_tool_calls", "state_reads", "confirmations", "mutating_tool_calls", "state_unchanged",
-                     "service_http_status", "service_stage", "initial_state_sha256", "final_state_sha256"):
+                     "service_http_status", "service_stage", "initial_state_sha256", "final_state_sha256",
+                     "effective_arguments", "adjustments"):
             row[name] = candidate.get(name)
     report["summary"] = _counts(report["results"])
     report["by_category"] = {category: _counts([row for row in report["results"] if row["category"] == category])
@@ -133,7 +134,12 @@ def _service_candidate(response, read_calls):
         card = payload.get("card")
         if not isinstance(card, dict) or not isinstance(card.get("action"), str) or not isinstance(card.get("parameters"), dict):
             return {**metadata, "status": "error", "reason": "invalid_service_preview"}
-        return {**metadata, "kind": "action", "action": card["action"], "arguments": card["parameters"],
+        # V1.4 2.2.5：超限值由确定性参数层取极值并提示，card.parameters 是取极值后的生效值。
+        # 标签冻结的是用户原始数值，所以按 requested_parameters 评分，生效值与调整记录单独保留。
+        requested = card.get("requested_parameters")
+        arguments = requested if isinstance(requested, dict) else card["parameters"]
+        return {**metadata, "kind": "action", "action": card["action"], "arguments": arguments,
+                "effective_arguments": card["parameters"], "adjustments": card.get("adjustments", []),
                 "service_stage": "simulator_preview"}
     if status in {"clarification", "rejected"}:
         return {**metadata, "kind": status, "service_stage": "service_policy_or_model"}
