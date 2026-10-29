@@ -46,11 +46,8 @@ TEMPORARY_DECISION_TIMED_OUT = "TEMPORARY_DECISION_TIMED_OUT"
 #: V1.4 4.1.3 的两种显式选择；没有默认值。
 POST_TEMPORARY_OPTIONS = ("resume_main", "end_all")
 
-#: V1.4 4.1.3：临时任务完成后「超时未选择」的计时兜底。
-#:
-#: **假设**：规范只规定结果（按低电量规则处理），没有给时长。这里显式取 60 秒，
-#: 可由 ``post_temporary_decision(..., timeout_sec=...)`` 覆盖；它不是规范数值。
-POST_TEMPORARY_DECISION_TIMEOUT_SEC = 60.0
+#: 2026-10-29 产品确认：临时任务完成后未选择的默认超时时长为 120 秒。
+POST_TEMPORARY_DECISION_TIMEOUT_SEC = 120.0
 #: 超时后显式转交 4.2 低电量规则（返航 + 保留主线断点），不做第三种结局。
 TEMPORARY_DECISION_TIMEOUT_ACTION = "low_battery_return"
 #: V1.4 4.2：返航时正在执行临时任务，充电重启后恢复原始主线任务的前端提示。
@@ -512,7 +509,7 @@ def post_temporary_decision(state: Any, *, now: float | None = None,
     事件驱动，这里只给出「是否已到超时」的确定性判定。
 
     ``now`` 与设备时钟无关，由调用方传入；缺省时只报告 ``required``，不判定超时。
-    ``timeout_sec`` 缺省取 :data:`POST_TEMPORARY_DECISION_TIMEOUT_SEC`（60 秒，**假设**）。
+    ``timeout_sec`` 缺省取 :data:`POST_TEMPORARY_DECISION_TIMEOUT_SEC`（120 秒，产品确认）。
     """
     timeout = POST_TEMPORARY_DECISION_TIMEOUT_SEC if timeout_sec is None else timeout_sec
     deadline = temporary_decision_deadline(state, timeout_sec=timeout)

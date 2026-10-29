@@ -191,7 +191,9 @@ class ZhuoyiPlatformExecutor:
             return self._receipt(FlightControlStatus.REJECTED, request, state,
                                  error_code="CONTROL_NOT_OWNED", message=CONTROL_MESSAGE)
         try:
-            warning = self._policy(request, state)
+            # 4.1.2 / P7：预览阶段只展示测绘成果失效风险；确认阶段仍由
+            # ``_policy`` 的默认门禁拒绝没有原子作废契约的真实下发。
+            warning = self._policy(request, state, allow_mapping_preview=True)
         except PolicyError as error:
             return self._receipt(FlightControlStatus.REJECTED, request, state,
                                  error_code=error.code, message=str(error))
@@ -215,7 +217,8 @@ class ZhuoyiPlatformExecutor:
             "expires_at": expires_at,
             "state": state,
             "adjustments": adjustments,
-            "warnings": [warning] if warning else [],
+            "warnings": ([warning] if warning else [])
+            + ([MAPPING_MESSAGE] if mapping_interruption(action.value, state) else []),
         }
         receipt = self._receipt(FlightControlStatus.PREVIEW_REQUIRED, request, state,
                              confirmation_id=confirmation_id,
@@ -223,11 +226,12 @@ class ZhuoyiPlatformExecutor:
                              expires_at=datetime.fromtimestamp(expires_at, timezone.utc).isoformat(),
                              message="平台动作已预览，等待确认")
         return replace(receipt, parameters=dict(request.parameters), adjustments=adjustments,
-                       warnings=[warning] if warning else [])
+                       warnings=([warning] if warning else [])
+                       + ([MAPPING_MESSAGE] if mapping_interruption(action.value, state) else []))
 
-    def _policy(self, request, state):
+    def _policy(self, request, state, *, allow_mapping_preview=False):
         check_flight_policy(request.action, state)
-        if mapping_interruption(request.action, state):
+        if mapping_interruption(request.action, state) and not allow_mapping_preview:
             raise PolicyError('MAPPING_INTERRUPTION_UNAVAILABLE',
                               MAPPING_MESSAGE + '平台尚未提供作废测绘任务的原子契约，本次不下发。')
         action = request.action.value if isinstance(request.action, FlightControlAction) else str(request.action)

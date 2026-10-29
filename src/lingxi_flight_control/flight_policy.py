@@ -11,21 +11,22 @@ V1.4 的正文规则章节（2.2.x / 4.x）与 4.4 表6「测试用例库」对�
    - 2.2.3：「当前正在执行自动航线，请先说‘暂停航线’或‘悬停’再操作。」
    - 表6 R2：「当前正在执行自动航线，请先说‘暂停航线’或‘悬停’。」
    - 当前：``ROUTE_MESSAGE`` 沿用 2.2.3（多「再操作」）。影响：按「表6 逐字」验收会判不符。
-2. 变焦超限取极值
+2. 变焦超限取极值（P2 已裁决）
    - 2.2.5：「当前设备最大变焦倍数为30倍，已为您按最大变焦设置执行。」
    - 4.3.2：「当前设备最大变焦为30倍，已为您按最大变焦设置。」
    - 表6 R3：「指令已拦截，当前设备最大变焦倍数为30倍，已为您按最大变焦设置。」
-   - 当前：``CAMERA_ZOOM_MAX_MESSAGE`` 采用 2.2.5；表6 变体保留在
-     ``CAMERA_ZOOM_MAX_INTERCEPT_MESSAGE`` 仅供对账。影响：同上。
+   - 当前/裁决：不拦截，按设备最大阈值取极值；``CAMERA_ZOOM_MAX_MESSAGE`` 采用
+     2.2.5，表6 变体保留在 ``CAMERA_ZOOM_MAX_INTERCEPT_MESSAGE`` 仅供对账。
 3. 平台判定遇障（表6 R4）
    - 4.3.1：「指令已拦截，平台检测到前方X米存在障碍物/禁飞区。」
    - 表6 R4：「指令已拦截，平台检测到前方存在障碍物，为了安全未执行移动。」
    - 当前：``BLOCKED_MESSAGE`` 为合并版（路径障碍物/禁飞区/限高），表6 原文只记录在
      ``TABLE6_OBSTACLE_MESSAGE``，不改对外话术。
-4. 测绘任务被干预（表6 R5）
+4. 测绘任务被干预（表6 R5，P7 已裁决）
    - 4.1.2：「中断将导致测绘成果失效，是否确认继续？」+ 关闭拼图/不可恢复说明
    - 表6 R5：「当前正在执行测绘任务，中断将导致测绘成果失效，是否确认？」
-   - 当前：``MAPPING_MESSAGE`` 采用 4.1.2 合并版；表6 原文只记录在
+   - 当前/裁决：测绘任务中的坐标飞行与环绕只提示并要求确认，不拦截；
+     ``MAPPING_MESSAGE`` 采用 4.1.2 合并版；表6 原文只记录在
      ``TABLE6_MAPPING_INTERRUPT_MESSAGE``，不改对外话术。
 5. 体目标拒绝
    - 3.2.2：「当前版本不支持立体目标，请标注为点或面。」
@@ -38,14 +39,21 @@ V1.4 的正文规则章节（2.2.x / 4.x）与 4.4 表6「测试用例库」对�
    - 当前：``BODY_ANNOTATION_AI_PHRASE`` 记录引号内逐字原文，
      ``BODY_ANNOTATION_AI_MESSAGE`` 记录既有实现的带句号形式；不改既有后端文案，
      只在测试里固定「仅差一个结尾句号」的差异。
-7. 云台俯仰取极值（表6 R1 / 4.3.2）
+7. 云台俯仰取极值（表6 R1 / 4.3.2，P5 已裁决）
    - 规范只给「上限」话术：「当前云台俯仰角度上限为X度，已为您调整。」
-   - 向下取极值时命中的是俯仰**下限**；本仓以俯仰方向的绝对限值填入 X（**解释性假设**），
-     向下场景的措辞是否成立需产品裁决。
+   - 当前/裁决：向下取极值沿用上限话术，以俯仰方向的绝对限值填入 X。
 8. 航线中悬停的确认卡说明（FLIGHT-V14-POLICY-GATE）
    - 2.2.4 只规定执行语义：自动航线中悬停等价暂停航线并保留断点，没有给出确认卡原文。
    - 当前：``ROUTE_HOVER_NOTICE`` 为实现补充话术，仅在 route_status=running 的 hover 卡片追加；
      手动模式不追加。规范如后续给出原文，以规范为准替换此常量。
+9. 航线中坐标飞行与环绕（P1）
+   - 当前/裁决：自动航线 ``route_status=running`` 时按 2.2.3 拦截，返回
+     ``ROUTE_PAUSE_REQUIRED`` 与 ``ROUTE_MESSAGE``；测绘任务保留 P7 例外。
+10. 航线中悬停放行（P3）
+   - 当前/裁决：悬停折算为暂停航线并保留断点，不替换为 ``emergency_stop``。
+11. 电子围栏不可用（P6）
+   - 当前/裁决：``unavailable`` / ``timeout`` / ``malformed`` 继续放行，每次跳过均
+     写脱敏审计记录。
 """
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
@@ -365,9 +373,9 @@ def check_flight_policy(action, state):
     if action in RESUME_ACTIONS and (state.get("mapping_invalidated") is True
                                      or state.get("route_resume_disabled") is True):
         raise PolicyError("MAPPING_NOT_RESUMABLE", MAPPING_NOT_RESUMABLE_MESSAGE)
-    # V1.4 2.2.3：自动航线执行中拦截平移/升降/转向。指点飞行与环绕按 4.1.1
-    # 作为“临时变更”接管并保留主线断点，不属于本条拦截范围（见验收文档解释分歧）。
-    if (action in MICRO_ACTIONS
+    # V1.4 2.2.3 + 2026-10-29 产品裁决 P1：自动航线执行中拦截微操、指点飞行与环绕。
+    # 测绘中断仍由 mapping_interruption 保留确认卡例外；临时任务自身状态不在本分支。
+    if (action in MICRO_ACTIONS | TEMPORARY_ACTIONS
             and state.get("route_status") == "running"
             and not mapping_interruption(action, state)):
         raise PolicyError("ROUTE_PAUSE_REQUIRED", ROUTE_MESSAGE)
@@ -660,6 +668,7 @@ def _degraded(status, reason):
 
 
 BLOCKED_MESSAGE = ("指令已拦截，平台检测到路径存在障碍物、禁飞区或限高，为了安全未执行移动。")
+POINT_BLOCKED_MESSAGE = "指令已拦截，目标点位于禁飞区/超限高。"
 ORBIT_BLOCKED_MESSAGE = "指令已拦截，环绕路径存在禁飞区。"
 
 
@@ -674,8 +683,19 @@ def check_path(provider, binding, action, parameters, state, *, allow_cooperativ
                             allow_cooperative=allow_cooperative)
     if outcome is None:
         return None
+    if outcome.check.degraded and not getattr(provider, "audit_emits", False):
+        # P6：策略层覆盖模拟器/卓翼等非 KtdPathChecker 路径；只留关联摘要，不写坐标。
+        from .audit import digest, emit
+        state_mapping = state if isinstance(state, Mapping) else {}
+        emit("flight_path_check_degraded", action=str(action), status=outcome.check.status,
+             reason=outcome.check.reason or None,
+             trace_ref=digest(state_mapping.get("trace_id")),
+             command_ref=digest(state_mapping.get("command_id")),
+             drone_ref=digest(getattr(binding, "drone_id", None)))
     if outcome.check.status == "blocked":
-        message = ORBIT_BLOCKED_MESSAGE if action == "point_orbit" else BLOCKED_MESSAGE
+        message = (ORBIT_BLOCKED_MESSAGE if action == "point_orbit"
+                   else POINT_BLOCKED_MESSAGE if action == "point_flight"
+                   else BLOCKED_MESSAGE)
         raise PolicyError("PATH_BLOCKED", message)
     if outcome.check.status == "invalid":
         raise PolicyError(outcome.check.reason or "INVALID_PATH_GEOMETRY",

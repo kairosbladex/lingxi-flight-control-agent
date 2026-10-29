@@ -13,7 +13,7 @@ import unittest
 from lingxi_flight_control import MemoryFlightControlSimulator, RuntimeBinding
 from lingxi_flight_control.flight_policy import (
     DEFAULT_PROVIDER_DEADLINE_SEC, CooperativePathProvider, HardBoundedPathProvider,
-    PathCheck, PolicyError, UnboundedPathProvider, check_path, classify_path_provider,
+    POINT_BLOCKED_MESSAGE, PathCheck, PolicyError, UnboundedPathProvider, check_path, classify_path_provider,
     evaluate_path,
 )
 from lingxi_flight_control.full_control import FlightControlActionRequest
@@ -107,6 +107,14 @@ class FenceProviderTests(unittest.TestCase):
                        allow_cooperative=True)
         self.assertIn('环绕路径', str(orbit.exception))
 
+    def test_point_flight_uses_the_coordinate_blocked_phrase(self):
+        with self.assertRaises(PolicyError) as caught:
+            check_path(StaticFenceProvider(PathCheck('blocked')), BINDING, 'point_flight',
+                       {'longitude': 113.0, 'latitude': 23.0, 'altitude_m': 100}, POSE,
+                       allow_cooperative=True)
+        self.assertEqual(caught.exception.code, 'PATH_BLOCKED')
+        self.assertEqual(str(caught.exception), POINT_BLOCKED_MESSAGE)
+
     def test_unavailable_degrades_with_explicit_warning(self):
         outcome = self.call(StaticFenceProvider(PathCheck('unavailable')))
         self.assertEqual(outcome.check.status, 'unavailable')
@@ -118,6 +126,26 @@ class FenceProviderTests(unittest.TestCase):
         self.assertEqual(outcome.check.status, 'unavailable')
         self.assertEqual(outcome.check.reason, 'PATH_CHECKER_UNAVAILABLE')
         self.assertIn('不代表路径安全', outcome.warning)
+
+    def test_static_provider_degradation_writes_a_redacted_audit_record(self):
+        import contextlib
+        import io
+        buffer = io.StringIO()
+        state = {**POSE, 'trace_id': 'trace-1', 'command_id': 'command-1'}
+        with contextlib.redirect_stdout(buffer):
+            check_path(StaticFenceProvider(PathCheck('timeout', 'PATH_CHECK_TIMEOUT')),
+                       BINDING, 'point_flight',
+                       {'longitude': 113.123, 'latitude': 23.456, 'altitude_m': 100},
+                       state, allow_cooperative=True)
+        records = [json.loads(line) for line in buffer.getvalue().splitlines() if line.strip()]
+        record = next(item for item in records if item.get('event') == 'flight_path_check_degraded')
+        self.assertEqual(record['action'], 'point_flight')
+        self.assertEqual(record['status'], 'timeout')
+        self.assertEqual(record['reason'], 'PATH_CHECK_TIMEOUT')
+        self.assertIsNotNone(record['trace_ref'])
+        self.assertIsNotNone(record['command_ref'])
+        self.assertNotIn('113.123', json.dumps(record))
+        self.assertNotIn('longitude', record)
 
     def test_provider_without_bounded_contract_is_never_called(self):
         calls = []

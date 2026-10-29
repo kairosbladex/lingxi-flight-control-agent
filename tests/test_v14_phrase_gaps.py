@@ -6,8 +6,8 @@
 2. 断言每条话术确实挂在一条确定性触发路径上（参数取极值、载荷未挂载、
    不支持的目标/航线类型、复合远目标追问、临时任务超时兜底、低电量返航提示）。
 
-规范未定义处（"距离较远"阈值、超时时长、已挂载能力清单字段）都在被断言处显式
-标注为**假设**，不得被读成规范数值。
+规范未定义处（"距离较远"阈值、已挂载能力清单字段）都在被断言处显式
+标注为**假设**，不得被读成规范数值；临时任务超时时长按 2026-10-29 产品确认固定为 120 秒。
 
 **入口边界（不要误读成生产可达）**：4.1.3 超时用例经由
 ``MemoryFlightControlSimulator.resolve_temporary_outcome`` 触发，它是**模拟器/测试
@@ -518,7 +518,7 @@ class CockpitPhraseTriggerTests(unittest.TestCase):
 
 
 class TemporaryDecisionTimeoutTests(unittest.TestCase):
-    """4.1.3 超时兜底：60 秒是显式假设；超时后按 4.2 低电量规则处理。
+    """4.1.3 超时兜底：120 秒为 2026-10-29 产品确认；超时后按 4.2 低电量规则处理。
 
     入口边界：本节经 ``MemoryFlightControlSimulator.resolve_temporary_outcome``
     （模拟器/测试入口）触发；HTTP / agent 生产路径尚未接线，用例不代表生产已可达。
@@ -548,6 +548,8 @@ class TemporaryDecisionTimeoutTests(unittest.TestCase):
             confirmation_binding=card.confirmation_binding, context_version=1)
 
     def complete_temporary_task(self):
+        # P1：非测绘自动航线运行中坐标动作需先暂停航线。
+        self.simulator.state.route_status = 'paused'
         self.confirm(self.preview('point_flight', longitude=113.5, latitude=23.5,
                                   altitude_m=50))
         temporary = self.simulator.state.temporary_task_id
@@ -557,44 +559,44 @@ class TemporaryDecisionTimeoutTests(unittest.TestCase):
         self.assertEqual(self.simulator.state.route_status, 'temporary_completed')
 
     def test_timeout_length_is_an_explicit_assumption(self):
-        self.assertEqual(events.POST_TEMPORARY_DECISION_TIMEOUT_SEC, 60.0)
+        self.assertEqual(events.POST_TEMPORARY_DECISION_TIMEOUT_SEC, 120.0)
         self.assertEqual(events.TEMPORARY_DECISION_TIMEOUT_ACTION, 'low_battery_return')
 
     def test_deadline_is_anchored_on_platform_event_time(self):
         self.complete_temporary_task()
         self.assertEqual(self.simulator.state.temporary_completed_at, 1000.0)
-        self.assertEqual(self.simulator.state.temporary_decision_deadline, 1060.0)
-        self.assertEqual(events.temporary_decision_deadline(self.simulator.state), 1060.0)
+        self.assertEqual(self.simulator.state.temporary_decision_deadline, 1120.0)
+        self.assertEqual(events.temporary_decision_deadline(self.simulator.state), 1120.0)
 
     def test_before_timeout_still_requires_explicit_choice(self):
         self.complete_temporary_task()
-        decision = events.post_temporary_decision(self.simulator.state, now=1059.9)
+        decision = events.post_temporary_decision(self.simulator.state, now=1119.9)
         self.assertTrue(decision['required'])
         self.assertFalse(decision['timed_out'])
         self.assertAlmostEqual(decision['remaining_sec'], 0.1)
         self.assertIsNone(decision['timeout_error_code'])
         # 未超时前仍不许系统替用户猜。
         self.assertEqual(events.validate_post_temporary_choice(
-            self.simulator.state, 'resume_main', now=1059.9), 'resume_main')
+            self.simulator.state, 'resume_main', now=1119.9), 'resume_main')
 
     def test_timeout_boundary_is_inclusive(self):
         self.complete_temporary_task()
-        self.assertFalse(events.temporary_decision_timed_out(self.simulator.state, now=1059.999))
-        self.assertTrue(events.temporary_decision_timed_out(self.simulator.state, now=1060.0))
-        decision = events.post_temporary_decision(self.simulator.state, now=1060.0)
+        self.assertFalse(events.temporary_decision_timed_out(self.simulator.state, now=1119.999))
+        self.assertTrue(events.temporary_decision_timed_out(self.simulator.state, now=1120.0))
+        decision = events.post_temporary_decision(self.simulator.state, now=1120.0)
         self.assertTrue(decision['timed_out'])
         self.assertEqual(decision['timeout_error_code'], events.TEMPORARY_DECISION_TIMED_OUT)
 
     def test_choice_after_timeout_is_refused_then_low_battery_rule_applies(self):
         self.complete_temporary_task()
         with self.assertRaises(events.TaskEventError) as caught:
-            events.validate_post_temporary_choice(self.simulator.state, 'resume_main', now=1060.0)
+            events.validate_post_temporary_choice(self.simulator.state, 'resume_main', now=1120.0)
         self.assertEqual(caught.exception.code, events.TEMPORARY_DECISION_TIMED_OUT)
 
     def test_apply_before_timeout_changes_nothing(self):
         self.complete_temporary_task()
         before = self.simulator.state.to_dict()
-        result = events.apply_temporary_decision_timeout(self.simulator.state, now=1059.0)
+        result = events.apply_temporary_decision_timeout(self.simulator.state, now=1119.0)
         self.assertFalse(result['applied'])
         self.assertEqual(result['reason'], 'not_timed_out')
         self.assertEqual(self.simulator.state.to_dict(), before)
@@ -602,7 +604,7 @@ class TemporaryDecisionTimeoutTests(unittest.TestCase):
     def test_timeout_applies_low_battery_rule_and_keeps_breakpoint(self):
         self.complete_temporary_task()
         revision = self.simulator.state.revision
-        result = events.apply_temporary_decision_timeout(self.simulator.state, now=1060.0)
+        result = events.apply_temporary_decision_timeout(self.simulator.state, now=1120.0)
         self.assertTrue(result['applied'])
         self.assertEqual(result['action'], 'low_battery_return')
         self.assertTrue(self.simulator.state.low_battery_return)
@@ -614,7 +616,7 @@ class TemporaryDecisionTimeoutTests(unittest.TestCase):
 
     def test_timeout_application_is_idempotent(self):
         self.complete_temporary_task()
-        first = events.apply_temporary_decision_timeout(self.simulator.state, now=1060.0)
+        first = events.apply_temporary_decision_timeout(self.simulator.state, now=1120.0)
         self.assertTrue(first['applied'])
         snapshot = self.simulator.state.to_dict()
         second = events.apply_temporary_decision_timeout(self.simulator.state, now=1070.0)
@@ -624,7 +626,7 @@ class TemporaryDecisionTimeoutTests(unittest.TestCase):
 
     def test_recharge_after_timeout_resumes_original_mainline(self):
         self.complete_temporary_task()
-        events.apply_temporary_decision_timeout(self.simulator.state, now=1060.0)
+        events.apply_temporary_decision_timeout(self.simulator.state, now=1120.0)
         self.simulator.apply_task_event('recharged_online', task_batch_id='batch')
         self.assertFalse(self.simulator.state.low_battery_return)
         self.assertEqual(self.simulator.state.route_status, 'running')
@@ -635,7 +637,7 @@ class TemporaryDecisionTimeoutTests(unittest.TestCase):
 
     def test_production_entry_before_deadline_still_requires_choice(self):
         self.complete_temporary_task()
-        self.clock[0] = 1059.0
+        self.clock[0] = 1119.0
         decision = self.simulator.resolve_temporary_outcome()
         self.assertTrue(decision['required'])
         self.assertFalse(decision['timed_out'])
@@ -643,7 +645,7 @@ class TemporaryDecisionTimeoutTests(unittest.TestCase):
 
     def test_production_entry_before_deadline_accepts_explicit_choice(self):
         self.complete_temporary_task()
-        self.clock[0] = 1059.0
+        self.clock[0] = 1119.0
         result = self.simulator.resolve_temporary_outcome('resume_main')
         self.assertFalse(result['required'])
         self.assertEqual(self.simulator.state.route_status, 'running')
@@ -652,7 +654,7 @@ class TemporaryDecisionTimeoutTests(unittest.TestCase):
 
     def test_production_entry_after_deadline_applies_low_battery_rule(self):
         self.complete_temporary_task()
-        self.clock[0] = 1060.0
+        self.clock[0] = 1120.0
         result = self.simulator.resolve_temporary_outcome()
         self.assertTrue(result['timed_out'])
         self.assertTrue(result['applied'])
@@ -664,7 +666,7 @@ class TemporaryDecisionTimeoutTests(unittest.TestCase):
 
     def test_production_entry_rejects_choice_after_deadline(self):
         self.complete_temporary_task()
-        self.clock[0] = 1060.0
+        self.clock[0] = 1120.0
         with self.assertRaises(events.TaskEventError) as caught:
             self.simulator.resolve_temporary_outcome('resume_main')
         self.assertEqual(caught.exception.code, events.TEMPORARY_DECISION_TIMED_OUT)
@@ -676,7 +678,7 @@ class TemporaryDecisionTimeoutTests(unittest.TestCase):
     def test_explicit_choice_before_deadline_disarms_timer(self):
         # 用户已选「恢复主线」后，哪怕时钟越过原 deadline，也不得再判超时返航。
         self.complete_temporary_task()
-        self.clock[0] = 1059.0
+        self.clock[0] = 1119.0
         self.simulator.resolve_temporary_outcome('resume_main')
         self.clock[0] = 5000.0
         decision = self.simulator.resolve_temporary_outcome()
@@ -820,6 +822,8 @@ class TemporaryRechargeNoticeTests(unittest.TestCase):
 
     def start_temporary_task(self):
         key = 'notice-cmd'
+        # P1：先暂停非测绘自动航线，才允许开始临时坐标任务。
+        self.simulator.state.route_status = 'paused'
         card = self.simulator.preview(FlightControlActionRequest(
             key, key, 'point_flight', {'longitude': 113.5, 'latitude': 23.5,
                                        'altitude_m': 50}, 1))

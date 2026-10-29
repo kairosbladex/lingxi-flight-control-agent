@@ -27,6 +27,9 @@ MIN_DEADLINE_SEC, MAX_DEADLINE_SEC = 0.1, 10.0
 class KtdPathChecker:
     """平台围栏适配器：几何来自本仓，结论只认平台返回的确定性字段。"""
 
+    # ``flight_policy.check_path`` 用它避免对已有 Ktd 审计重复记账。
+    audit_emits = True
+
     def __init__(self, transport, *, deadline_sec=DEFAULT_DEADLINE_SEC, clock=time.monotonic):
         if not finite(deadline_sec) or not MIN_DEADLINE_SEC <= deadline_sec <= MAX_DEADLINE_SEC:
             raise ValueError("invalid path check deadline")
@@ -53,7 +56,7 @@ class KtdPathChecker:
                                segments=result.segments, vertical_field=result.vertical_field)
         result = PathCheck(result.status, result.reason, result.segments, result.segment_index,
                            result.vertical_field, int(elapsed * 1000))
-        self._audit(binding, action, result)
+        self._audit(binding, action, result, state)
         return result
 
     def _check(self, binding, action, parameters, state):
@@ -90,12 +93,15 @@ class KtdPathChecker:
         return self.transport.check_path(binding, points,
                                          **{self._timeout_keyword: self.deadline_sec})
 
-    def _audit(self, binding, action, result):
+    def _audit(self, binding, action, result, state):
         # 只记录类型、计数和摘要，不记录经纬度、半径或平台响应原文。
+        state = state if isinstance(state, dict) else {}
         emit("flight_path_check", action=str(action), status=result.status,
              reason=result.reason or None, segments=result.segments,
              segment_index=result.segment_index, vertical_field=result.vertical_field or None,
              elapsed_ms=result.elapsed_ms, deadline_ms=int(self.deadline_sec * 1000),
+             trace_ref=digest(state.get("trace_id")),
+             command_ref=digest(state.get("command_id")),
              drone_ref=digest(getattr(binding, "drone_id", None)))
 
 

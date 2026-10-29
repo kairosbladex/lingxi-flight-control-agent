@@ -13,6 +13,7 @@ from lingxi_flight_control import (
     ToolCall,
 )
 from lingxi_flight_control.cockpit import CockpitService
+from lingxi_flight_control.flight_policy import ROUTE_MESSAGE
 
 
 class RouteStateSafetyTests(unittest.TestCase):
@@ -139,14 +140,16 @@ class RouteStateSafetyTests(unittest.TestCase):
         result = self.execute("execute_route")
         self.assertEqual(result.state["route_id"], "route-2")
 
-    def test_point_flight_invalidates_pending_route_confirmation(self):
+    def test_point_flight_is_blocked_while_route_is_running(self):
         self.prepare("running")
         card = self.preview("route_pause")
-        self.execute("point_flight", {"longitude": 113.2, "latitude": 23.1, "altitude_m": 50})
-        self.assert_old_card_rejected_without_change(card)
-        for action in ("route_pause", "route_resume", "execute_route"):
-            with self.subTest(action=action):
-                self.assert_preview_rejected_without_change(action, "ROUTE_STATE_MISMATCH")
+        point = self.simulator.preview(FlightControlActionRequest(
+            "point-1", "point-1", "point_flight",
+            {"longitude": 113.2, "latitude": 23.1, "altitude_m": 50}, 1))
+        self.assertEqual(point.error_code, "ROUTE_PAUSE_REQUIRED")
+        self.assertEqual(point.message, ROUTE_MESSAGE)
+        self.assertEqual(self.confirm(card).status, FlightControlStatus.ACCEPTED)
+        self.assertEqual(self.simulator.state.route_status, "paused")
 
     def test_unrelated_camera_action_does_not_invalidate_route_card(self):
         self.prepare("uploaded")

@@ -45,6 +45,10 @@ class ProductV13Tests(unittest.TestCase):
         self.sim.state.breakpoint_index = 7
         self.sim.state.auto_stitching = task_type == 'mapping'
 
+    def pause_route(self):
+        """P1：开始临时指点前先暂停非测绘自动航线。"""
+        self.execute('route_pause')
+
     def event(self, event, **kwargs):
         return self.sim.apply_task_event(event, task_batch_id='batch', **kwargs)
 
@@ -152,6 +156,7 @@ class ProductV13Tests(unittest.TestCase):
 
     def test_latest_temporary_replaces_previous_and_preserves_main_breakpoint(self):
         self.route()
+        self.pause_route()
         first = self.execute('point_flight', longitude=113, latitude=23, altitude_m=50)
         old_id = first.state['temporary_task_id']
         latest = self.execute('point_orbit', longitude=114, latitude=24, radius_m=30)
@@ -166,6 +171,7 @@ class ProductV13Tests(unittest.TestCase):
 
     def test_low_battery_priority_and_recharge_restore_only_original(self):
         self.route()
+        self.pause_route()
         self.execute('point_orbit', longitude=114, latitude=24, radius_m=30)
         self.event('low_battery_return')
         self.assertIsNone(self.sim.state.temporary_task_id)

@@ -276,6 +276,8 @@ class TemporaryTaskTests(Harness):
         super().setUp()
         self.sim.state.task_type = 'inspection'
         self.sim.state.auto_stitching = False
+        # P1：非测绘自动航线运行中坐标动作先被拦截，临时任务从暂停态开始。
+        self.sim.state.route_status = 'paused'
 
     def test_new_temporary_task_replaces_old_and_keeps_main_breakpoint(self):
         self.confirm(self.preview('point_flight', longitude=113.0, latitude=23.0, altitude_m=50))

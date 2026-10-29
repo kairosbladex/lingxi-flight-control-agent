@@ -79,6 +79,8 @@ class FullControlSimulatorTests(unittest.TestCase):
             (FlightControlAction.ROUTE_RESUME, {}),
             (FlightControlAction.ROUTE_PAUSE, {}),
             (FlightControlAction.CONTINUE_FROM_BREAKPOINT, {"index": 2}),
+            # P1：非测绘自动航线中，坐标动作必须从暂停态开始。
+            (FlightControlAction.ROUTE_PAUSE, {}),
             (FlightControlAction.POINT_FLIGHT, {"longitude": 113.4, "latitude": 34.8, "altitude_m": 50}),
             (FlightControlAction.POINT_ORBIT, {"longitude": 113.4, "latitude": 34.8, "radius_m": 20}),
             (FlightControlAction.SET_MOVE_SPEED, {"value": 8}),
