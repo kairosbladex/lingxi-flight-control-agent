@@ -57,10 +57,67 @@ PYTHONPATH=src:. python3 tools/bench/cockpit_intents.py --surface service --fixt
 
 变异检查（临时副本，对照组 7 项全通过；只统计新增失败）：撤掉 `TARGET_NOT_FOUND` 回退新增失败 1 项；撤掉绕过/绕开/绕行排除新增失败 1 项；恢复计划模式多目标拦截新增失败 1 项；把确认时服务不可用重新压成 `TARGET_VERSION_CHANGED` 新增失败 2 项。临时副本和报告已删除。
 
-真实模型评测（新冻结集、v1.3 后 102 条与 31 条全量重跑）待验收方执行；真实静态标注服务、Ktd/卓翼和设备闭环也未连接。本轮不宣称真实模型或设备验证完成。
+真实模型评测由验收方执行，见下一节；真实静态标注服务、Ktd/卓翼和设备闭环未连接。
+
+## 验收方补充（2026-10-30）
+
+### 名称过滤修正（ae75166）
+
+验收发现名称过滤把“升、降、转、飞、看、拍、录”出现在名称任何位置都当动作，“1号升压站”“2号降压站”“转运站”“飞来峰”这类电力巡检常见标注名全部无法解析（会退回原流程追问坐标，安全但功能失效）。修正为：开头只认多字动作短语（拍照、拍张、看看、录像、转向、飞行、上升、升高等），结尾排除“拍照/录像/看看”等目标+载荷复合句，方位词只看开头，航线概念（航点、返航）出现即排除。新增 `test_power_station_names_with_action_characters_inside_are_resolved`（4 个子用例）；单字规则下该测试失败（转运站），修正后通过。离线 `bash tools/ci/offline_tests.sh`：Ran 1413 tests … OK；`git diff --check` 无输出。
+
+v1 冻结集里只有“唯一水塔”这类名称，覆盖不到上述问题。另出 `fixtures/v14-named-target-intents-v2.json`（19 条 = v1 的 13 条 + 6 条贴近业务的用例）与 `fixtures/v14-named-target-candidates-v2.json`，在 ae75166 中先于任何真实运行提交冻结；v1 两个文件哈希不变（`17bb298c…` / `42dbc724…`），新增用例的依据记录在 provenance 的 `added_scenarios`。
+
+### 真实模型结果（qwen3.5:9b，只预览不确认，`code_sha=ae75166`，`PROMPT_VERSION=cockpit-prompt-v1.3`）
+
+命令（`PYTHONPATH=src:.`）：
+
+```bash
+python3 tools/bench/cockpit_intents.py --surface service --fixture fixtures/v14-named-target-intents-v1.json \
+  --target-fixture fixtures/v14-named-target-candidates-v1.json --live --model qwen3.5:9b \
+  --max-samples 13 --max-model-calls 60 --max-seconds 900 --max-tokens 300000 --timeout 30 \
+  --output artifacts/v14-named-target-intents-13-20261030-v1-prompt-v1.3-policy-v14/report.json
+python3 tools/bench/cockpit_intents.py --surface service --fixture fixtures/v14-named-target-intents-v2.json \
+  --target-fixture fixtures/v14-named-target-candidates-v2.json --live --model qwen3.5:9b \
+  --max-samples 19 --max-model-calls 80 --max-seconds 1200 --max-tokens 400000 --timeout 30 \
+  --output artifacts/v14-named-target-intents-19-20261030-v2-prompt-v1.3-policy-v14/report.json
+python3 tools/bench/cockpit_intents.py --surface service --fixture fixtures/v14-dictionary-intents-v2.json --live \
+  --model qwen3.5:9b --max-samples 31 --max-model-calls 100 --max-seconds 1500 --max-tokens 500000 --timeout 30 \
+  --output artifacts/v14-dictionary-intents-31-20261030-v2-prompt-v1.3-policy-v14-named/report.json
+python3 tools/bench/cockpit_intents.py --surface service --live --model qwen3.5:9b \
+  --max-samples 102 --max-model-calls 320 --max-seconds 3600 --max-tokens 1200000 --timeout 30 \
+  --output artifacts/cockpit-service-intents-102-20261030-v2-prompt-v1.3-policy-v14-named/report.json
+```
+
+四份报告 `source_changed_during_run=false`、`fixture_changed_during_run=false`，确认 0、写执行 0、平台调用 0。
+
+| 集合 | 正确 | 不符 | 超时 | 危险提议 | 模型调用 | P50 / P95 |
+| --- | --- | --- | --- | --- | --- | --- |
+| v2 冻结集 102 | 92 | 8 | 2 | 0 | 86 | 9.3s / 19.4s |
+| v14 补充集 v2 31 | 31 | 0 | 0 | 0 | 15 | 4ms / 16.9s |
+| 命名目标 v1 13 | 9 | 0 | 4 | 0 | 6 | 1ms / 30.0s |
+| 命名目标 v2 19 | 14 | 0 | 5 | 0 | 12 | 14.6s / 30.0s |
+
+- 102 条与上一轮（`artifacts/cockpit-service-intents-102-20261029-v2-prompt-v1.2-policy-v14-gate/`，91/8/3）逐条对比只有超时位置互换：numerals_02、limits_06 由超时变正确，camera_07 由超时变保守追问，camera_08 由不符变超时，route_05 由正确变超时（10-29 首轮同样超时过）。resolver 关闭时模型输入与 v1.2 一致，无逻辑退化。
+- 命名目标两套集合**没有判错**。不调用模型的用例（同名、线、体、航线运行中、无控制权、否定、条件）全部 0 次模型调用、约 1ms 返回；`named_14/15/16` 证明“升压站/降压站/转运站”已能解析（14 超时见下）。
+
+### 超时根因（命名目标走模型的用例：named_02/03/07/11 两轮都超时，named_14 在 v2 超时）
+
+一次性探针放宽到 90 秒抓完整输出：
+
+| 探针 | 结果 |
+| --- | --- |
+| named_02 resolver 开 | 83s，`done_reason=length`，2048 token 打满；思考在“水塔高度45米 vs 用户说50米”和“是否先获取控制权”之间反复 |
+| named_02 resolver 关 | 31s 正常结束（追问坐标）；下发全部 66 个工具，prompt 约 5.2k token |
+| 去掉传给模型的标注 `altitude_m` 后重跑 named_02 / named_11 | 11.7s / 12.5s 正确给出 point_flight / point_orbit |
+| 同样处理后 named_14 | 仍 77～82s 打满；思考反复引用 `control_acquire` 工具描述“执行任何飞行动作前必须先获取” |
+
+结论：三个因素叠加——(1) 标注高度进入模型输入，与用户飞行高度冲突；(2) `control_acquire` 工具描述与系统提示词矛盾（FLIGHT-V14-POLICY-GATE 已记录的已知问题，此前因 clamp_01 退化撤回改动，现在有了实际危害证据）；(3) 工具筛选器不认识“去X”句式，退回全量 66 个工具，单次推理本身就接近 30s 上限。
+
+**结论：resolver 默认关闭，不影响现有入口；在上述三点处理前，不建议在任何环境打开命名目标开关。** 本轮未改这三点（超出“修名称过滤 + 执行评测”的范围），留作下一步。
 
 ## Git 与清理
 
 - 既有 `.workbuddy-ai/`、评测目录、`lingxi_agent_src_*` 未跟踪文件未暂存、未删除。
 - 本轮临时离线报告、变异检查副本和脚本均已删除，没有启动常驻进程、容器或远端模型。
 - 本分支包含 A 的正向 merge 与本轮 B 代码、测试、文档；推送后用 `git ls-remote origin feature/v14-flight-named-target` 核对最终远端 SHA。
+- 验收方的一次性探针脚本放在 /tmp/v14-align-probe，用完已删除；探针输出只摘录进本记录，未入库。
