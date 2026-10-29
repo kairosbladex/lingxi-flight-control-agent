@@ -191,9 +191,8 @@ class ZhuoyiPlatformExecutor:
             return self._receipt(FlightControlStatus.REJECTED, request, state,
                                  error_code="CONTROL_NOT_OWNED", message=CONTROL_MESSAGE)
         try:
-            # 4.1.2 / P7：预览阶段只展示测绘成果失效风险；确认阶段仍由
-            # ``_policy`` 的默认门禁拒绝没有原子作废契约的真实下发。
-            warning = self._policy(request, state, allow_mapping_preview=True)
+            # 4.1.2 / P7：没有原子作废契约时预览即拒，避免生成必然失败的确认卡。
+            warning = self._policy(request, state)
         except PolicyError as error:
             return self._receipt(FlightControlStatus.REJECTED, request, state,
                                  error_code=error.code, message=str(error))
@@ -229,9 +228,9 @@ class ZhuoyiPlatformExecutor:
                        warnings=([warning] if warning else [])
                        + ([MAPPING_MESSAGE] if mapping_interruption(action.value, state) else []))
 
-    def _policy(self, request, state, *, allow_mapping_preview=False):
+    def _policy(self, request, state):
         check_flight_policy(request.action, state)
-        if mapping_interruption(request.action, state) and not allow_mapping_preview:
+        if mapping_interruption(request.action, state):
             raise PolicyError('MAPPING_INTERRUPTION_UNAVAILABLE',
                               MAPPING_MESSAGE + '平台尚未提供作废测绘任务的原子契约，本次不下发。')
         action = request.action.value if isinstance(request.action, FlightControlAction) else str(request.action)
@@ -240,7 +239,8 @@ class ZhuoyiPlatformExecutor:
         except KtdPlatformError as error:
             code = str(error)
             raise PolicyError(code, DJI_FLYTO_MESSAGES.get(code, "本次未下发。")) from None
-        return check_path(self._path_checker, self.binding, request.action, request.parameters, state)
+        return check_path(self._path_checker, self.binding, request.action, request.parameters, state,
+                          command_ref=request.command_id)
 
     def confirm(self, confirmation_id: str, *, command_id: str, idempotency_key: str,
                 confirmation_binding: str, context_version: int) -> FlightControlReceipt:

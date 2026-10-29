@@ -208,12 +208,9 @@ class AtomicInterruptionTests(Harness):
         sim = mapping_simulator(mapping_gateway=UnavailableMappingInterruptionGateway())
         longitude, latitude = sim.state.longitude, sim.state.latitude
         card = sim.preview(FlightControlActionRequest('c1', 'k1', 'move_forward', {'distance_m': 10}, 1))
-        self.assertIs(card.status, FlightControlStatus.PREVIEW_REQUIRED)
-        self.assertIn(MAPPING_MESSAGE, card.warnings)
-        receipt = sim.confirm(card.confirmation_id, command_id='c1', idempotency_key='k1',
-                              confirmation_binding=card.confirmation_binding, context_version=1)
-        self.assertIs(receipt.status, FlightControlStatus.REJECTED)
-        self.assertEqual(receipt.error_code, MAPPING_INTERRUPTION_UNAVAILABLE)
+        self.assertIs(card.status, FlightControlStatus.REJECTED)
+        self.assertEqual(card.error_code, MAPPING_INTERRUPTION_UNAVAILABLE)
+        self.assertEqual(card.message, MAPPING_MESSAGE + '平台尚未提供作废测绘任务的原子契约，本次不下发。')
         # 动作没有执行：位姿与测绘状态都保持原样。
         self.assertEqual((sim.state.longitude, sim.state.latitude), (longitude, latitude))
         self.assertTrue(sim.state.auto_stitching)

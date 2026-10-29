@@ -297,12 +297,9 @@ class ExecutorAuthorityTests(unittest.TestCase):
         snapshot = build_snapshot(now=self.now, state={'task_type': 'mapping'})
         executor = self.executor(snapshot)
         card = executor.preview(self.request('route_pause', {}))
-        self.assertEqual(card.status, FlightControlStatus.PREVIEW_REQUIRED, card.to_dict())
-        receipt = executor.confirm(card.confirmation_id, command_id='cmd-1', idempotency_key='key-1',
-                                   confirmation_binding=card.confirmation_binding, context_version=1)
-        self.assertEqual(receipt.status, FlightControlStatus.REJECTED)
-        # 测绘任务中断在平台缺少原子契约时直接拒绝，也不会下发。
-        self.assertEqual(receipt.error_code, 'MAPPING_INTERRUPTION_UNAVAILABLE')
+        self.assertEqual(card.status, FlightControlStatus.REJECTED, card.to_dict())
+        # 测绘任务中断在平台缺少原子契约时预览即拒，也不会下发。
+        self.assertEqual(card.error_code, 'MAPPING_INTERRUPTION_UNAVAILABLE')
         self.assertEqual(self.transport.calls, [])
 
     def test_authority_contract_report_is_read_only_and_explains_blocks(self):

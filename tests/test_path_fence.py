@@ -130,20 +130,22 @@ class FenceProviderTests(unittest.TestCase):
     def test_static_provider_degradation_writes_a_redacted_audit_record(self):
         import contextlib
         import io
+        from lingxi_flight_control.audit import digest
         buffer = io.StringIO()
-        state = {**POSE, 'trace_id': 'trace-1', 'command_id': 'command-1'}
+        state = {**POSE, 'trace_id': 'state-trace', 'command_id': 'state-command'}
         with contextlib.redirect_stdout(buffer):
             check_path(StaticFenceProvider(PathCheck('timeout', 'PATH_CHECK_TIMEOUT')),
                        BINDING, 'point_flight',
                        {'longitude': 113.123, 'latitude': 23.456, 'altitude_m': 100},
-                       state, allow_cooperative=True)
+                       state, allow_cooperative=True, command_ref='command-1',
+                       trace_ref='trace-1')
         records = [json.loads(line) for line in buffer.getvalue().splitlines() if line.strip()]
         record = next(item for item in records if item.get('event') == 'flight_path_check_degraded')
         self.assertEqual(record['action'], 'point_flight')
         self.assertEqual(record['status'], 'timeout')
         self.assertEqual(record['reason'], 'PATH_CHECK_TIMEOUT')
-        self.assertIsNotNone(record['trace_ref'])
-        self.assertIsNotNone(record['command_ref'])
+        self.assertEqual(record['trace_ref'], digest('trace-1'))
+        self.assertEqual(record['command_ref'], digest('command-1'))
         self.assertNotIn('113.123', json.dumps(record))
         self.assertNotIn('longitude', record)
 
@@ -386,6 +388,35 @@ class ProviderContractTests(unittest.TestCase):
         self.assertEqual(receipt.status.value, 'accepted')
         self.assertEqual(receipt.execution_mode, 'simulator')
         self.assertEqual(provider.calls, ['move_forward', 'move_forward'])
+
+    def test_simulator_degraded_audit_uses_explicit_command_ref(self):
+        import contextlib
+        import io
+        from lingxi_flight_control.audit import digest
+        sim = MemoryFlightControlSimulator(BINDING)
+        sim.state.control_owner = 'actor'
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            card = sim.preview(FlightControlActionRequest(
+                'sim-command', 'sim-key', 'move_forward', {'distance_m': 10}, 1))
+        self.assertEqual(card.status.value, 'preview_required')
+        records = [json.loads(line) for line in buffer.getvalue().splitlines() if line.strip()]
+        record = next(item for item in records if item.get('event') == 'flight_path_check_degraded')
+        self.assertEqual(record['command_ref'], digest('sim-command'))
+        self.assertIsNone(record['trace_ref'])
+
+    def test_ktd_path_audit_uses_explicit_refs_only(self):
+        import contextlib
+        import io
+        from lingxi_flight_control.audit import digest
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            check_path(KtdPathChecker(FenceTransport()), BINDING, 'move_forward',
+                       {'distance_m': 10}, POSE, command_ref='ktd-command')
+        records = [json.loads(line) for line in buffer.getvalue().splitlines() if line.strip()]
+        record = next(item for item in records if item.get('event') == 'flight_path_check')
+        self.assertEqual(record['command_ref'], digest('ktd-command'))
+        self.assertIsNone(record['trace_ref'])
 
 
 class PathGeometryTests(unittest.TestCase):

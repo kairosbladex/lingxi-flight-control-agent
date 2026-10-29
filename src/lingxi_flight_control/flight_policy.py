@@ -25,7 +25,7 @@ V1.4 的正文规则章节（2.2.x / 4.x）与 4.4 表6「测试用例库」对�
 4. 测绘任务被干预（表6 R5，P7 已裁决）
    - 4.1.2：「中断将导致测绘成果失效，是否确认继续？」+ 关闭拼图/不可恢复说明
    - 表6 R5：「当前正在执行测绘任务，中断将导致测绘成果失效，是否确认？」
-   - 当前/裁决：测绘任务中的坐标飞行与环绕只提示并要求确认，不拦截；
+   - 当前/裁决：测绘任务中的坐标飞行与环绕只提示并要求确认，不拦截；平台路径缺少原子作废契约时预览即拒，真实平台的 P7 流程依赖该外部契约；
      ``MAPPING_MESSAGE`` 采用 4.1.2 合并版；表6 原文只记录在
      ``TABLE6_MAPPING_INTERRUPT_MESSAGE``，不改对外话术。
 5. 体目标拒绝
@@ -598,15 +598,25 @@ def platform_path_provider_rejection(provider):
     return None
 
 
-def _invoke_bounded(bounded, binding, action, parameters, state):
+def _invoke_bounded(bounded, binding, action, parameters, state, *, command_ref=None,
+                    trace_ref=None):
+    kwargs = {}
     if bounded.keyword:
-        return bounded.call(binding, action, parameters, state,
-                            **{bounded.keyword: bounded.deadline_sec})
-    return bounded.call(binding, action, parameters, state)
+        kwargs[bounded.keyword] = bounded.deadline_sec
+    try:
+        signature = inspect.signature(bounded.call)
+        accepts_kwargs = any(parameter.kind is inspect.Parameter.VAR_KEYWORD
+                             for parameter in signature.parameters.values())
+        for name, value in (("command_ref", command_ref), ("trace_ref", trace_ref)):
+            if name in signature.parameters or accepts_kwargs:
+                kwargs[name] = value
+    except (TypeError, ValueError):
+        pass
+    return bounded.call(binding, action, parameters, state, **kwargs)
 
 
 def evaluate_path(provider, binding, action, parameters, state, *, clock=time.monotonic,
-                  allow_cooperative=False):
+                  allow_cooperative=False, command_ref=None, trace_ref=None):
     """执行一次围栏检查并返回结构化结论；只有路径类动作才返回非 None。
 
     契约在**调用前**判定：
@@ -631,7 +641,8 @@ def evaluate_path(provider, binding, action, parameters, state, *, clock=time.mo
                            _degraded("unavailable", contract.reason), action)
     started = clock()
     try:
-        result = _invoke_bounded(contract, binding, action, dict(parameters), dict(state))
+        result = _invoke_bounded(contract, binding, action, dict(parameters), dict(state),
+                                  command_ref=command_ref, trace_ref=trace_ref)
     except TimeoutError:
         # 有界 transport 超时：底层已停止等待，结果一律不可用。
         return PathOutcome(PathCheck("timeout", "PATH_CHECK_TIMEOUT"),
@@ -672,25 +683,28 @@ POINT_BLOCKED_MESSAGE = "指令已拦截，目标点位于禁飞区/超限高。
 ORBIT_BLOCKED_MESSAGE = "指令已拦截，环绕路径存在禁飞区。"
 
 
-def check_path(provider, binding, action, parameters, state, *, allow_cooperative=False):
+def check_path(provider, binding, action, parameters, state, *, allow_cooperative=False,
+               command_ref=None, trace_ref=None):
     """A missing fence service degrades only this check, never authorization.
 
     ``blocked`` 与几何非法都抛 ``PolicyError``，调用方据此拒绝执行并撤销待确认卡；
     其余失败只返回 warning，业务继续。``allow_cooperative`` 只给模拟器与离线测试
     使用：平台执行器必须保持默认 ``False``，否则协作式 provider 会被误当成有界。
+    ``command_ref`` 与 ``trace_ref`` 由调用方显式提供，仅以摘要写入审计；不从设备
+    状态推断关联值。
     """
     outcome = evaluate_path(provider, binding, action, parameters, state,
-                            allow_cooperative=allow_cooperative)
+                            allow_cooperative=allow_cooperative,
+                            command_ref=command_ref, trace_ref=trace_ref)
     if outcome is None:
         return None
     if outcome.check.degraded and not getattr(provider, "audit_emits", False):
         # P6：策略层覆盖模拟器/卓翼等非 KtdPathChecker 路径；只留关联摘要，不写坐标。
         from .audit import digest, emit
-        state_mapping = state if isinstance(state, Mapping) else {}
         emit("flight_path_check_degraded", action=str(action), status=outcome.check.status,
              reason=outcome.check.reason or None,
-             trace_ref=digest(state_mapping.get("trace_id")),
-             command_ref=digest(state_mapping.get("command_id")),
+             trace_ref=digest(trace_ref),
+             command_ref=digest(command_ref),
              drone_ref=digest(getattr(binding, "drone_id", None)))
     if outcome.check.status == "blocked":
         message = (ORBIT_BLOCKED_MESSAGE if action == "point_orbit"

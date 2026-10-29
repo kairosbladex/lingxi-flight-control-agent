@@ -129,6 +129,31 @@ class ZhuoyiPlatformExecutorTests(unittest.TestCase):
         self.assertEqual(self.executor.supports_plan_execution, False)
         self.assertEqual(self.executor.supports_verified_plan_execution, False)
 
+    def test_degraded_path_audit_uses_command_id_and_has_no_trace(self):
+        import contextlib
+        import io
+        from lingxi_flight_control.audit import digest
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            preview = self.executor.preview(self.request(FlightControlAction.MOVE_FORWARD,
+                                                         command_id='zhuoyi-command',
+                                                         distance_m=10))
+        self.assertEqual(preview.status, FlightControlStatus.PREVIEW_REQUIRED)
+        records = [json.loads(line) for line in buffer.getvalue().splitlines() if line.strip()]
+        record = next(item for item in records if item.get('event') == 'flight_path_check_degraded')
+        self.assertEqual(record['command_ref'], digest('zhuoyi-command'))
+        self.assertIsNone(record['trace_ref'])
+
+    def test_mapping_without_atomic_gateway_is_rejected_at_preview(self):
+        self.platform.state.update(task_type='mapping', route_status='running')
+        preview = self.executor.preview(self.request(FlightControlAction.MOVE_FORWARD,
+                                                     command_id='mapping-command',
+                                                     distance_m=10))
+        self.assertEqual(preview.status, FlightControlStatus.REJECTED)
+        self.assertEqual(preview.error_code, 'MAPPING_INTERRUPTION_UNAVAILABLE')
+        self.assertIn('平台尚未提供作废测绘任务的原子契约，本次不下发。', preview.message)
+        self.assertEqual(self.platform.commands, {})
+
     def test_dji_move_below_20_metres_is_not_submitted(self):
         self.platform.state["height_m"] = 10
         request = self.request(FlightControlAction.MOVE_FORWARD, distance_m=10)

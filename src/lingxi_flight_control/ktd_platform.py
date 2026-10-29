@@ -1002,6 +1002,9 @@ class KtdPlatformExecutor:
                 transport, binding, site_id=site_id, task_id=task_id)
         if self._mapping_gateway is None:
             self._mapping_gateway = UnavailableMappingInterruptionGateway()
+        self._mapping_gateway_available = (
+            callable(getattr(self._mapping_gateway, 'interrupt', None))
+            and getattr(self._mapping_gateway, 'execution_mode', 'unavailable') != 'unavailable')
         self._task_event_bridge = task_event_bridge
         if self._task_event_bridge is None and callable(getattr(transport, 'read_task_events', None)):
             self._task_event_bridge = PlatformTaskEventBridge(
@@ -1301,7 +1304,7 @@ class KtdPlatformExecutor:
             from .flight_policy import ROUTE_MESSAGE
             message = ROUTE_MESSAGE
         elif code == 'MAPPING_INTERRUPTION_UNAVAILABLE':
-            message = MAPPING_MESSAGE + '平台尚未提供关闭拼图及作废断点的原子契约，本次不下发。'
+            message = MAPPING_MESSAGE + '平台尚未提供作废测绘任务的原子契约，本次不下发。'
         elif code in {'MAPPING_INTERRUPTION_PARTIAL', 'MAPPING_INTERRUPTION_NOT_CONFIRMED'}:
             message = (MAPPING_MESSAGE + '测绘中断未完成（只执行了部分步骤或未获确认），'
                        '本次不下发飞控动作；已完成的步骤不构成本次动作的授权，'
@@ -2235,6 +2238,11 @@ class KtdPlatformExecutor:
                     snapshot = self._snapshot(action_value)
                 if action == FlightControlAction.READ_STATE:
                     return self._receipt(request, "observed", snapshot=snapshot, message="已读取权威状态")
+                if (mapping_interruption(action_value, snapshot.state)
+                        and not self._mapping_gateway_available):
+                    raise PolicyError(
+                        'MAPPING_INTERRUPTION_UNAVAILABLE',
+                        MAPPING_MESSAGE + '平台尚未提供作废测绘任务的原子契约，本次不下发。')
                 command = self._compile(request, snapshot, interruption_pending=True)
                 self._task_end_precheck(request)
                 fingerprint = self._fingerprint(request)
@@ -2255,7 +2263,8 @@ class KtdPlatformExecutor:
                                         expires_at=datetime.fromtimestamp(deadline, timezone.utc).isoformat(), trace_id=trace_id,
                                         message="待确认平台指令，设备效果尚未验证", adjustments=adjustments)
                 warning = check_path(self._path_checker, self.binding, action_value, request.parameters,
-                                     self._path_state(snapshot))
+                                     self._path_state(snapshot), command_ref=request.command_id,
+                                     trace_ref=trace_id)
                 receipt = replace(receipt, warnings=([warning] if warning else [])
                                   + ([MAPPING_MESSAGE] if mapping_interruption(action_value, snapshot.state) else [])
                                   + self._platform_warnings(action_value, request.parameters))
@@ -2350,7 +2359,9 @@ class KtdPlatformExecutor:
                     # 绝不改写成 clear，也不跳过后续控制权与确认校验。
                     try:
                         warning = check_path(self._path_checker, self.binding, action_value,
-                                             request.parameters, self._path_state(snapshot))
+                                             request.parameters, self._path_state(snapshot),
+                                             command_ref=request.command_id,
+                                             trace_ref=pending.receipt.trace_id)
                     except PolicyError as error:
                         raise KtdPlatformError(error.code) from None
                 # 7：重新比较快照哈希与编译结果；任何漂移都作废这张确认卡。

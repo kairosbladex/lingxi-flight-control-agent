@@ -365,15 +365,12 @@ class ProductV13PlatformTests(unittest.TestCase):
             fixture.snapshot = replace(fixture.snapshot, state={**fixture.snapshot.state,
                 'route_status': 'running', 'task_type': 'mapping'})
             executor = fixture.executor()
-            # V1.4 4.1.1：首次 preview 必须展示「成果失效」确认，而不是静默拒绝，
-            # 也不是直接执行；此时不能有任何平台写入。
+            # V1.4 4.1.1 / 2026-10-29 产品裁决：没有原子作废契约时预览即拒，
+            # 不生成必然失败的确认卡，也不能有任何平台写入。
             card = executor.preview(fixture.request())
-            self.assertIs(card.status, FlightControlStatus.PREVIEW_REQUIRED)
-            self.assertIn(MAPPING_MESSAGE, card.warnings)
-            self.assertEqual(fixture.transport.calls, [])
-            # 确认后仍必须在缺少原子契约时拒绝，且不发送任何飞控动作。
-            receipt = fixture.confirm(executor, card)
-            self.assertEqual(receipt.error_code, 'MAPPING_INTERRUPTION_UNAVAILABLE')
+            self.assertIs(card.status, FlightControlStatus.REJECTED)
+            self.assertEqual(card.error_code, 'MAPPING_INTERRUPTION_UNAVAILABLE')
+            self.assertEqual(card.message, MAPPING_MESSAGE + '平台尚未提供作废测绘任务的原子契约，本次不下发。')
             self.assertEqual(fixture.transport.calls, [])
             self.assertEqual(executor.mapping_interruption_audit()['execution_mode'], 'unavailable')
         finally:
