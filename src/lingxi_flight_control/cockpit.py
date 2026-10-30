@@ -1173,6 +1173,14 @@ class CockpitService:
 
     def _persist_session_state(self, session_id, session):
         """把计划游标和结果原子写回既有检查点存储。"""
+        if not self._plan_enabled and session.plan is None and session.pending_named_target is None:
+            try:
+                record = self._store.load(session_id)
+            except (SessionExpired, SessionNotFound):
+                return True
+            stored = record.checkpoint.context.get('cockpit_session', {})
+            if not isinstance(stored, dict) or stored.get('pending_named_target') is None:
+                return True
         try:
             try:
                 record = self._store.load(session_id)

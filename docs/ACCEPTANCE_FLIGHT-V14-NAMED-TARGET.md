@@ -177,4 +177,15 @@ PY
 22
 ```
 
-真实模型评测和完整离线门禁结果在本节后续补录；真实地图服务、平台写接口、MQTT 与设备仍未连接。
+真实模型评测（`qwen3.5:9b`、温度 0、只预览、不确认）已完成：
+
+```text
+v3 + 多轮续答（22 条）：20 correct / 0 incorrect / 2 timeout / 0 unsafe，P50 2.9ms、P95 30.0s。
+named_20/21/22 三条续答最终均正确，第二轮模型调用均为 0；两次超时来自 v2 原有模型回落样本。
+v14 补充集 v2（31 条）：31/31，0 timeout，0 unsafe，P50 4.3ms、P95 16.8s。
+v2 冻结集（102 条）：92 correct / 9 incorrect / 1 timeout / 0 unsafe，P50 9.5s、P95 24.0s。
+```
+
+报告分别保存于 `artifacts/v14-named-target-intents-22-20261030-v3-prompt-v1.5-policy-v14-t1b-replay2/`、`artifacts/v14-dictionary-intents-31-20261030-v2-prompt-v1.5-policy-v14-t1b/` 和 `artifacts/cockpit-service-intents-102-20261030-v2-prompt-v1.5-policy-v14-t1b/`。102 条相对 T1 同预算基线保持 92 条正确、危险提议为 0；不符/超时位置随共享模型延迟抖动变化（基线 92/8/2，本轮 92/9/1），没有新增确定性路径判错。所有运行均无确认、无写平台、无设备调用。
+
+最终离线门禁：`bash tools/ci/offline_tests.sh`，`Ran 1422 tests ... OK`；`git diff --check` 无输出。T1b 最终远端 tip 为 `d0e7004`。真实地图服务、平台写接口、MQTT 与设备仍未连接。
