@@ -1488,7 +1488,7 @@ def _spec(domain: str, description: str, parameters: Mapping[str, ToolParameter]
 ACTION_SPECS: dict[FlightControlAction, ActionSpec] = {
     # 控制权
     FlightControlAction.CONTROL_ACQUIRE: _spec(
-        "control", "获取或申请无人机控制权；执行任何飞行动作前必须先获取",
+        "control", "申请或获取本无人机控制权；仅在用户明确要求申请或获取控制权时使用",
         {"mode": _P_CONTROL_MODE, "reason": _P_CONTROL_REASON}),
     FlightControlAction.CONTROL_RELEASE: _spec("control", "释放当前持有的控制权"),
     FlightControlAction.REMOTE_REQUEST: _spec("control", "向远端发起接管请求"),

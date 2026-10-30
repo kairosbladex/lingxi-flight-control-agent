@@ -10,6 +10,7 @@ from pathlib import Path
 
 from lingxi_flight_control import MemoryFlightControlSimulator, RuntimeBinding
 from lingxi_flight_control.cockpit import PROMPT_VERSION, CockpitService, grounded_parameters
+from lingxi_flight_control.full_control import ACTION_SPECS, FlightControlAction
 from lingxi_flight_control.flight_policy import CONTROL_MESSAGE, ROUTE_HOVER_NOTICE, ROUTE_MESSAGE
 from lingxi_flight_control.ollama_decider import OllamaDecider
 from lingxi_flight_control.ktd_platform import (
@@ -45,6 +46,12 @@ class PolicyGateTests(unittest.TestCase):
         self.service = CockpitService(self.binding, self.simulator,
             lambda: OllamaDecider(model='synthetic-gate', transport=transport, max_attempts=1),
             clock=lambda: 1000, enable_direct_commands=direct)
+
+    def test_control_acquire_description_is_neutral_and_prompt_version_is_bumped(self):
+        description = ACTION_SPECS[FlightControlAction.CONTROL_ACQUIRE].description
+        self.assertEqual(description, '申请或获取本无人机控制权；仅在用户明确要求申请或获取控制权时使用')
+        self.assertNotIn('执行任何飞行动作前必须先获取', description)
+        self.assertEqual(PROMPT_VERSION, 'cockpit-prompt-v1.6')
 
     def message(self, text):
         self.counter += 1
