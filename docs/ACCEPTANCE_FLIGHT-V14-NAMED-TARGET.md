@@ -3,7 +3,7 @@
 日期：2026-10-29
 分支：`bugfix/v14-named-target-deterministic`
 基线：A 分支返工已正向 merge（`0b76a316713644fcfec7b03ee1dc6d6f4a66710f`）
-证据级别：离线单测、合成 resolver 与模拟器；未连接真实地图服务、模型服务或设备。
+证据级别：离线单测、合成 resolver、模拟器与有预算的 Ollama 意图评测；未连接真实地图服务、平台写接口或设备。
 
 ## 设计说明
 
