@@ -43,9 +43,9 @@ from .safety import SafetyFastPath
 from .session import MemoryCheckpointStore, SessionError, SessionExpired, SessionNotFound, validate_session_id
 from .standalone_preview import StandaloneResponse
 from .arrival import arrival_observed
-from .flight_policy import (POLICY_VERSION, CONTROL_MESSAGE, MAPPING_MESSAGE, PATH_ACTIONS, ROUTE_HOVER_NOTICE,
-                            PolicyError, check_flight_policy, mapping_interruption, normalize_parameters,
-                            proposal_parameters)
+from .flight_policy import (ADJUSTABLE, POLICY_VERSION, CONTROL_MESSAGE, MAPPING_MESSAGE, PATH_ACTIONS,
+                            ROUTE_HOVER_NOTICE, PolicyError, check_flight_policy, finite,
+                            mapping_interruption, normalize_parameters, proposal_parameters)
 from .flight_policy import (BODY_TARGET_MESSAGE, COMPLEX_ROUTE_MANUAL_MESSAGE,
                             COMPOUND_DISTANCE_CLARIFICATION_REQUIRED, MIXED_TARGET_MESSAGE,
                             compound_distance_question, payload_mount_message)
@@ -234,6 +234,67 @@ def _direct_command(text):
 # 以免改变 enable_direct_commands 开启时可直接生成预览的范围。
 _GATE_TURN = re.compile(r'(?:请|帮我)?(?:原地)?(?:向|往)?(?P<side>左|右)(?:转|偏航|旋转)\s*(?P<number>'
     + _DIRECT_NUMBER + r')\s*(?:度|°)[。!！]?')
+
+_PARAMETER_CLAMP_PATTERNS = (
+    (re.compile(r'(?:请|帮我)?起飞(?:到|至)\s*(?P<number>' + _DIRECT_NUMBER
+                + r')\s*(?:米)?高度[。!！]?'), 'takeoff', 'altitude_m'),
+    (re.compile(r'(?:请|帮我)?(?:光学|相机)?变焦(?:到|调到|设为|设置为)\s*(?P<number>'
+                + _DIRECT_NUMBER + r')\s*倍[。!！]?'), 'camera_zoom', 'value'),
+    (re.compile(r'(?:请|帮我)?(?:数字|数码|云台数字)变焦(?:到|调到|设为|设置为)\s*(?P<number>'
+                + _DIRECT_NUMBER + r')\s*倍[。!！]?'), 'gimbal_digital_zoom', 'value'),
+    (re.compile(r'(?:请|帮我)?云台(?P<direction>向上|向下)(?:调|调整|看|压|抬)?\s*(?P<number>'
+                + _DIRECT_NUMBER + r')\s*(?:度|°)[。!！]?'), None, 'angle_deg'),
+)
+_SPEED_CLAMP_PATTERNS = (
+    (re.compile(r'(?:请|帮我)?水平(?:移动)?速度(?:调到|设为|设置为)\s*每秒\s*(?P<number>'
+                + _DIRECT_NUMBER + r')\s*米[。!！]?'), 'set_move_speed'),
+    (re.compile(r'(?:请|帮我)?(?:垂直|升降)速度(?:调到|设为|设置为)\s*每秒\s*(?P<number>'
+                + _DIRECT_NUMBER + r')\s*米[。!！]?'), 'set_vertical_speed'),
+    (re.compile(r'(?:请|帮我)?横滚角速度(?:调到|设为|设置为)\s*每秒\s*(?P<number>'
+                + _DIRECT_NUMBER + r')\s*度[。!！]?'), 'set_roll_speed'),
+    (re.compile(r'(?:请|帮我)?俯仰角速度(?:调到|设为|设置为)\s*每秒\s*(?P<number>'
+                + _DIRECT_NUMBER + r')\s*度[。!！]?'), 'set_pitch_speed'),
+    (re.compile(r'(?:请|帮我)?偏航角速度(?:调到|设为|设置为)\s*每秒\s*(?P<number>'
+                + _DIRECT_NUMBER + r')\s*度[。!！]?'), 'set_yaw_speed'),
+)
+
+
+def _parameter_clamp_call(text, state):
+    """只把完整且越过协议/设备范围的数值指令提前交给策略层。"""
+    call = _direct_command(text)
+    if call is None:
+        match = _GATE_TURN.fullmatch(text)
+        if match is not None:
+            call = ToolCall('turn_left' if match['side'] == '左' else 'turn_right',
+                            {'angle_deg': _number(match['number'])})
+    if call is None:
+        for pattern, action, key in _PARAMETER_CLAMP_PATTERNS:
+            match = pattern.fullmatch(text)
+            if match is None:
+                continue
+            if action is None:
+                action = 'gimbal_up' if match['direction'] == '向上' else 'gimbal_down'
+            call = ToolCall(action, {key: _number(match['number'])})
+            break
+    if call is None:
+        for pattern, action in _SPEED_CLAMP_PATTERNS:
+            match = pattern.fullmatch(text)
+            if match is not None:
+                call = ToolCall(action, {'value': _number(match['number'])})
+                break
+    if call is None:
+        return None
+    key, protocol_low, protocol_high = ADJUSTABLE.get(call.name, (None, None, None))
+    if key is None or key not in call.arguments:
+        return None
+    value = call.arguments[key]
+    limits = state.get('device_limits', {}) if isinstance(state, Mapping) else {}
+    limit = limits.get(call.name) if isinstance(limits, Mapping) else None
+    if isinstance(limit, Mapping) and finite(limit.get('min')) and finite(limit.get('max')):
+        low, high = max(protocol_low, limit['min']), min(protocol_high, limit['max'])
+    else:
+        low, high = protocol_low, protocol_high
+    return call if value < low or value > high else None
 
 
 def _policy_gate_call(text):
@@ -1775,7 +1836,8 @@ class CockpitService:
                 safety_call = ToolCall('hover', {})
             product_call = _product_command(product_text)
             direct_call = _direct_command(text) if self._direct_commands and not self._plan_enabled else None
-            fixed_call = safety_call or product_call or direct_call or target_call
+            parameter_call = _parameter_clamp_call(text, state)
+            fixed_call = safety_call or product_call or direct_call or target_call or parameter_call
             if (self._plan_enabled and safety_call is None and product_call is None
                     and target_call is None):
                 response, pending = self._plan_turn(session, epoch, started, model_input,
@@ -1857,7 +1919,8 @@ class CockpitService:
                     response.setdefault('interpretation_source',
                         'product-v1.3-exact' if product_call else 'exact-command-v1' if direct_call else
                         'safety-fast-path' if safety_call else
-                        'deterministic-target-resolver' if target_call else 'model')
+                        'deterministic-target-resolver' if target_call else
+                        'deterministic-parameter-clamp' if parameter_call else 'model')
                     session.clarification = response['status'] == 'clarification'
                     history += [{'role': 'user', 'text': text}, {'role': 'assistant', 'status': response['status'], 'text': response['message']}]
                     result.checkpoint.context['conversation'] = history[-12:]

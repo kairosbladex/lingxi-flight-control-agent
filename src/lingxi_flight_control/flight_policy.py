@@ -112,6 +112,8 @@ SPEAKER_VOLUME_MAX_TEMPLATE = "音量最大支持{maximum:g}%，已为您按最�
 SPEAKER_VOLUME_MAX_MESSAGE = SPEAKER_VOLUME_MAX_TEMPLATE.format(maximum=100)
 SEARCHLIGHT_BRIGHTNESS_MAX_TEMPLATE = "亮度最大支持{maximum:g}%，已按最大值设置。"
 SEARCHLIGHT_BRIGHTNESS_MAX_MESSAGE = SEARCHLIGHT_BRIGHTNESS_MAX_TEMPLATE.format(maximum=100)
+# 2.2.5：没有设备参数表时不能猜极值，直接告诉用户如何继续。
+DEVICE_LIMITS_UNAVAILABLE_MESSAGE = "暂未获取到当前设备的参数上限，无法确定可执行的最大值，请稍后重试。"
 
 #: 4.3.2 表 / 4.4 表6 场景：项目未配置该 AI 算法。
 AI_ALGORITHM_NOT_CONFIGURED_MESSAGE = "当前项目未配置该AI算法。"
@@ -245,11 +247,11 @@ def normalize_parameters(action, parameters, state):
                 })
             return result, adjustments
         if not protocol_low <= value <= protocol_high:
-            raise PolicyError("DEVICE_LIMITS_UNAVAILABLE", "未取得当前设备参数表，不能猜测设备极值。")
+            raise PolicyError("DEVICE_LIMITS_UNAVAILABLE", DEVICE_LIMITS_UNAVAILABLE_MESSAGE)
         return result, adjustments
     if (not isinstance(limit, Mapping) or not finite(limit.get("min"))
             or not finite(limit.get("max")) or limit["min"] > limit["max"]):
-        raise PolicyError("DEVICE_LIMITS_UNAVAILABLE", "当前设备参数表无效。")
+        raise PolicyError("DEVICE_LIMITS_UNAVAILABLE", DEVICE_LIMITS_UNAVAILABLE_MESSAGE)
     low, high = max(protocol_low, limit["min"]), min(protocol_high, limit["max"])
     pitch_bound = None
     if action in {"gimbal_up", "gimbal_down"}:
