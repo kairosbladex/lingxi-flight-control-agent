@@ -30,6 +30,7 @@ next_action: 先登记外部联调前置条件，再单独申请并验证真实�
 - 2026-10-29 飞行中命名目标（分支 `feature/v14-flight-named-target`）：可选静态标注 resolver、唯一/歧义/线面体拒绝、坐标 grounding 与确认时版本复核已接入；冻结集合与 service 评测入口已建立，离线 1413 项通过；2026-10-30 真实 qwen3.5:9b：v2 冻结集 92/102、补充集 31/31、命名目标 v2 集 14/19（0 判错、5 超时，根因为标注高度入模型、control_acquire 描述矛盾与全量工具下发），危险提议 0；resolver 默认关闭，三点处理前不建议开启；真实地图/设备未验证，见 [验收记录](../ACCEPTANCE_FLIGHT-V14-NAMED-TARGET.md)。
 - 2026-10-30 T1（分支 `bugfix/v14-named-target-deterministic`）：离线 1415 项通过；命名目标 v1/v2 真实评测分别 13/13、19/19，模型调用降至 2、5，确定性样本毫秒级；补充集 31/31。102 条冻结集同预算复跑为 92/8/2，另一次运行 93/9/0，危险提议均为 0；模型服务波动仍存在。标注高度移出模型输入，确认卡仅展示参考高度；真实地图/设备未验证，见 [验收记录](../ACCEPTANCE_FLIGHT-V14-NAMED-TARGET.md)。
 - 2026-10-30 T1b 完成（分支 `bugfix/v14-named-target-deterministic`）：命名目标缺高度/半径的续答通过既有会话检查点持久化并重新执行门禁、目标版本复核；计划模式单目标走确定性路径，命名目标模型回落工具集收窄，提示版本 `cockpit-prompt-v1.5`。离线 1424 项通过；v3 多轮评测新增续答最终 3/3、0 次模型调用，31 条补充集 31/31；102 条为 92/9/1，危险提议 0。真实地图/设备未验证，见 [验收记录](../ACCEPTANCE_FLIGHT-V14-NAMED-TARGET.md)。
+- 2026-10-30 T2 完成（分支 `bugfix/v14-control-acquire-description`）：从 T1b 推送 tip `5153eae` 创建；`control_acquire` 描述改为中性动作说明，`PROMPT_VERSION=cockpit-prompt-v1.6`。A/B 候选各 2 轮，`v14_clamp_01` 均稳定 `camera_zoom(100)`；v14 补充集 31/31，命名目标 v3 续答 3/3 且 0 次模型调用，102 条 92/7/3，危险提议 0。完整离线 1425 项通过；真实平台/设备未验证，见 [策略门禁验收记录](../ACCEPTANCE_FLIGHT-V14-POLICY-GATE.md)。
 - 真实平台联调前置条件已整理为 Java 快照、控制权租约、逐动作权限、`route_status`、回执、围栏、设备和书面授权等外部条件，见 [平台联调前置条件](../evidence/platform-integration-prereq-20261027.md)。
 
 ## 未验证与阻塞

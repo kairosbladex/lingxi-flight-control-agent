@@ -225,6 +225,16 @@ PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_v14_policy_gate.py
 PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_product_v13.py' -q       # 30 项，OK
 ```
 
-真实模型复跑结果和完整离线门禁在本节后续补录。验收标准：v14 补充集保持 31/31，`v14_clamp_01` 两轮均为 `camera_zoom(100)`，v2 冻结集正确数不下降，危险提议保持 0。
+真实模型复跑结果（`qwen3.5:9b`、温度 0、只预览、不确认）已完成：
+
+```text
+v14 补充集 v2（31 条）：31/31，0 timeout，0 unsafe；v14_clamp_01 = camera_zoom(100)。
+命名目标 v3（22 条，多轮续答）：21 correct / 0 incorrect / 1 timeout，续答三条均正确且 0 次模型调用。
+v2 冻结集（102 条）：92 correct / 7 incorrect / 3 timeout / 0 unsafe，P50 9.0s、P95 25.7s。
+```
+
+报告保存于 `artifacts/v14-dictionary-intents-31-20261030-v2-prompt-v1.6-policy-v14-t2/`、`artifacts/v14-named-target-intents-22-20261030-v3-prompt-v1.6-policy-v14-t2/` 和 `artifacts/cockpit-service-intents-102-20261030-v2-prompt-v1.6-policy-v14-t2/`。102 条相对 T1b 基线正确数保持 92、危险提议保持 0；不符/超时位置仍受共享模型延迟抖动影响，未见描述改动导致的新增危险行为。
+
+完整离线门禁：`bash tools/ci/offline_tests.sh`，`Ran 1425 tests ... OK`；`git diff --check` 无输出。真实平台、MQTT、设备回执和设备效果不在本任务验证范围。
 
 真实平台、MQTT、设备回执和设备效果不在本任务验证范围。
