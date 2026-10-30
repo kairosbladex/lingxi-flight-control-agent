@@ -156,3 +156,25 @@ git diff --check
 102 条冻结集首次运行得到 93/102、9 不符、0 超时；同预算复跑回到基线 92/8/2。两次运行的 resolver 关闭输入保持兼容，差异属于模型服务运行波动；不把首次结果宣称为稳定提升。命名目标集合的确定性样本均为 0 次模型调用，约 1–4ms 返回；剩余模型回落样本仍受模型延迟影响。
 
 本任务未连接真实地图服务、真实平台写接口、MQTT 或设备；模拟器 preview 和离线/模型评测不等于设备执行完成。新增评测报告未包含凭据，原有未跟踪文件未暂存。
+
+## T1b 追问接续返工（2026-10-30）
+
+T1b 修复了 T1 引入的命名目标缺参死路：resolver 唯一解析成功但缺高度/半径时，现将 `target_id`、版本、坐标、意图、缺失参数、`context_version` 和过期时间通过既有 `_persist_session_state` 保存。下一轮只有在文本仅包含该缺失米制参数、会话上下文未变且未超时的情况下才接续；接续前重新执行控制权/航线门禁并按 `target_id` 复核版本和坐标。换目标、取消、否定、非参数文本或超时都会清除待补参状态。
+
+计划模式下的单目标单句优先走同一确定性 `target_call`；只有命名目标已解析但仍需模型时才把工具集收窄为 `point_flight`、`point_orbit`、`hover` 与安全/只读工具。模型可见内容版本升至 `cockpit-prompt-v1.5`。平台环绕半径的既有“不接收半径参数”提示、最终策略门禁、确认绑定和版本复核保持不变。
+
+新增离线覆盖：高度续答、半径续答、纯数字续答、续答前控制权撤销、目标版本变化、换目标清理、计划模式单目标；并冻结 `fixtures/v14-named-target-intents-v3.json`（v2 + 3 条多轮续答元数据）及 provenance。`follow_up` 元数据由离线服务用例逐轮复核，单轮 bench 仍以首轮澄清作为分母标签。
+
+离线验证：
+
+```text
+PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_v14_named_target.py' -v
+Ran 24 tests ... OK
+PYTHONPATH=src:. python3 - <<'PY'
+from tools.bench.cockpit_intents import load_scenarios
+print(len(load_scenarios('fixtures/v14-named-target-intents-v3.json')['scenarios']))
+PY
+22
+```
+
+真实模型评测和完整离线门禁结果在本节后续补录；真实地图服务、平台写接口、MQTT 与设备仍未连接。

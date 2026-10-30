@@ -218,6 +218,73 @@ class NamedTargetServiceTests(unittest.TestCase):
                 self.assertIn(expected, reply['message'])
                 self.assertEqual(self.brain_calls, [])
 
+    def test_missing_height_continues_with_numeric_reply_without_model(self):
+        resolver = RecordingResolver([point()])
+        service = self.make_service(resolver, ModelDecision(DecisionKind.FINAL, message='不应调用'))
+        first = self.message(service, '去唯一水塔')
+        self.assertEqual(first['error_code'], 'TARGET_ALTITUDE_REQUIRED')
+        second = self.message(service, '50米')
+        self.assertEqual(second['status'], 'preview_required')
+        self.assertEqual(second['card']['action'], 'point_flight')
+        self.assertEqual(second['card']['parameters']['altitude_m'], 50)
+        self.assertEqual(self.brain_calls, [])
+
+    def test_missing_radius_continues_with_labeled_reply_without_model(self):
+        resolver = RecordingResolver([point()])
+        service = self.make_service(resolver, ModelDecision(DecisionKind.FINAL, message='不应调用'))
+        first = self.message(service, '围绕唯一水塔')
+        self.assertEqual(first['error_code'], 'PARAMETER_REQUIRED')
+        second = self.message(service, '半径30米')
+        self.assertEqual(second['status'], 'preview_required')
+        self.assertEqual(second['card']['action'], 'point_orbit')
+        self.assertEqual(second['card']['parameters']['radius_m'], 30)
+        self.assertEqual(self.brain_calls, [])
+
+    def test_pending_target_rechecks_policy_and_target_version(self):
+        target = point()
+        resolver = RecordingResolver([target])
+        service = self.make_service(resolver, ModelDecision(DecisionKind.FINAL, message='不应调用'))
+        self.message(service, '去唯一水塔')
+        self.simulator.state.control_owner = None
+        rejected = self.message(service, '高度50')
+        self.assertEqual((rejected['status'], rejected['error_code']),
+                         ('rejected', 'CONTROL_NOT_OWNED'))
+        self.simulator.state.control_owner = 'actor-1'
+        self.message(service, '去唯一水塔')
+        resolver.candidates = [replace(target, version='v2')]
+        changed = self.message(service, '50')
+        self.assertEqual((changed['status'], changed['error_code']),
+                         ('rejected', 'TARGET_VERSION_CHANGED'))
+        self.assertEqual(self.brain_calls, [])
+
+    def test_new_instruction_clears_pending_named_target(self):
+        resolver = RecordingResolver([point(), point(name='新水塔', target_id='target-2')])
+        service = self.make_service(resolver, ModelDecision(DecisionKind.CLARIFY, message='请提供坐标'))
+        self.message(service, '去唯一水塔')
+        reply = self.message(service, '去新水塔，高50米')
+        self.assertEqual(reply['status'], 'preview_required')
+        self.assertEqual(reply['card']['target']['target_id'], 'target-2')
+        self.assertEqual([query.name for query in resolver.calls], ['唯一水塔', '新水塔'])
+        self.assertEqual(self.brain_calls, [])
+
+    def test_plan_mode_single_named_target_stays_deterministic(self):
+        resolver = RecordingResolver([point()])
+        brain_calls = []
+
+        class Planner:
+            def decide(self, *_args):
+                brain_calls.append(True)
+                return ModelDecision(DecisionKind.FINAL, message='不应调用')
+
+        service = CockpitService(
+            self.binding, self.simulator, lambda: Planner(), target_resolver=resolver,
+            clock=lambda: 1000.0, enable_plan_execution=True,
+            plan_decider_factory=lambda: Planner())
+        reply = self.message(service, '去唯一水塔，高50米')
+        self.assertEqual(reply['status'], 'preview_required')
+        self.assertEqual(reply['card']['action'], 'point_flight')
+        self.assertEqual(brain_calls, [])
+
     def test_nearby_target_phrase_falls_back_to_model(self):
         resolver = RecordingResolver([point()])
         service = self.make_service(resolver, ModelDecision(DecisionKind.CLARIFY, message='请提供坐标'))
