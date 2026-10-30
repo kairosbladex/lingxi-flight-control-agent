@@ -253,6 +253,15 @@ class NamedTargetServiceTests(unittest.TestCase):
         self.assertEqual(second['card']['parameters']['radius_m'], 30)
         self.assertEqual(self.brain_calls, [])
 
+    def test_missing_radius_continues_with_bare_number(self):
+        resolver = RecordingResolver([point()])
+        service = self.make_service(resolver, ModelDecision(DecisionKind.FINAL, message='不应调用'))
+        self.message(service, '围绕唯一水塔')
+        reply = self.message(service, '30')
+        self.assertEqual(reply['status'], 'preview_required')
+        self.assertEqual(reply['card']['parameters']['radius_m'], 30)
+        self.assertEqual(self.brain_calls, [])
+
     def test_pending_target_rechecks_policy_and_target_version(self):
         target = point()
         resolver = RecordingResolver([target])

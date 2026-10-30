@@ -1622,6 +1622,8 @@ class CockpitService:
                 return result
             pending_original = ((session.pending_named_target or {}).get('original_text')
                                 if session.pending_named_target else None)
+            pending_missing = ((session.pending_named_target or {}).get('missing')
+                               if session.pending_named_target else None)
             (named_continuation, target_mention, resolved_target, target_call,
              target_early) = self._continue_named_target(text, state, session)
             if not named_continuation:
@@ -1682,7 +1684,9 @@ class CockpitService:
                 session.clarification = False
             parameter_reply = text if session.clarification and _motion_parameter_reply(text) else None
             if named_continuation:
-                grounding_text = (pending_original or text) + '\n' + text
+                label = '高度' if pending_missing == 'altitude_m' else '半径'
+                parameter_text = text if re.search(r'高度|半径', text) else label + text
+                grounding_text = (pending_original or text) + '\n' + parameter_text
                 session.active_intent = grounding_text
                 session.clarification = False
                 session.completed_steps.clear()
