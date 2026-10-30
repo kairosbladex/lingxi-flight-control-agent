@@ -81,8 +81,23 @@ class NamedTargetServiceTests(unittest.TestCase):
             'longitude': 113.201, 'latitude': 23.101, 'radius_m': 30})
         self.assertEqual(reply['card']['target']['target_id'], 'target-1')
         self.assertEqual(reply['card']['target']['version'], 'v1')
+        self.assertEqual(reply['card']['target']['reference_altitude_m'], 45.0)
+        self.assertTrue(any('不接收半径参数' in warning for warning in reply['card']['warnings']))
         self.assertEqual(len(resolver.calls), 1)
-        self.assertEqual(self.brain_calls[0]['resolved_target']['target_id'], 'target-1')
+        self.assertEqual(self.brain_calls, [])
+
+    def test_unique_flight_fills_parameters_without_model_and_hides_altitude_from_model(self):
+        resolver = RecordingResolver([point()])
+        service = self.make_service(
+            resolver,
+            ModelDecision(DecisionKind.FINAL, message='不应调用'))
+        reply = self.message(service, '去唯一水塔，50米高度')
+        self.assertEqual(reply['status'], 'preview_required')
+        self.assertEqual(reply['card']['action'], 'point_flight')
+        self.assertEqual(reply['card']['parameters'], {
+            'longitude': 113.201, 'latitude': 23.101, 'altitude_m': 50})
+        self.assertEqual(reply['card']['target']['reference_altitude_m'], 45.0)
+        self.assertEqual(self.brain_calls, [])
 
     def test_ambiguous_target_never_calls_model(self):
         resolver = RecordingResolver([point('target-1', '1号水塔'), point('target-2', '1号水塔', 113.209, 23.109, 48, 'v2')])
@@ -177,7 +192,7 @@ class NamedTargetServiceTests(unittest.TestCase):
                 self.assertEqual(reply['card']['target']['target_id'], 'station-1')
                 self.assertEqual(reply['card']['requested_parameters'], arguments)
 
-    def test_model_coordinates_must_match_resolved_target(self):
+    def test_deterministic_coordinates_use_resolved_target(self):
         resolver = RecordingResolver([point()])
         service = self.make_service(
             resolver,
@@ -185,12 +200,13 @@ class NamedTargetServiceTests(unittest.TestCase):
                           tool_call=ToolCall('point_flight', {
                               'longitude': 113.999, 'latitude': 23.101, 'altitude_m': 50})))
         reply = self.message(service, '去唯一水塔，高50米')
-        self.assertEqual((reply['status'], reply['error_code']), ('rejected', 'TARGET_BINDING_MISMATCH'))
-        self.assertEqual(self.simulator.state.last_action, None)
+        self.assertEqual(reply['status'], 'preview_required')
+        self.assertEqual(reply['card']['parameters']['longitude'], 113.201)
+        self.assertEqual(self.brain_calls, [])
 
     def test_missing_radius_or_flight_height_is_a_clarification(self):
         cases = (
-            ('围绕唯一水塔绕一圈，半径30米', ToolCall('point_orbit', {'longitude': 113.201, 'latitude': 23.101}), '环绕半径'),
+            ('围绕唯一水塔', ToolCall('point_orbit', {'longitude': 113.201, 'latitude': 23.101}), '环绕半径'),
             ('去唯一水塔', ToolCall('point_flight', {'longitude': 113.201, 'latitude': 23.101}), '飞行高度'),
         )
         for text, call, expected in cases:
@@ -200,6 +216,15 @@ class NamedTargetServiceTests(unittest.TestCase):
                 reply = self.message(service, text)
                 self.assertEqual(reply['status'], 'clarification')
                 self.assertIn(expected, reply['message'])
+                self.assertEqual(self.brain_calls, [])
+
+    def test_nearby_target_phrase_falls_back_to_model(self):
+        resolver = RecordingResolver([point()])
+        service = self.make_service(resolver, ModelDecision(DecisionKind.CLARIFY, message='请提供坐标'))
+        reply = self.message(service, '去唯一水塔附近看看')
+        self.assertEqual(reply['status'], 'clarification')
+        self.assertEqual(len(self.brain_calls), 1)
+        self.assertEqual(resolver.calls, [])
 
     def test_confirm_rechecks_target_version_and_keeps_state_unchanged(self):
         target = point()
