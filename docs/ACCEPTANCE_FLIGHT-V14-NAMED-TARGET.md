@@ -119,7 +119,7 @@ python3 tools/bench/cockpit_intents.py --surface service --live --model qwen3.5:
 
 - 既有 `.workbuddy-ai/`、评测目录、`lingxi_agent_src_*` 未跟踪文件未暂存、未删除。
 - 本轮临时离线报告、变异检查副本和脚本均已删除，没有启动常驻进程、容器或远端模型。
-- 本分支包含 A 的正向 merge 与本轮 B 代码、测试、文档；推送后用 `git ls-remote origin feature/v14-flight-named-target` 核对最终远端 SHA。
+- 基线分支的 A/B 历史保留在上文；T1 实现、测试、评测和文档已提交到 `bugfix/v14-named-target-deterministic`，并用 `git ls-remote origin bugfix/v14-named-target-deterministic` 核对远端 SHA `3e482bbb3a1801f9c8a9a118fbd92997f5408d32`。
 - 验收方的一次性探针脚本放在 /tmp/v14-align-probe，用完已删除；探针输出只摘录进本记录，未入库。
 
 ## T1 确定性填充（2026-10-30）
