@@ -491,7 +491,8 @@ def _named_target_parameter_reply(text, missing):
         return None
     for prefix in prefixes:
         if value_text.startswith(prefix):
-            value_text = value_text[len(prefix):].lstrip('：:为是设为')
+            value_text = value_text[len(prefix):]
+            value_text = re.sub(r'^(?:\s*[：:]?\s*(?:为|是|设为)?)\s*', '', value_text)
             break
     for suffix in suffixes:
         if value_text.endswith(suffix) and len(value_text) > len(suffix):
@@ -1172,9 +1173,6 @@ class CockpitService:
 
     def _persist_session_state(self, session_id, session):
         """把计划游标和结果原子写回既有检查点存储。"""
-        if (not self._plan_enabled and session.plan is None
-                and session.pending_named_target is None):
-            return True
         try:
             try:
                 record = self._store.load(session_id)
@@ -1279,6 +1277,7 @@ class CockpitService:
                 with self._lock:
                     session = self._session(session_id)
                     self._invalidate(session)
+                    session.pending_named_target = None
                     session.active_intent, session.clarification = '', False
                     session.completed_steps.clear()
                     session.ordered_steps = None

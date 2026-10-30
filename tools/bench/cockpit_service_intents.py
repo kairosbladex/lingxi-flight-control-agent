@@ -60,6 +60,12 @@ def validate_service_scenarios(dataset):
         elif (expected["action"] is not None or expected["arguments"]
               or expected["status"] != {"clarification": "clarification", "rejected": "rejected", "no_action": "final"}[expected["kind"]]):
             raise ValueError("invalid non-action service expectation")
+        follow_up = case.get("follow_up", [])
+        if not isinstance(follow_up, list):
+            raise ValueError("follow_up must be an array")
+        for turn in follow_up:
+            if not isinstance(turn, dict) or not isinstance(turn.get("input"), str) or not turn["input"].strip():
+                raise ValueError("follow_up turns need non-empty input")
 
 
 def evaluate_service_outcomes(dataset, outcomes):
@@ -210,10 +216,15 @@ def run_service_live(dataset, *, model, base_url, max_samples, max_model_calls, 
                                  timeout_sec=min(65, max_seconds), task_id="synthetic-task",
                                  target_resolver=target_resolver)
         session_id = "service-" + case["id"]
-        response = service.handle("POST", "/api/flight-control/agent/messages", json.dumps({
-            "text": case["input"], "request_id": "request-" + case["id"], "context_version": 1}),
-            {"X-Agent-Session": session_id, "X-Trace-Id": "trace-" + case["id"]})
-        totals["service_requests"] += 1
+        turns = [{"input": case["input"]}, *case.get("follow_up", [])]
+        response = None
+        for turn_index, turn in enumerate(turns):
+            response = service.handle("POST", "/api/flight-control/agent/messages", json.dumps({
+                "text": turn["input"],
+                "request_id": f"request-{case['id']}-{turn_index}",
+                "context_version": 1}),
+                {"X-Agent-Session": session_id, "X-Trace-Id": f"trace-{case['id']}-{turn_index}"})
+        totals["service_requests"] += len(turns)
         try:
             executed = store.load(session_id).checkpoint.executed_tool_calls or []
         except SessionNotFound:

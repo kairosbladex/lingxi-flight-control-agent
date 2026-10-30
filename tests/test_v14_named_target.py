@@ -10,6 +10,7 @@ from lingxi_flight_control import (
 )
 from lingxi_flight_control.cockpit import CockpitService
 from lingxi_flight_control.flight_policy import CONTROL_MESSAGE, MAPPING_MESSAGE, ROUTE_MESSAGE
+from lingxi_flight_control.session import MemoryCheckpointStore
 from lingxi_flight_control.target_resolver import (
     TARGET_NOT_FOUND, TARGET_RESOLVER_UNAVAILABLE, TargetCandidate, TargetGeometry,
     TargetResolverError,
@@ -227,6 +228,18 @@ class NamedTargetServiceTests(unittest.TestCase):
         self.assertEqual(second['status'], 'preview_required')
         self.assertEqual(second['card']['action'], 'point_flight')
         self.assertEqual(second['card']['parameters']['altitude_m'], 50)
+        self.assertEqual(self.brain_calls, [])
+
+    def test_pending_target_survives_service_restart_via_checkpoint_store(self):
+        resolver = RecordingResolver([point()])
+        store = MemoryCheckpointStore(clock=lambda: 1000.0)
+        first = self.make_service(resolver, ModelDecision(DecisionKind.FINAL, message='不应调用'))
+        first._store = store
+        self.assertEqual(self.message(first, '去唯一水塔')['status'], 'clarification')
+        second = self.make_service(resolver, ModelDecision(DecisionKind.FINAL, message='不应调用'))
+        second._store = store
+        reply = self.message(second, '50米')
+        self.assertEqual(reply['status'], 'preview_required')
         self.assertEqual(self.brain_calls, [])
 
     def test_missing_radius_continues_with_labeled_reply_without_model(self):

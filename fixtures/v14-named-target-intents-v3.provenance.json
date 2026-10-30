@@ -5,14 +5,14 @@
   "source_fixture": "fixtures/v14-named-target-intents-v2.json",
   "source_fixture_sha256": "4a6101a89a70b00eadd4e6f9680afbfedf407b0a649fbabc46c151c069bf5150",
   "fixture": "fixtures/v14-named-target-intents-v3.json",
-  "fixture_sha256": "78938adef497cdd048f477c58caa4d936b752b807efafe7f5d4a14074662df71",
+  "fixture_sha256": "a284d301478216b5f3b4f50d51e1a0e9636fc53120d30807823cece4ff13ea89",
   "candidate_fixture": "fixtures/v14-named-target-candidates-v2.json",
   "candidate_fixture_sha256": "47ed31cd2c2a3ee76e8390dd008d49009683ce51c1bccc8a8e36ee62d9d19776",
   "scenario_count": 22,
   "labels_frozen_before_candidate_run": true,
   "multi_turn_contract": {
     "field": "follow_up",
-    "scope": "offline service replay; live benchmark scores first turn and records follow_up labels"
+    "scope": "service benchmark replays all turns in one session; labels score final turn and initial_expected records first-turn clarification"
   },
   "known_label_assumptions": [
     "首轮缺参只返回澄清；续答必须复用已解析 target_id/version 并重新执行门禁。",

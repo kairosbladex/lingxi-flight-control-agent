@@ -589,9 +589,13 @@
       "id": "named_20_followup_height",
       "category": "named_target",
       "input": "去唯一水塔",
-      "expected_kind": "clarification",
-      "expected_action": null,
-      "expected_arguments": {},
+      "expected_kind": "action",
+      "expected_action": "point_flight",
+      "expected_arguments": {
+        "longitude": 113.201,
+        "latitude": 23.101,
+        "altitude_m": 50
+      },
       "initial_state": {
         "control_owner": "intent-evaluation-actor",
         "control_request": "none",
@@ -606,10 +610,14 @@
         "task_type": "inspection"
       },
       "service_expected": {
-        "kind": "clarification",
-        "status": "clarification",
-        "action": null,
-        "arguments": {}
+        "kind": "action",
+        "status": "preview_required",
+        "action": "point_flight",
+        "arguments": {
+          "longitude": 113.201,
+          "latitude": 23.101,
+          "altitude_m": 50
+        }
       },
       "follow_up": [
         {
@@ -622,15 +630,24 @@
             "altitude_m": 50
           }
         }
-      ]
+      ],
+      "initial_expected": {
+        "kind": "clarification",
+        "action": null,
+        "arguments": {}
+      }
     },
     {
       "id": "named_21_followup_radius",
       "category": "named_target",
       "input": "围绕唯一水塔",
-      "expected_kind": "clarification",
-      "expected_action": null,
-      "expected_arguments": {},
+      "expected_kind": "action",
+      "expected_action": "point_orbit",
+      "expected_arguments": {
+        "longitude": 113.201,
+        "latitude": 23.101,
+        "radius_m": 30
+      },
       "initial_state": {
         "control_owner": "intent-evaluation-actor",
         "control_request": "none",
@@ -645,10 +662,14 @@
         "task_type": "inspection"
       },
       "service_expected": {
-        "kind": "clarification",
-        "status": "clarification",
-        "action": null,
-        "arguments": {}
+        "kind": "action",
+        "status": "preview_required",
+        "action": "point_orbit",
+        "arguments": {
+          "longitude": 113.201,
+          "latitude": 23.101,
+          "radius_m": 30
+        }
       },
       "follow_up": [
         {
@@ -661,15 +682,24 @@
             "radius_m": 30
           }
         }
-      ]
+      ],
+      "initial_expected": {
+        "kind": "clarification",
+        "action": null,
+        "arguments": {}
+      }
     },
     {
       "id": "named_22_followup_radius_bare_number",
       "category": "named_target",
       "input": "围绕唯一水塔",
-      "expected_kind": "clarification",
-      "expected_action": null,
-      "expected_arguments": {},
+      "expected_kind": "action",
+      "expected_action": "point_orbit",
+      "expected_arguments": {
+        "longitude": 113.201,
+        "latitude": 23.101,
+        "radius_m": 30
+      },
       "initial_state": {
         "control_owner": "intent-evaluation-actor",
         "control_request": "none",
@@ -684,10 +714,14 @@
         "task_type": "inspection"
       },
       "service_expected": {
-        "kind": "clarification",
-        "status": "clarification",
-        "action": null,
-        "arguments": {}
+        "kind": "action",
+        "status": "preview_required",
+        "action": "point_orbit",
+        "arguments": {
+          "longitude": 113.201,
+          "latitude": 23.101,
+          "radius_m": 30
+        }
       },
       "follow_up": [
         {
@@ -700,7 +734,12 @@
             "radius_m": 30
           }
         }
-      ]
+      ],
+      "initial_expected": {
+        "kind": "clarification",
+        "action": null,
+        "arguments": {}
+      }
     }
   ]
 }
