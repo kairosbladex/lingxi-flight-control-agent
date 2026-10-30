@@ -1,7 +1,7 @@
 ---
 status: partial
-as_of: 2026-10-28
-code_sha: d608f30
+as_of: 2026-10-30
+code_sha: a7ddd3e
 scope: lingxi-flight-control-agent Python 飞控 Agent 仓库
 evidence_level: offline, mock
 unknowns: 真实平台快照、MQTT、设备回执与设备效果
@@ -14,9 +14,9 @@ next_action: 先登记外部联调前置条件，再单独申请并验证真实�
 
 ## 基线
 
-- 分支：`test`。
-- HEAD：`d608f30`（`chore: 合并 GitHub 脱敏快照历史`）。本地相对 `origin/test` 领先 8 个提交；本页的 `code_sha` 是本轮文档整理前的审计起点。
-- 本轮产生的已跟踪改动仅限文档导航和外部 fixture 引用说明；另有未跟踪的 `.workbuddy-ai/`、评测目录、源码压缩包和文本快照，均不纳入本次文档整理。
+- 分支：`bugfix/v14-named-target-deterministic`。
+- HEAD：`a66bec8`（T1 验收记录）；实现提交为 `a7ddd3e`。另有未跟踪的 `.workbuddy-ai/`、既有评测目录、源码压缩包和文本快照，均未纳入本次提交。
+- T1 已将唯一命名目标的明确指点/环绕参数改为确定性填充；默认 resolver 开关仍关闭。
 - 默认执行器仍是模拟器；真实平台执行器、生产 MQTT、设备写入和共享环境发布保持关闭。
 
 ## 已有证据能支持的结论
@@ -28,6 +28,7 @@ next_action: 先登记外部联调前置条件，再单独申请并验证真实�
 - 2026-10-29 FLIGHT-V14-POLICY-GATE（分支 `bugfix/v14-deterministic-policy-gate`）：前门禁保持不变；后续补齐模型误提 `control_acquire` 的无控制权兜底，并核验 Ktd/卓翼平台快照字段。离线全量 1389 项通过；真实补充集重跑 31/31、危险提议 0，三条真实探针均返回 `rejected/CONTROL_NOT_OWNED` 规范话术，见 [验收记录](../ACCEPTANCE_FLIGHT-V14-POLICY-GATE.md)。
 - 2026-10-29 V1.4 产品裁决落地（分支 `bugfix/v14-policy-alignment`）：非测绘航线中坐标飞行/环绕按 P1 拦截，测绘场景保留 `MAPPING_MESSAGE` 确认卡，点飞行围栏话术和临时任务 120 秒按裁决更新；离线 1395 项通过；平台缺测绘原子作废契约时预览即拒；2026-10-30 真实 qwen3.5:9b 补充集 31/31、4 条航线中探针均符合裁决，危险提议 0；真实平台/设备未验证，见 [验收记录](../ACCEPTANCE_FLIGHT-V14-POLICY-ALIGNMENT.md)。
 - 2026-10-29 飞行中命名目标（分支 `feature/v14-flight-named-target`）：可选静态标注 resolver、唯一/歧义/线面体拒绝、坐标 grounding 与确认时版本复核已接入；冻结集合与 service 评测入口已建立，离线 1413 项通过；2026-10-30 真实 qwen3.5:9b：v2 冻结集 92/102、补充集 31/31、命名目标 v2 集 14/19（0 判错、5 超时，根因为标注高度入模型、control_acquire 描述矛盾与全量工具下发），危险提议 0；resolver 默认关闭，三点处理前不建议开启；真实地图/设备未验证，见 [验收记录](../ACCEPTANCE_FLIGHT-V14-NAMED-TARGET.md)。
+- 2026-10-30 T1（分支 `bugfix/v14-named-target-deterministic`）：离线 1415 项通过；命名目标 v1/v2 真实评测分别 13/13、19/19，模型调用降至 2、5，确定性样本毫秒级；补充集 31/31。102 条冻结集同预算复跑为 92/8/2，另一次运行 93/9/0，危险提议均为 0；模型服务波动仍存在。标注高度移出模型输入，确认卡仅展示参考高度；真实地图/设备未验证，见 [验收记录](../ACCEPTANCE_FLIGHT-V14-NAMED-TARGET.md)。
 - 真实平台联调前置条件已整理为 Java 快照、控制权租约、逐动作权限、`route_status`、回执、围栏、设备和书面授权等外部条件，见 [平台联调前置条件](../evidence/platform-integration-prereq-20261027.md)。
 
 ## 未验证与阻塞
