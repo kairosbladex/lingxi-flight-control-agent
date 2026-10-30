@@ -3,6 +3,7 @@
 import json
 import unittest
 from dataclasses import replace
+from unittest.mock import patch
 
 from lingxi_flight_control import (
     DecisionKind, FlightControlStatus, MemoryFlightControlSimulator, ModelDecision,
@@ -241,6 +242,44 @@ class NamedTargetServiceTests(unittest.TestCase):
         reply = self.message(second, '50米')
         self.assertEqual(reply['status'], 'preview_required')
         self.assertEqual(self.brain_calls, [])
+
+    def test_expired_pending_target_is_cleared_before_reply(self):
+        now = [1000.0]
+        resolver = RecordingResolver([point()])
+        calls = []
+
+        class Brain:
+            def decide(self, *_args):
+                calls.append(True)
+                return ModelDecision(DecisionKind.CLARIFY, message='请重新说明')
+
+        service = CockpitService(self.binding, self.simulator, lambda: Brain(),
+                                 target_resolver=resolver, clock=lambda: now[0])
+        self.message(service, '去唯一水塔')
+        now[0] = 3000.0
+        reply = self.message(service, '50米')
+        self.assertEqual(reply['status'], 'clarification')
+        self.assertEqual(calls, [True])
+
+    def test_named_target_model_fallback_receives_only_target_and_safe_tools(self):
+        resolver = RecordingResolver([point()])
+        seen = []
+
+        class Brain:
+            def decide(self, _text, _checkpoint, tools):
+                seen.append({tool.name for tool in tools})
+                return ModelDecision(DecisionKind.CLARIFY, message='请重新说明')
+
+        service = CockpitService(self.binding, self.simulator, lambda: Brain(),
+                                 target_resolver=resolver, clock=lambda: 1000.0)
+        with patch('lingxi_flight_control.cockpit._named_target_call', return_value=(None, None)):
+            reply = self.message(service, '去唯一水塔，高50米')
+        self.assertEqual(reply['status'], 'clarification')
+        self.assertEqual(len(seen), 1)
+        self.assertTrue({'point_flight', 'point_orbit', 'hover'} <= seen[0])
+        self.assertTrue(seen[0] <= {
+            'point_flight', 'point_orbit', 'hover', 'read_state',
+            'emergency_stop', 'return_home', 'land'})
 
     def test_missing_radius_continues_with_labeled_reply_without_model(self):
         resolver = RecordingResolver([point()])

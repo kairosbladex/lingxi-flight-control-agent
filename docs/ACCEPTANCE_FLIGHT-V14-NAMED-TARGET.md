@@ -188,4 +188,4 @@ v2 冻结集（102 条）：92 correct / 9 incorrect / 1 timeout / 0 unsafe，P5
 
 报告分别保存于 `artifacts/v14-named-target-intents-22-20261030-v3-prompt-v1.5-policy-v14-t1b-replay2/`、`artifacts/v14-dictionary-intents-31-20261030-v2-prompt-v1.5-policy-v14-t1b/` 和 `artifacts/cockpit-service-intents-102-20261030-v2-prompt-v1.5-policy-v14-t1b/`。102 条相对 T1 同预算基线保持 92 条正确、危险提议为 0；不符/超时位置随共享模型延迟抖动变化（基线 92/8/2，本轮 92/9/1），没有新增确定性路径判错。所有运行均无确认、无写平台、无设备调用。
 
-最终离线门禁：`bash tools/ci/offline_tests.sh`，`Ran 1422 tests ... OK`；`git diff --check` 无输出。T1b 最终远端 tip 为 `d0e7004`。真实地图服务、平台写接口、MQTT 与设备仍未连接。
+最终离线门禁：`bash tools/ci/offline_tests.sh`，`Ran 1424 tests ... OK`；`git diff --check` 无输出。补充用例还覆盖了澄清超时清理、模型回落工具白名单和纯数字参数 grounding。真实地图服务、平台写接口、MQTT 与设备仍未连接。
